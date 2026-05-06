@@ -855,6 +855,14 @@ const char* connection_manager_get_boxcode(void) {
     return ecu_info_get_boxcode(&current_ecu_info);
 }
 
+const char* connection_manager_get_vin(void) {
+    /* current_ecu_info.vin is a fixed-size NUL-terminated char buffer
+     * populated by handle_wait_vin_response(). When the VIN read has
+     * not yet completed, the buffer is zeroed at boot, so this
+     * returns an empty string. */
+    return current_ecu_info.vin;
+}
+
 bool connection_manager_logger_add_variable(uint32_t address, 
                                             uint8_t size,
                                             float scale,

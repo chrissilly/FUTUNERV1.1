@@ -68,6 +68,14 @@ uint8_t connection_manager_get_patch_version(void);
 uint16_t connection_manager_get_patch_buffer_size(void);
 const char* connection_manager_get_boxcode(void);
 
+/* Returns the current ECU VIN as a NUL-terminated string. Returns
+ * an empty string if the VIN read has not yet completed. The
+ * pointer is owned by connection_manager and is valid until the
+ * next discovery cycle; callers needing to retain the value must
+ * copy it. NOT normalized (case / whitespace) — the comparison
+ * site is responsible for ISO-3779 normalization (uppercase + trim). */
+const char* connection_manager_get_vin(void);
+
 bool connection_manager_logger_add_variable(uint32_t address, 
                                             uint8_t size,
                                             float scale,
