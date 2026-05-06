@@ -92,6 +92,127 @@ def test_firmware_flow():
         headers={"authorization":f"Bearer {token}"})
     assert r.json()["available"] == 0
 
+def test_register_409_on_vin_mismatch():
+    r = client.post("/admin/devices",
+        json={"mac":"40:00:00:00:00:01", "vin":"WAUZZZ4M9PA000001"},
+        headers=ADMIN)
+    token = r.json()["auth_token"]
+
+    # Different VIN under same token → 409.
+    r = client.post("/api/v1/device/register",
+        json={"mac":"40:00:00:00:00:01", "vin":"WAUZZZ4M9PA999999"},
+        headers={"authorization": f"Bearer {token}"})
+    assert r.status_code == 409
+    body = r.json()
+    assert "WAUZZZ4M9PA000001" in body["detail"]
+    assert "WAUZZZ4M9PA999999" in body["detail"]
+
+def test_register_idempotent_when_vin_matches_normalized():
+    r = client.post("/admin/devices",
+        json={"mac":"40:00:00:00:00:02", "vin":"WAUZZZ4M9PA000002"},
+        headers=ADMIN)
+    token = r.json()["auth_token"]
+
+    # Same VIN with leading whitespace + lowercase → normalize-equal.
+    r = client.post("/api/v1/device/register",
+        json={"mac":"40:00:00:00:00:02", "vin":"  wauzzz4m9pa000002 "},
+        headers={"authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+def test_register_first_set_when_existing_null():
+    # Enroll without a VIN.
+    r = client.post("/admin/devices",
+        json={"mac":"40:00:00:00:00:03"}, headers=ADMIN)
+    token = r.json()["auth_token"]
+
+    # First register with a VIN sets it; no 409.
+    r = client.post("/api/v1/device/register",
+        json={"mac":"40:00:00:00:00:03", "vin":"WAUZZZ4M9PA000003"},
+        headers={"authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+
+    # Subsequent register with same VIN is idempotent.
+    r = client.post("/api/v1/device/register",
+        json={"mac":"40:00:00:00:00:03", "vin":"WAUZZZ4M9PA000003"},
+        headers={"authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+
+def test_register_skip_when_no_vin_in_body():
+    r = client.post("/admin/devices",
+        json={"mac":"40:00:00:00:00:04", "vin":"WAUZZZ4M9PA000004"},
+        headers=ADMIN)
+    token = r.json()["auth_token"]
+
+    # No VIN in body → no comparison, no 409, existing VIN preserved.
+    r = client.post("/api/v1/device/register",
+        json={"mac":"40:00:00:00:00:04", "boxcode":"4K0907557G__0003"},
+        headers={"authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+
+def test_license_endpoint_default_unpaid():
+    r = client.post("/admin/devices",
+        json={"mac":"50:00:00:00:00:01", "vin":"WAUZZZ4M9PA005001"},
+        headers=ADMIN)
+    token = r.json()["auth_token"]
+
+    r = client.get("/api/v1/license",
+        headers={"authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["paid"] is False
+    assert body["revoked"] is False
+    assert body["revoked_reason"] in (None, "")
+    assert body["vin"] == "WAUZZZ4M9PA005001"
+
+def test_license_endpoint_after_admin_set_paid():
+    r = client.post("/admin/devices",
+        json={"mac":"50:00:00:00:00:02", "vin":"WAUZZZ4M9PA005002"},
+        headers=ADMIN)
+    token = r.json()["auth_token"]
+
+    r = client.post("/admin/devices/50:00:00:00:00:02/license",
+        json={"paid": 1}, headers=ADMIN)
+    assert r.status_code == 200, r.text
+
+    r = client.get("/api/v1/license",
+        headers={"authorization": f"Bearer {token}"})
+    body = r.json()
+    assert body["paid"] is True
+    assert body["revoked"] is False
+    assert body["vin"] == "WAUZZZ4M9PA005002"
+
+def test_license_endpoint_after_admin_revoke():
+    r = client.post("/admin/devices",
+        json={"mac":"50:00:00:00:00:03", "vin":"WAUZZZ4M9PA005003"},
+        headers=ADMIN)
+    token = r.json()["auth_token"]
+
+    r = client.post("/admin/devices/50:00:00:00:00:03/license",
+        json={"paid": 1, "revoked": 1, "revoked_reason": "chargeback"},
+        headers=ADMIN)
+    assert r.status_code == 200, r.text
+
+    r = client.get("/api/v1/license",
+        headers={"authorization": f"Bearer {token}"})
+    body = r.json()
+    assert body["paid"] is True
+    assert body["revoked"] is True
+    assert body["revoked_reason"] == "chargeback"
+
+def test_license_endpoint_unauthenticated():
+    r = client.get("/api/v1/license")  # no Authorization header
+    assert r.status_code == 401
+    r = client.get("/api/v1/license",
+        headers={"authorization": "Bearer not-a-real-token"})
+    assert r.status_code == 401
+
+def test_admin_license_set_unknown_device():
+    r = client.post("/admin/devices/aa:99:88:77:66:55/license",
+        json={"paid": 1}, headers=ADMIN)
+    assert r.status_code == 404
+
+
 def test_calibration_with_ethanol_patch():
     # enroll device with a specific ethanol_random
     r = client.post("/admin/devices",

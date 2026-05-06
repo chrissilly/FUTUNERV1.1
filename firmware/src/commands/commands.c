@@ -10,6 +10,7 @@
 #include "can_sniffer.h"
 #include "wot_log_commands.h"
 #include "dtc_commands.h"
+#include "vin_pair_commands.h"
 
 const command_def_t COMMAND_REGISTRY[] = {
     {"pair_ecu", "Pair with current ECU", CMD_SECURITY_UNSECURED, cmd_pair_ecu},
@@ -56,6 +57,10 @@ const command_def_t COMMAND_REGISTRY[] = {
     /* DTC read/clear — second feature plumbed through feature_manager */
     {"dtc_read",  "Read active DTCs from ECU (UDS 0x19 0x02)", CMD_SECURITY_UNSECURED, cmd_dtc_read},
     {"dtc_clear", "Clear all DTCs in ECU (UDS 0x14 FF FF FF)", CMD_SECURITY_SECURED,   cmd_dtc_clear},
+    /* VIN pairing + license cache — first cloud round-trip feature */
+    {"vin_pair_now",   "Run VIN pair-or-refresh (cloud /register + /license)", CMD_SECURITY_UNSECURED, cmd_vin_pair_now},
+    {"set_auth_token", "Install device Bearer token in NVS (admin pre-enrollment)", CMD_SECURITY_SECURED, cmd_set_auth_token},
+    {"license_status", "Snapshot of cached license state (read-only)", CMD_SECURITY_UNSECURED, cmd_license_status},
 };
 
 const uint8_t COMMAND_COUNT = sizeof(COMMAND_REGISTRY) / sizeof(command_def_t);

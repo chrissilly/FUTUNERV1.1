@@ -3,3 +3,7 @@ _secrets_/
 # Host test build artifacts — rebuilt every eval run; never source.
 firmware/test/*/host_test_runner
 firmware/test/*/host_test_runner.dSYM/
+
+# build artifacts and IDE cache (rebuilt every session, never source of truth)
+firmware/build/
+firmware/.cache/

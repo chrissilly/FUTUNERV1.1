@@ -120,8 +120,34 @@ def init_db():
         detail           TEXT
     );
     """)
+    # Idempotent license-column migrations. SCALE_ARCHITECTURE §6 adds
+    # paid / revoked / revoked_reason to the devices table. SQLite's
+    # ALTER TABLE ADD COLUMN is the simplest forward path; raises
+    # OperationalError if the column already exists, which we catch.
+    # Real Alembic migrations land with the PostgreSQL move per
+    # SCALE_ARCHITECTURE Phase A.
+    for col_ddl in (
+        "paid INTEGER DEFAULT 0",
+        "revoked INTEGER DEFAULT 0",
+        "revoked_reason TEXT",
+    ):
+        try:
+            conn.execute(f"ALTER TABLE devices ADD COLUMN {col_ddl}")
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
+
+
+def normalize_vin(v: Optional[str]) -> Optional[str]:
+    """ISO-3779 normalization: trim whitespace, uppercase. Returns
+    None if input is None or normalizes to empty. Applied at the
+    comparison site only — the raw value the ECU emitted is preserved
+    in the DB for audit."""
+    if v is None:
+        return None
+    s = v.strip().upper()
+    return s if s else None
 
 # ===========================================================================
 # Auth helpers
@@ -216,8 +242,26 @@ async def device_register(
     Dongle phones home on every boot.
     Body: { mac, vin, boxcode, build_hash, active_cal, fw_version }
     Returns: { ok: true, server_time, message? }
+
+    VIN-mismatch behavior: if device record already has a vin set
+    AND incoming vin (after ISO-3779 normalize) differs, return 409
+    Conflict. Cases:
+      - request.vin None/empty                 → no VIN check, no 409
+      - device.vin   None/empty (first-pair)   → set it, no 409
+      - both set, normalized equal             → idempotent, no 409
+      - both set, normalized differ            → 409
+    Comparison is normalized; storage preserves raw ECU bytes.
     """
     dev = device_for_token(authorization)
+    incoming_vin = normalize_vin(payload.vin)
+    existing_vin = normalize_vin(dev["vin"])
+    if incoming_vin and existing_vin and incoming_vin != existing_vin:
+        log(dev["mac"], "register_conflict",
+            f"existing={existing_vin} incoming={incoming_vin}")
+        raise HTTPException(
+            409,
+            f"VIN already paired (existing={existing_vin}, incoming={incoming_vin})"
+        )
     conn = db()
     conn.execute(
         """UPDATE devices SET
@@ -234,6 +278,26 @@ async def device_register(
         "ok": True,
         "server_time": int(time.time()),
         "message": "Welcome to SRM",
+    }
+
+
+@app.get("/api/v1/license")
+async def get_license(authorization: Optional[str] = Header(None)):
+    """
+    Per-device license state. Returns:
+      { paid: bool, vin: str, revoked: bool, revoked_reason: str|null }
+
+    `paid` and `revoked` are stored as INTEGER 0/1 on disk and
+    surfaced as bool. `vin` is the raw value the ECU originally
+    reported (NOT normalized — the dongle does its own normalization
+    at the comparison site, and audit tools want the raw bytes).
+    """
+    dev = device_for_token(authorization)
+    return {
+        "paid": bool((dev["paid"] if "paid" in dev.keys() else 0) or 0),
+        "vin": dev["vin"] or "",
+        "revoked": bool((dev["revoked"] if "revoked" in dev.keys() else 0) or 0),
+        "revoked_reason": (dev["revoked_reason"] if "revoked_reason" in dev.keys() else None),
     }
 
 
@@ -495,6 +559,45 @@ async def admin_assign_calibration(
     conn.commit()
     conn.close()
     return {"ok": True, "mac": mac, "active_cal": filename}
+
+
+class LicenseSetPayload(BaseModel):
+    paid:           Optional[int] = None  # 0 or 1
+    revoked:        Optional[int] = None  # 0 or 1
+    revoked_reason: Optional[str] = None  # set to None to clear
+
+@app.post("/admin/devices/{mac}/license")
+async def admin_set_license(
+    mac: str,
+    payload: LicenseSetPayload,
+    x_admin_key: Optional[str] = Header(None),
+):
+    """
+    Admin: flip the license state on a device. Used after a one-time
+    payment lands (paid=1) or for fraud/safety revocation
+    (revoked=1, revoked_reason='...').
+    """
+    require_admin(x_admin_key)
+    conn = db()
+    row = conn.execute("SELECT 1 FROM devices WHERE mac = ?", (mac,)).fetchone()
+    if not row:
+        conn.close(); raise HTTPException(404, f"No such device: {mac}")
+    sets, params = [], []
+    if payload.paid is not None:
+        sets.append("paid = ?"); params.append(1 if payload.paid else 0)
+    if payload.revoked is not None:
+        sets.append("revoked = ?"); params.append(1 if payload.revoked else 0)
+    if payload.revoked_reason is not None or payload.revoked == 0:
+        sets.append("revoked_reason = ?")
+        params.append(payload.revoked_reason or None)
+    if not sets:
+        conn.close(); raise HTTPException(400, "No license fields supplied")
+    params.append(mac)
+    conn.execute(f"UPDATE devices SET {', '.join(sets)} WHERE mac = ?", params)
+    conn.commit()
+    conn.close()
+    log(mac, "license_set", payload.model_dump_json())
+    return {"ok": True, "mac": mac}
 
 
 @app.get("/admin/log/{mac}")

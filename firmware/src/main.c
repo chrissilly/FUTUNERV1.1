@@ -171,6 +171,18 @@ void app_main(void) {
         ESP_LOGW(TAG, "DTC feature init failed (non-fatal): rc=%d", (int)err);
     }
 
+    /* License cache + VIN pairing — wires the cloud round-trip
+       transports through esp_http_client and nvs_manager, then
+       hands the FEATURE_VIN_PAIRING descriptor to feature_manager.
+       Pair-or-refresh runs on-demand via the vin_pair_now command. */
+    {
+        extern esp_err_t main_init_license_and_vin_pairing(void);
+        err = main_init_license_and_vin_pairing();
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "license / vin_pairing init failed (non-fatal): rc=%d", (int)err);
+        }
+    }
+
     ESP_LOGI(TAG, "System initialized");
     ESP_LOGI(TAG, "Device Serial: 0x%012llX", wifi_ap_get_serial_number());
     /* C1 fix: do not log password in plaintext */

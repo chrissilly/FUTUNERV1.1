@@ -1,8 +1,0 @@
-Command: ninja all
-[1/4] cd /Users/rabbit/esp/obd/FUTV1.1/firmware/build/esp-idf/esptool_py && /Users/rabbit/.espressif/python_env/idf5.5_py3.9_env/bin/python /Users/rabbit/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /Users/rabbit/esp/obd/FUTV1.1/firmware/build/partition_table/partition-table.bin /Users/rabbit/esp/obd/FUTV1.1/firmware/build/futuner_v2.bin
-futuner_v2.bin binary size 0x11aeb0 bytes. Smallest app partition is 0x280000 bytes. 0x165150 bytes (56%) free.
-[2/4] Performing build step for 'bootloader'
-[1/1] cd /Users/rabbit/esp/obd/FUTV1.1/firmware/build/bootloader/esp-idf/esptool_py && /Users/rabbit/.espressif/python_env/idf5.5_py3.9_env/bin/python /Users/rabbit/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /Users/rabbit/esp/obd/FUTV1.1/firmware/build/bootloader/bootloader.bin
-Bootloader binary size 0x5260 bytes. 0x2da0 bytes (36%) free.
-[3/4] No install step for 'bootloader'
-[4/4] Completed 'bootloader'
