@@ -1,37 +1,34 @@
 #!/usr/bin/env bash
-# eval.sh — graded evaluation harness for the DTC read/clear feature.
+# eval.sh — graded evaluation harness for the SBF live-tune
+# orchestrator (Prompt 5).
 #
 # Claude Code MUST run this and exit 0 before declaring this prompt
-# done. If any check fails, fix the issue and re-run. Do not declare
-# success while any check is FAIL.
+# done.
 #
-# Usage:   cd ~/esp/obd/FUTV1.1 && firmware/test/dtc/eval.sh
+# Usage:   cd ~/esp/obd/FUTV1.1 && firmware/test/sbf/eval.sh
 # Returns: 0 on all-pass, non-zero on any failure.
 #
 # Env knobs:
-#   SKIP_IDF_BUILD=1   skip the full idf.py build step (CI without IDF)
+#   SKIP_IDF_BUILD=1   skip the full idf.py build step
+#   SKIP_PYTEST=1      skip the cloud-side pytest regression
 #   VERBOSE=1          print every check as it runs
 
 set -u
 
-# ---------------------------------------------------------------------------
-# Locate the project root regardless of cwd.
-# ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 FW_ROOT="$PROJECT_ROOT/firmware"
 SRC_ROOT="$FW_ROOT/src"
-DTC_DIR="$SRC_ROOT/dtc"
+SBF_DIR="$SRC_ROOT/sbf"
 CMD_DIR="$SRC_ROOT/commands"
-CFG_HEADER="$SRC_ROOT/config/dtc_config.h"
-TEST_FILE="$FW_ROOT/test/test_dtc.c"
+FLEX_DIR="$SRC_ROOT/flex_fuel"
+SBF_CFG="$SRC_ROOT/config/sbf_config.h"
+TEST_FILE="$FW_ROOT/test/test_sbf_orchestrator.c"
 HOST_TEST_DIR="$SCRIPT_DIR"
+CLOUD_DIR="$PROJECT_ROOT/cloud"
 
 cd "$PROJECT_ROOT"
 
-# ---------------------------------------------------------------------------
-# Pretty output
-# ---------------------------------------------------------------------------
 PASS_COUNT=0
 FAIL_COUNT=0
 FAILURES=()
@@ -40,13 +37,11 @@ pass() {
     PASS_COUNT=$((PASS_COUNT+1))
     [ "${VERBOSE:-0}" = "1" ] && echo "  PASS  $1"
 }
-
 fail() {
     FAIL_COUNT=$((FAIL_COUNT+1))
     FAILURES+=("$1")
     echo "  FAIL  $1"
 }
-
 section() {
     echo
     echo "=============================================================="
@@ -55,117 +50,127 @@ section() {
 }
 
 # ---------------------------------------------------------------------------
-# Section 1 — File structure (8 files)
+# Section 1 — File structure
 # ---------------------------------------------------------------------------
 section "1. File structure"
 
 REQUIRED_FILES=(
-    "$DTC_DIR/dtc.h"
-    "$DTC_DIR/dtc_uds.c"
-    "$DTC_DIR/dtc_feature.c"
-    "$CFG_HEADER"
-    "$CMD_DIR/dtc_commands.h"
-    "$CMD_DIR/dtc_commands.c"
+    "$SBF_DIR/sbf_orchestrator.h"
+    "$SBF_DIR/sbf_orchestrator.c"
+    "$SBF_DIR/sbf_loader.h"
+    "$SBF_DIR/sbf_loader.c"
+    "$SBF_DIR/sbf_applier.h"
+    "$SBF_DIR/sbf_applier.c"
+    "$SBF_DIR/sbf_downloader.h"
+    "$SBF_DIR/sbf_downloader.c"
+    "$SBF_DIR/sbf_variants.h"
+    "$SBF_DIR/sbf_variants.c"
+    "$SBF_CFG"
+    "$CMD_DIR/sbf_commands.h"
+    "$CMD_DIR/sbf_commands.c"
+    "$FLEX_DIR/blend_engine.h"
+    "$FLEX_DIR/blend_engine.c"
     "$TEST_FILE"
     "$HOST_TEST_DIR/Makefile"
 )
-
 for f in "${REQUIRED_FILES[@]}"; do
-    if [ -f "$f" ]; then
-        pass "exists: ${f#$PROJECT_ROOT/}"
-    else
-        fail "missing required file: ${f#$PROJECT_ROOT/}"
+    if [ -f "$f" ]; then pass "exists: ${f#$PROJECT_ROOT/}"
+    else                  fail "missing required file: ${f#$PROJECT_ROOT/}"
     fi
 done
 
 # ---------------------------------------------------------------------------
-# Section 2 — Public API surface in dtc.h
+# Section 2 — Public API surface
 # ---------------------------------------------------------------------------
 section "2. Public API surface"
 
-if [ -f "$DTC_DIR/dtc.h" ]; then
-    H="$DTC_DIR/dtc.h"
+if [ -f "$SBF_DIR/sbf_orchestrator.h" ]; then
+    H="$SBF_DIR/sbf_orchestrator.h"
     for sym in \
-        "dtc_feature_init" \
-        "dtc_register_with_feature_manager" \
-        "dtc_read" \
-        "dtc_clear"
+        "sbf_orchestrator_init" \
+        "sbf_orchestrator_register_with_feature_manager" \
+        "sbf_orchestrator_live_tune_start" \
+        "sbf_orchestrator_live_tune_set" \
+        "sbf_orchestrator_live_tune_stop" \
+        "sbf_orchestrator_live_tune_status" \
+        "sbf_orchestrator_drain_one"
     do
-        if grep -q "$sym" "$H"; then
-            pass "header declares: $sym"
-        else
-            fail "header missing symbol: $sym"
+        if grep -q "$sym" "$H"; then pass "orchestrator.h declares: $sym"
+        else                          fail "orchestrator.h missing: $sym"
         fi
     done
 fi
 
 # ---------------------------------------------------------------------------
-# Section 3 — No-magic-numbers scan on dtc_feature.c and dtc_uds.c
+# Section 3 — No-magic-numbers scan on each new .c file
 # ---------------------------------------------------------------------------
-section "3. No magic numbers in dtc_feature.c and dtc_uds.c"
+section "3. No magic numbers in new .c files"
 
 scan_magic() {
     local file="$1"
     [ -f "$file" ] || return 0
-    # Strip C string literals, multi-line /* ... */ block comments, and
-    # // line comments BEFORE scanning. Multi-line block comments need a
-    # multi-line-aware tool (sed -E processes line-by-line on macOS),
-    # so we use perl in slurp (-0777) mode.
-    local stripped
+    local stripped suspect
     stripped=$(perl -0777 -pe '
         s/"(?:\\.|[^"\\])*"//g;
         s|/\*.*?\*/||gs;
         s|//[^\n]*||g;
     ' "$file")
-    local suspect
     suspect=$(printf "%s" "$stripped" \
         | grep -nE '\b[0-9]+\b' \
         | grep -vE '^[^:]+:[^:]*#define\b' \
         | grep -vE '\b[01]\b' \
         | grep -vE '\b(uint|int)(8|16|32|64)_t\b' \
         | grep -vE '0x0+' \
-        || true
-    )
+        || true)
     if [ -z "$suspect" ]; then
         pass "no magic numbers detected in $(basename "$file")"
     else
-        fail "$(basename "$file") contains numeric literals that look like magic numbers; move to dtc_config.h"
+        fail "$(basename "$file") contains numeric literals; move to sbf_config.h"
         echo "$suspect" | sed 's/^/        /'
     fi
 }
 
-scan_magic "$DTC_DIR/dtc_feature.c"
-scan_magic "$DTC_DIR/dtc_uds.c"
+scan_magic "$SBF_DIR/sbf_orchestrator.c"
+scan_magic "$SBF_DIR/sbf_loader.c"
+scan_magic "$SBF_DIR/sbf_applier.c"
+scan_magic "$SBF_DIR/sbf_downloader.c"
+scan_magic "$SBF_DIR/sbf_variants.c"
+scan_magic "$CMD_DIR/sbf_commands.c"
+scan_magic "$FLEX_DIR/blend_engine.c"
 
 # ---------------------------------------------------------------------------
-# Section 4 — dtc_config.h has named #defines + approval annotation
+# Section 4 — Config header
 # ---------------------------------------------------------------------------
-section "4. dtc_config.h uses named #defines"
+section "4. sbf_config.h"
 
-if [ -f "$CFG_HEADER" ]; then
-    DEFINE_COUNT=$(grep -cE '^\s*#define\s+\w+' "$CFG_HEADER" || true)
+if [ -f "$SBF_CFG" ]; then
+    DEFINE_COUNT=$(grep -cE '^\s*#define\s+\w+' "$SBF_CFG" || true)
     if [ "$DEFINE_COUNT" -ge 1 ]; then
-        pass "config header declares $DEFINE_COUNT named constant(s)"
+        pass "sbf_config.h declares $DEFINE_COUNT named constant(s)"
     else
-        fail "config header declares no #define constants — every tunable value must live here"
+        fail "sbf_config.h declares no #define constants"
     fi
-    if grep -qiE 'needs?\s+(approval|review|sign-off)' "$CFG_HEADER"; then
-        pass "config header flags defaults as needing approval"
+    if grep -qiE 'needs?\s+(approval|review|sign-off)' "$SBF_CFG"; then
+        pass "sbf_config.h flags defaults as needing approval"
+    elif grep -qE 'Locked\s+[0-9]{4}-[0-9]{2}-[0-9]{2}' "$SBF_CFG"; then
+        pass "sbf_config.h marked Locked with date stamp"
     else
-        fail "config header should annotate proposed defaults as 'NEEDS SEAN'S APPROVAL'"
+        fail "sbf_config.h should carry an approval-status marker — either 'needs approval/review/sign-off' (pre-lock) or 'Locked YYYY-MM-DD' (post-lock)"
     fi
-    # Required keys per the kickoff prompt.
     for key in \
-        "DTC_READ_TIMEOUT_MS" \
-        "DTC_CLEAR_TIMEOUT_MS" \
-        "DTC_MAX_CODES_PER_RESPONSE" \
-        "DTC_DEFAULT_STATUS_MASK" \
-        "DTC_FAMILY_DEFAULT"
+        "SBF_CACHE_DIR_PATH" \
+        "SBF_DOWNLOAD_PATH" \
+        "SBF_APPLY_HARD_CAP_MS" \
+        "SBF_PER_WRITE_TIMEOUT_MS" \
+        "SBF_WORKER_QUEUE_DEPTH" \
+        "SBF_STAGE_MIN" \
+        "SBF_STAGE_MAX" \
+        "SBF_BLEND_MAP_POINTS"
     do
-        if grep -qE "^\s*#define\s+$key\b" "$CFG_HEADER"; then
-            pass "config defines $key"
+        if grep -qE "^\s*#define\s+$key\b" "$SBF_CFG"; then
+            pass "sbf_config defines $key"
         else
-            fail "config header missing required constant: $key"
+            fail "sbf_config missing required constant: $key"
         fi
     done
 fi
@@ -175,35 +180,30 @@ fi
 # ---------------------------------------------------------------------------
 section "5. Forbidden modifications check"
 
-# Frozen modules and predecessor-prompt deliverables MUST stay
-# untouched. Within commands/, only commands.c, dtc_commands.c, and
-# dtc_commands.h are in scope.
+# Frozen modules (per FROZEN_MODULES.md), prior-prompt deliverables,
+# and out-of-scope command handlers must stay untouched. Per Sean's
+# Q2 directive, wot_uploader.{c,h} IS in scope (license-gate one-liner).
 FORBIDDEN=(
     "firmware/src/scal"
     "firmware/src/bdef"
     "firmware/src/ecu_write"
     "firmware/src/flash"
-    "firmware/src/feature_manager/feature_manager.c"
-    # Granular: wot_logger.c / wot_recorder.c are forbidden, but
-    # wot_uploader.{c,h} is in scope as of Prompt 5 (license-gate
-    # one-liner per Q2). Keep the firmware/src/logger/ tree mostly
-    # off-limits but allow the gate-wiring file.
+    "firmware/src/feature_manager"
+    "firmware/src/license"
+    "firmware/src/vin_pairing"
+    "firmware/src/dtc"
     "firmware/src/logger/wot_logger.c"
     "firmware/src/logger/wot_logger.h"
     "firmware/src/logger/wot_recorder.c"
     "firmware/src/logger/wot_recorder.h"
-    "firmware/src/logger/logger_manager.c"
-    "firmware/src/logger/logger_manager.h"
-    "firmware/src/logger/logger_config.c"
-    "firmware/src/logger/logger_config.h"
-    "firmware/src/logger/logger_profile.c"
-    "firmware/src/logger/logger_profile.h"
-    "firmware/src/logger/logger_variables.c"
-    "firmware/src/logger/logger_variables.h"
     "firmware/src/commands/command_handler.c"
     "firmware/src/commands/command_handler.h"
     "firmware/src/commands/wot_log_commands.c"
     "firmware/src/commands/wot_log_commands.h"
+    "firmware/src/commands/dtc_commands.c"
+    "firmware/src/commands/dtc_commands.h"
+    "firmware/src/commands/vin_pair_commands.c"
+    "firmware/src/commands/vin_pair_commands.h"
     "firmware/src/commands/ecu_commands.c"
     "firmware/src/commands/ecu_commands.h"
     "firmware/src/commands/ecu_write_commands.c"
@@ -212,13 +212,19 @@ FORBIDDEN=(
     "firmware/src/commands/system_commands.c"
     "firmware/src/commands/file_commands.c"
     "firmware/src/commands/profile_commands.c"
-    "firmware/src/commands/flex_commands.c"
     "firmware/src/commands/can_sniffer.c"
-    "firmware/src/commands/flash_commands.c"
+    "firmware/src/commands/flex_commands.c"
     "firmware/test/feature_manager"
     "firmware/test/test_feature_manager.c"
     "firmware/test/wot_logger"
+    "firmware/test/test_wot_logger.c"
+    "firmware/test/dtc"
+    "firmware/test/test_dtc.c"
+    "firmware/test/vin_pairing"
+    "firmware/test/test_vin_pairing.c"
     "firmware/test/verify_frozen.sh"
+    "cloud/src/main.py"
+    "cloud/tests"
 )
 
 if command -v git >/dev/null 2>&1 && git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
@@ -230,11 +236,11 @@ if command -v git >/dev/null 2>&1 && git -C "$PROJECT_ROOT" rev-parse --git-dir 
         fi
     done
 else
-    echo "  SKIP  git not available — frozen-modules cross-check (Section 6) is the load-bearing guard for scal/bdef/ecu_write integrity"
+    echo "  SKIP  git not available — frozen-modules cross-check is the load-bearing guard"
 fi
 
 # ---------------------------------------------------------------------------
-# Section 6 — Frozen modules cross-check
+# Section 6 — Frozen modules cross-check (CRITICAL)
 # ---------------------------------------------------------------------------
 section "6. Frozen modules check (verify_frozen.sh)"
 
@@ -242,7 +248,7 @@ if [ -x "$PROJECT_ROOT/firmware/test/verify_frozen.sh" ]; then
     if "$PROJECT_ROOT/firmware/test/verify_frozen.sh" >/dev/null 2>&1; then
         pass "frozen modules unchanged (scal/bdef/ecu_write)"
     else
-        fail "frozen modules modified — re-run firmware/test/verify_frozen.sh for details"
+        fail "FROZEN MODULES MODIFIED — re-run firmware/test/verify_frozen.sh for details"
     fi
 else
     fail "verify_frozen.sh missing or not executable"
@@ -259,7 +265,6 @@ if [ -f "$HOST_TEST_DIR/Makefile" ]; then
     else
         fail "host test failed to compile"
     fi
-
     if [ -x "$HOST_TEST_DIR/host_test_runner" ]; then
         if "$HOST_TEST_DIR/host_test_runner"; then
             pass "host test runner exited 0 (all unit tests pass)"
@@ -274,22 +279,23 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Section 8 — Required test scenarios in test_dtc.c
+# Section 8 — Required test scenarios in test_sbf_orchestrator.c
 # ---------------------------------------------------------------------------
-section "8. Required test scenarios in test_dtc.c"
+section "8. Required test scenarios in test_sbf_orchestrator.c"
 
 if [ -f "$TEST_FILE" ]; then
     declare -a REQUIRED=(
-        "(read.*positive|positive.*read|read.*two)"        # read positive
-        "(NRC|negative)"                                    # read negative
-        "multi.*frame"                                      # multi-frame
-        "clear"                                             # clear (positive)
-        "arbitrat"                                          # arbitration with mock feature
-        "(active.*during|manager.*mutex|FEATURE_DTC.*during)" # active during exchange
-        "idempotent"                                        # idempotent re-start / re-register
+        "test_start_refuses_when_unpaid"
+        "test_start_paid_applies_in_budget"
+        "test_set_ethanol_triggers_reapply"
+        "test_set_stage_triggers_reapply"
+        "test_malformed_sbf_returns_idle"
+        "test_swap_from_dtc"
+        "test_apply_progress_events"
+        "test_unload_drains_queue"
     )
     for pat in "${REQUIRED[@]}"; do
-        if grep -iEq "$pat" "$TEST_FILE"; then
+        if grep -Eq "$pat" "$TEST_FILE"; then
             pass "test file references scenario: $pat"
         else
             fail "test file missing scenario: $pat"
@@ -298,21 +304,39 @@ if [ -f "$TEST_FILE" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Section 9 — Full firmware build (idf.py) — optional, gated
+# Section 9 — Cloud pytest regression (no cloud changes this prompt)
 # ---------------------------------------------------------------------------
-section "9. Full firmware build (idf.py)"
+section "9. Cloud pytest regression"
 
-if [ "${SKIP_IDF_BUILD:-0}" = "1" ]; then
-    echo "  SKIP  SKIP_IDF_BUILD=1 set; skipping idf.py build"
-elif [ -d "${IDF_PATH:-$HOME/esp/esp-idf}" ]; then
-    if (cd "$FW_ROOT" && ./build.sh > /tmp/futuner_dtc_build.log 2>&1); then
-        pass "idf.py build exited 0"
+if [ "${SKIP_PYTEST:-0}" = "1" ]; then
+    echo "  SKIP  SKIP_PYTEST=1 set"
+elif [ -d "$CLOUD_DIR/tests" ] && command -v python3 >/dev/null 2>&1; then
+    if (cd "$CLOUD_DIR" && PYTHONPATH=. python3 -m pytest -x tests/ > /tmp/futuner_sbf_pytest.log 2>&1); then
+        pass "cloud pytest passed"
     else
-        fail "idf.py build FAILED — see /tmp/futuner_dtc_build.log"
-        tail -40 /tmp/futuner_dtc_build.log | sed 's/^/        /'
+        fail "cloud pytest FAILED — see /tmp/futuner_sbf_pytest.log"
+        tail -40 /tmp/futuner_sbf_pytest.log | sed 's/^/        /'
     fi
 else
-    echo "  SKIP  IDF_PATH not found; skipping firmware build"
+    echo "  SKIP  python3 / cloud tests dir unavailable"
+fi
+
+# ---------------------------------------------------------------------------
+# Section 10 — Full firmware build (idf.py)
+# ---------------------------------------------------------------------------
+section "10. Full firmware build (idf.py)"
+
+if [ "${SKIP_IDF_BUILD:-0}" = "1" ]; then
+    echo "  SKIP  SKIP_IDF_BUILD=1 set"
+elif [ -d "${IDF_PATH:-$HOME/esp/esp-idf}" ]; then
+    if (cd "$FW_ROOT" && ./build.sh > /tmp/futuner_sbf_build.log 2>&1); then
+        pass "idf.py build exited 0"
+    else
+        fail "idf.py build FAILED — see /tmp/futuner_sbf_build.log"
+        tail -40 /tmp/futuner_sbf_build.log | sed 's/^/        /'
+    fi
+else
+    echo "  SKIP  IDF_PATH not found"
 fi
 
 # ---------------------------------------------------------------------------
@@ -328,15 +352,12 @@ echo
 
 if [ "$FAIL_COUNT" -gt 0 ]; then
     echo "FAILURES:"
-    for f in "${FAILURES[@]}"; do
-        echo "  - $f"
-    done
+    for f in "${FAILURES[@]}"; do echo "  - $f"; done
     echo
     echo "RESULT: FAIL"
-    echo "Fix the issues above and re-run. Do not declare done while any check is FAIL."
     exit 1
 fi
 
 echo "RESULT: PASS"
-echo "All checks green. You may declare the DTC prompt complete and hand back to Sean."
+echo "All checks green. You may declare Prompt 5 complete."
 exit 0

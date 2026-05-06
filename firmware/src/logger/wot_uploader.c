@@ -1,5 +1,12 @@
 #include "wot_uploader.h"
 #include "wot_logger_config.h"
+#include "license.h"
+#include "feature_manager.h"
+
+// Local sizing for the license-gate reason buffer. Not part of the
+// locked wot_logger_config.h — this is a private gate detail.
+// Proposed default — needs approval from Sean before lock.
+#define WOT_UPLOAD_GATE_REASON_MAX  128
 
 #include "esp_log.h"
 
@@ -28,9 +35,14 @@ typedef struct {
     bool                          first_tick;
     uint32_t                      queue_count;
     uint32_t                      queue_bytes;
+    wot_uploader_vin_source_fn_t  vin_source;       // Prompt 5 license gate
 } up_ctx_t;
 
 static up_ctx_t s_ctx;
+
+void wot_uploader_set_vin_source(wot_uploader_vin_source_fn_t fn) {
+    s_ctx.vin_source = fn;
+}
 
 // ------------------------------------------------------------------
 // Helpers
@@ -115,6 +127,20 @@ static esp_err_t try_one_upload(void) {
     if (s_ctx.fs.iter_next == NULL || s_ctx.fs.read_file == NULL ||
         s_ctx.fs.delete_file == NULL || s_ctx.http.post == NULL) {
         return ESP_ERR_INVALID_STATE;
+    }
+    // Promoted-Prompt-4 license gate. Refuse upload if license cache
+    // says unpaid / revoked / VIN-mismatch. The file is RETAINED
+    // (not deleted) so a subsequent paid + VIN-matched cycle can
+    // still upload it. NULL vin_source degrades the check to
+    // present + paid + !revoked (no per-VIN match).
+    {
+        const char *vin = s_ctx.vin_source != NULL ? s_ctx.vin_source() : NULL;
+        char gate_reason[WOT_UPLOAD_GATE_REASON_MAX] = {0};
+        if (!license_can_run_feature(FEATURE_WOT_LOGGING, vin,
+                                     gate_reason, sizeof(gate_reason))) {
+            ESP_LOGW(TAG, "upload gated by license: %s", gate_reason);
+            return ESP_OK; // not a transport error — retain + retry
+        }
     }
     char name[WOT_QUEUE_FILENAME_MAX];
     size_t size = 0;

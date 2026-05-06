@@ -207,7 +207,21 @@ FORBIDDEN=(
     "firmware/src/ecu_write"
     "firmware/src/flash"
     "firmware/src/feature_manager"
-    "firmware/src/logger"
+    # Granular: wot_uploader.{c,h} is in scope as of Prompt 5 (license-
+    # gate one-liner per Q2). Keep the rest of firmware/src/logger/
+    # off-limits.
+    "firmware/src/logger/wot_logger.c"
+    "firmware/src/logger/wot_logger.h"
+    "firmware/src/logger/wot_recorder.c"
+    "firmware/src/logger/wot_recorder.h"
+    "firmware/src/logger/logger_manager.c"
+    "firmware/src/logger/logger_manager.h"
+    "firmware/src/logger/logger_config.c"
+    "firmware/src/logger/logger_config.h"
+    "firmware/src/logger/logger_profile.c"
+    "firmware/src/logger/logger_profile.h"
+    "firmware/src/logger/logger_variables.c"
+    "firmware/src/logger/logger_variables.h"
     "firmware/src/dtc"
     "firmware/src/commands/command_handler.c"
     "firmware/src/commands/command_handler.h"

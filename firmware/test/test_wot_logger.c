@@ -280,6 +280,45 @@ static void setup_uploader(void) {
     EXPECT(wot_uploader_init(&cfg) == ESP_OK, "uploader init");
 }
 
+// Prompt 5 added a license_can_run_feature() gate inside
+// wot_uploader.c's try_one_upload(). Seed a paid + non-revoked
+// license per test so the existing upload-success / 5xx-retain
+// scenarios still exercise the HTTP path.
+#include "license.h"
+#include "license_config.h"
+
+static int  dummy_lic_get(const char *u, const char *b, uint8_t *o, size_t c, size_t *l, uint32_t t, void *x)
+                         { (void)u;(void)b;(void)o;(void)c;(void)l;(void)t;(void)x; return -1; }
+static int  dummy_lic_post(const char *u, const char *b, const uint8_t *body, size_t bl,
+                           uint8_t *o, size_t c, size_t *l, uint32_t t, void *x)
+                          { (void)u;(void)b;(void)body;(void)bl;(void)o;(void)c;(void)l;(void)t;(void)x; return -1; }
+static esp_err_t dummy_lic_save_str(const char *k, const char *v, void *x) { (void)k;(void)v;(void)x; return ESP_OK; }
+static esp_err_t dummy_lic_load_str(const char *k, char *v, size_t cap, void *x) {
+    (void)k; (void)x; if (v && cap > 0) v[0] = '\0'; return ESP_ERR_NOT_FOUND;
+}
+static esp_err_t dummy_lic_save_u32(const char *k, uint32_t v, void *x) { (void)k;(void)v;(void)x; return ESP_OK; }
+static esp_err_t dummy_lic_load_u32(const char *k, uint32_t *v, void *x) { (void)k;(void)v;(void)x; return ESP_ERR_NOT_FOUND; }
+
+static void seed_license_paid_no_vin_match(void) {
+    static bool s_inited = false;
+    if (!s_inited) {
+        license_module_config_t cfg = {
+            .http = { .get = dummy_lic_get, .post = dummy_lic_post, .user_ctx = NULL },
+            .nvs  = {
+                .save_string = dummy_lic_save_str,
+                .load_string = dummy_lic_load_str,
+                .save_uint32 = dummy_lic_save_u32,
+                .load_uint32 = dummy_lic_load_u32,
+                .user_ctx    = NULL,
+            },
+        };
+        license_init(&cfg);
+        s_inited = true;
+    }
+    license_state_t seed = { .present = true, .paid = true, .revoked = false };
+    license_test_seed(&seed);
+}
+
 static void test_setup(void) {
     test_clock_reset();
     mock_fs_reset();
@@ -291,6 +330,7 @@ static void test_setup(void) {
     g_wifi_ready = true;
     memset(&g_mockf, 0, sizeof(g_mockf));
     g_last_gzip_len = 0;
+    seed_license_paid_no_vin_match();
 }
 
 /* ------------------------------------------------------------------ */

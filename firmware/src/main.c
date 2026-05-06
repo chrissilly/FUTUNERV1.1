@@ -183,6 +183,18 @@ void app_main(void) {
         }
     }
 
+    /* SBF live tune orchestrator — registers FEATURE_LIVE_TUNE with
+       feature_manager, wires loader/applier/downloader behind their
+       on-target adapters. Includes the wot_uploader license gate
+       wiring (Prompt 4 follow-up). */
+    {
+        extern esp_err_t main_init_sbf_orchestrator(void);
+        err = main_init_sbf_orchestrator();
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "sbf_orchestrator init failed (non-fatal): rc=%d", (int)err);
+        }
+    }
+
     ESP_LOGI(TAG, "System initialized");
     ESP_LOGI(TAG, "Device Serial: 0x%012llX", wifi_ap_get_serial_number());
     /* C1 fix: do not log password in plaintext */

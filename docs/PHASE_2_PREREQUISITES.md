@@ -167,6 +167,45 @@ These don't exist in `cloud/src/main.py` today.
 
 ---
 
+## P-11 🔴 Per-variant manifest replaces sbf_variants table + ECU sentinel check
+
+Two related items grouped because both close out together when
+`SCALE_ARCHITECTURE_PROPOSAL §2.2` ships.
+
+**(a) sbf_variants table → manifest.** Today
+`firmware/src/sbf/sbf_variants.{c,h}` carries a hand-maintained
+`{boxcode, mid_byte, address_offset}` table used by the SBF live
+tune applier when invoking `ecu_write_data`. v1 ships with one row
+(the dev car's `4K0907557G__0003`); future boxcodes get rows added
+manually per variant-onboarding. The Phase A migration plan lifts
+these values into the per-variant manifest's `memory_map.write_mid_byte`
+and `memory_map.write_offset` fields, with `sbf_variants_lookup`
+becoming a thin shim that resolves the active variant's manifest.
+
+This same table is duplicated structurally by
+`logger_variables_get_write_mid_byte()` /
+`_get_write_address_offset()`. Both must coexist with matching
+values until the manifest migration unifies them.
+
+**(b) ECU sentinel check before live-tune apply.** The orchestrator
+does NOT verify the ECU's currently-running binary contains the
+live-tune patches before applying. A paid-but-stock-flashed customer
+could attempt a live-tune apply, get "success", and see no behavior
+change. v1 relies on operator discipline (dev-car only); customer
+rollout requires:
+- A per-variant sentinel address + expected byte sequence in the
+  manifest.
+- A pre-apply UDS read at that sentinel; mismatch → refuse with a
+  clear "ECU not flashed for live tune" message.
+- A separate cloud-side gate so the order is enforced (Phase 2
+  first, then live tune).
+
+Closes when: `docs/SCALE_ARCHITECTURE_PROPOSAL.md` §2.2 schema is
+locked, the dongle reads variant manifest at boot, and the
+sentinel check is wired into `sbf_orchestrator`.
+
+---
+
 ## Update protocol
 
 When you close an item out, change its emoji to 🟢 and add a one-line

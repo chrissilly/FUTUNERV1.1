@@ -11,6 +11,7 @@
 #include "wot_log_commands.h"
 #include "dtc_commands.h"
 #include "vin_pair_commands.h"
+#include "sbf_commands.h"
 
 const command_def_t COMMAND_REGISTRY[] = {
     {"pair_ecu", "Pair with current ECU", CMD_SECURITY_UNSECURED, cmd_pair_ecu},
@@ -61,6 +62,11 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"vin_pair_now",   "Run VIN pair-or-refresh (cloud /register + /license)", CMD_SECURITY_UNSECURED, cmd_vin_pair_now},
     {"set_auth_token", "Install device Bearer token in NVS (admin pre-enrollment)", CMD_SECURITY_SECURED, cmd_set_auth_token},
     {"license_status", "Snapshot of cached license state (read-only)", CMD_SECURITY_UNSECURED, cmd_license_status},
+    /* SBF live tune — Prompt 5; gated by license_can_run_feature(FEATURE_LIVE_TUNE) */
+    {"live_tune_start",  "Begin live-tune (params: stage, ethanol_pct)", CMD_SECURITY_UNSECURED, cmd_live_tune_start},
+    {"live_tune_set",    "Update active live-tune (params: stage, ethanol_pct)", CMD_SECURITY_UNSECURED, cmd_live_tune_set},
+    {"live_tune_stop",   "Drain queue and unload active SBF",            CMD_SECURITY_UNSECURED, cmd_live_tune_stop},
+    {"live_tune_status", "Snapshot of orchestrator state (read-only)",   CMD_SECURITY_UNSECURED, cmd_live_tune_status},
 };
 
 const uint8_t COMMAND_COUNT = sizeof(COMMAND_REGISTRY) / sizeof(command_def_t);

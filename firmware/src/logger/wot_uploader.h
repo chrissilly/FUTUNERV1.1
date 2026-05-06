@@ -125,6 +125,22 @@ void      wot_uploader_tick(uint32_t now_ms);
 /* Diagnostics — number of files currently queued on disk. */
 uint32_t  wot_uploader_queue_count(void);
 
+/* ------------------------------------------------------------------ */
+/* License gate (Prompt 5 — promotes the deferred Prompt 4 gate)       */
+/* ------------------------------------------------------------------ */
+
+/* VIN source — used at upload-time to gate license_can_run_feature
+ * on the current ECU VIN. Returns NULL or empty when no VIN known
+ * (license module's contract handles that gracefully). Installed by
+ * main.c via wot_uploader_set_vin_source(); host tests install a
+ * fixture. Returning NULL skips the per-VIN match and degrades the
+ * gate to present + paid + !revoked. */
+typedef const char *(*wot_uploader_vin_source_fn_t)(void);
+
+/* Plumb a VIN source into the uploader. Calling with NULL clears it
+ * (effectively skipping the per-VIN match check). Idempotent. */
+void wot_uploader_set_vin_source(wot_uploader_vin_source_fn_t fn);
+
 #ifdef __cplusplus
 }
 #endif

@@ -33,10 +33,16 @@ CFLAGS      ?= -std=c11 -Wall -Wextra -Wpedantic \
                -DWOT_LOGGER_HOST_BUILD=1 \
                -DWOT_LOG_COMMANDS_HOST_BUILD=1 \
                -O0 -g
-INCLUDES    := -I$(SHIM_DIR) -I$(FM_SRC) -I$(LOG_SRC) -I$(CMD_SRC) -I$(CFG_SRC)
+INCLUDES    := -I$(SHIM_DIR) -I$(FM_SRC) -I$(LOG_SRC) -I$(CMD_SRC) -I$(CFG_SRC) \
+               -I$(FW_SRC)/license
+
+# Prompt 5 added a license-gate dependency to wot_uploader.c. Link
+# the real license module so the gate path is exercised end-to-end.
+LIC_SRC     := $(FW_SRC)/license
 
 SOURCES     := \
     $(FM_SRC)/feature_manager.c \
+    $(LIC_SRC)/license.c \
     $(LOG_SRC)/wot_recorder.c \
     $(LOG_SRC)/wot_uploader.c \
     $(LOG_SRC)/wot_logger.c \

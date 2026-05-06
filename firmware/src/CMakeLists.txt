@@ -39,6 +39,7 @@ set(app_sources
     "commands/wot_log_commands.c"
     "commands/dtc_commands.c"
     "commands/vin_pair_commands.c"
+    "commands/sbf_commands.c"
     "flex_fuel/blend_engine.c"
     "flex_fuel/flex_fuel.c"
     "feature_manager/feature_manager.c"
@@ -46,11 +47,16 @@ set(app_sources
     "dtc/dtc_uds.c"
     "license/license.c"
     "vin_pairing/vin_pairing.c"
+    "sbf/sbf_loader.c"
+    "sbf/sbf_applier.c"
+    "sbf/sbf_downloader.c"
+    "sbf/sbf_orchestrator.c"
+    "sbf/sbf_variants.c"
 )
 
 idf_component_register(
     SRCS ${app_sources}
-    INCLUDE_DIRS "." "can" "nvs" "config" "state_machine" "logger" "isotp_coordinator" "wifi" "websocket" "commands" "error" "filesystem" "bdef" "scal" "ecu_write" "flex_fuel" "feature_manager" "dtc" "license" "vin_pairing"
+    INCLUDE_DIRS "." "can" "nvs" "config" "state_machine" "logger" "isotp_coordinator" "wifi" "websocket" "commands" "error" "filesystem" "bdef" "scal" "ecu_write" "flex_fuel" "feature_manager" "dtc" "license" "vin_pairing" "sbf"
     REQUIRES esp_http_server esp_http_client esp_rom json littlefs mbedtls isotp-c driver nvs_flash esp_wifi esp_event
     EMBED_FILES "${CMAKE_SOURCE_DIR}/futuner_control_panel.html"
 )
