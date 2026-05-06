@@ -1,0 +1,2 @@
+{"ts": 1714892100.000123, "dir": "tx", "src": "0x7E0", "dst": "0x710", "service": "ReadDataByIdentifier", "service_id": "0x22", "did": "0xF190", "raw": "22 F1 90", "decoded": null}
+{"ts": 1714892100.001500, "dir": "rx", "src": "0x710", "dst": "0x7E0", "service": "ReadDataByIdentifier (positive response)", "service_id": "0x62", "did": "0xF190", "raw": "62 F1 90 57 41 55 5A 5A 5A 34 4D 31 32 32 30 30 30 31 32 33", "decoded": "WAUZZZ4M122000123"}

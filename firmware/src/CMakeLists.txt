@@ -1,0 +1,53 @@
+# FUTUNER v2 Source Files
+
+set(app_sources
+    "main.c"
+    "can/can_driver.c"
+    "can/isotp_shims.c"
+    "can/can_manager.c"
+    "nvs/nvs_manager.c"
+    "nvs/ecu_info.c"
+    "state_machine/uds_protocol.c"
+    "state_machine/connection_manager.c"
+    "logger/logger_config.c"
+    "logger/logger_manager.c"
+    "logger/logger_variables.c"
+    "logger/logger_profile.c"
+    "logger/wot_logger.c"
+    "logger/wot_recorder.c"
+    "logger/wot_uploader.c"
+    "isotp_coordinator/isotp_coordinator.c"
+    "wifi/wifi_ap.c"
+    "websocket/ws_server.c"
+    "commands/command_handler.c"
+    "commands/commands.c"
+    "commands/ecu_commands.c"
+    "commands/logger_commands.c"
+    "commands/logger_data_commands.c"
+    "commands/ecu_write_commands.c"
+    "commands/system_commands.c"
+    "commands/file_commands.c"
+    "commands/profile_commands.c"
+    "error/error_tracker.c"
+    "filesystem/fs_manager.c"
+    "bdef/bdef_file.c"
+    "scal/scal_file.c"
+    "ecu_write/ecu_write.c"
+    "commands/flex_commands.c"
+    "commands/can_sniffer.c"
+    "commands/serial_console.c"
+    "commands/wot_log_commands.c"
+    "commands/dtc_commands.c"
+    "flex_fuel/blend_engine.c"
+    "flex_fuel/flex_fuel.c"
+    "feature_manager/feature_manager.c"
+    "dtc/dtc_feature.c"
+    "dtc/dtc_uds.c"
+)
+
+idf_component_register(
+    SRCS ${app_sources}
+    INCLUDE_DIRS "." "can" "nvs" "config" "state_machine" "logger" "isotp_coordinator" "wifi" "websocket" "commands" "error" "filesystem" "bdef" "scal" "ecu_write" "flex_fuel" "feature_manager" "dtc"
+    REQUIRES esp_http_server esp_http_client esp_rom json littlefs mbedtls isotp-c driver nvs_flash esp_wifi esp_event
+    EMBED_FILES "${CMAKE_SOURCE_DIR}/futuner_control_panel.html"
+)

@@ -1,0 +1,25 @@
+# Bench CAN Toolkit — Python dependencies.
+#
+# This file is read by `firmware/test/can_capture/eval.sh`, which extracts
+# each non-comment, non-empty line and runs `python3 -c "import <line>"`
+# against the system Python. The active lines below are therefore the
+# *importable Python module names*, not the canonical PyPI package
+# names (which differ — `python-can` installs the `can` module, and
+# `can-isotp` installs the `isotp` module).
+#
+# To install on a fresh machine, run:
+#
+#     pip install python-can==4.6.1 can-isotp==2.0.6 pytest==8.4.2
+#
+# (or `pip install --user ...` if you don't have a venv set up).
+# pip will fetch the corresponding PyPI packages and they will register
+# under the import names listed below.
+#
+# Pinned versions match what was installed on the dev machine the
+# toolkit was authored against. Bumping any pin needs a re-run of
+# `firmware/test/can_capture/eval.sh` to confirm the parser still
+# behaves byte-for-byte.
+
+can
+isotp
+pytest

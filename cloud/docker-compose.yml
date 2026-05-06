@@ -1,0 +1,13 @@
+services:
+  srm-cloud:
+    build: .
+    container_name: srm-cloud
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"   # bind localhost-only; let Caddy do TLS
+    environment:
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./firmware:/app/firmware
+      - ./calibrations:/app/calibrations

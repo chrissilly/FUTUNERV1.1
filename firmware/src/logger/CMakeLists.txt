@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS
+        logger_manager.c
+        logger_config.c
+        logger_profile.c
+        logger_variables.c
+        wot_logger.c
+    INCLUDE_DIRS
+        .
+)

@@ -1,0 +1,25 @@
+# Caddy reverse proxy + automatic HTTPS via Let's Encrypt.
+# Put this in /etc/caddy/Caddyfile on a Linux box, then `sudo systemctl reload caddy`.
+# Requires: A record api.sillyrabbitmotorsport.com → this box's public IP, port 80+443 open.
+
+api.sillyrabbitmotorsport.com {
+    reverse_proxy 127.0.0.1:8000
+
+    # Friendly logs
+    log {
+        output file /var/log/caddy/api-srm.log {
+            roll_size 100mb
+            roll_keep 10
+        }
+        format json
+    }
+
+    # Tighten admin endpoints (optional — also gated by ADMIN_API_KEY)
+    @admin path /admin/*
+    handle @admin {
+        # Uncomment to restrict admin to your home IP:
+        # @bad_ip not remote_ip 1.2.3.4
+        # respond @bad_ip 403
+        reverse_proxy 127.0.0.1:8000
+    }
+}

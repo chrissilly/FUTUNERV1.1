@@ -1,0 +1,2 @@
+source /Users/rabbit/esp/obd/FUTV1.1/firmware/build/bootloader/gdbinit/symbols
+source /Users/rabbit/esp/obd/FUTV1.1/firmware/build/bootloader/gdbinit/connect

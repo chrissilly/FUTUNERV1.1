@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FUTUNER v2 Control Panel</title>
+<style>
+:root {
+  --bg-dark: #0d0d0d;
+  --bg-card: #1a1a1a;
+  --bg-input: #252525;
+  --bg-hover: #2a2a2a;
+  --border: #333;
+  --text: #e0e0e0;
+  --text-dim: #888;
+  --accent: #ff6600;
+  --accent-dark: #cc5200;
+  --accent-glow: rgba(255,102,0,0.3);
+  --green: #00cc66;
+  --yellow: #ffcc00;
+  --red: #ff3333;
+  --blue: #3399ff;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg-dark);color:var(--text);min-height:100vh;overflow-x:hidden}
+a{color:var(--accent)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-dark)}
+::-webkit-scrollbar-thumb{background:#444;border-radius:3px}
+
+.header{background:linear-gradient(135deg,#1a1a1a 0%,#0d0d0d 100%);border-bottom:2px solid var(--accent);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:100}
+.brand{display:flex;align-items:center;gap:12px}
+.brand h1{font-size:1.4em;font-weight:700;letter-spacing:2px;color:var(--accent);text-shadow:0 0 20px var(--accent-glow)}
+.brand span{font-size:.75em;color:var(--text-dim);border:1px solid #444;padding:2px 8px;border-radius:3px}
+.conn-group{display:flex;align-items:center;gap:12px}
+.conn-dot{width:10px;height:10px;border-radius:50%;background:var(--red);transition:background .3s}
+.conn-dot.connected{background:var(--green);box-shadow:0 0 8px var(--green)}
+.conn-label{font-size:.85em;color:var(--text-dim)}
+.auth-group{display:flex;gap:6px;align-items:center}
+.auth-group input{background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:.85em;width:160px}
+.auth-group input:focus{outline:none;border-color:var(--accent)}
+.lock-icon{font-size:1.1em;margin-right:2px}
+.auth-status{font-size:.75em;padding:2px 8px;border-radius:3px;background:#331a00;color:var(--accent)}
+.auth-status.authed{background:#003300;color:var(--green)}
+
+button{background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:4px;cursor:pointer;font-size:.85em;transition:all .15s}
+button:hover{background:var(--accent);color:#000;border-color:var(--accent)}
+button:active{transform:scale(.97)}
+button.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
+button.primary:hover{background:#ff8533}
+button.danger{border-color:var(--red)}
+button.danger:hover{background:var(--red);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+
+.tabs{display:flex;background:var(--bg-card);border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{padding:10px 20px;cursor:pointer;font-size:.9em;color:var(--text-dim);border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;user-select:none}
+.tab:hover{color:var(--text);background:var(--bg-hover)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.panel{display:none;padding:16px;max-width:1600px;margin:0 auto}
+.panel.active{display:block}
+
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:12px}
+.card h3{color:var(--accent);font-size:.95em;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px}
+
+input[type=text],input[type=number],input[type=password],select,textarea{background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:.85em;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{resize:vertical}
+
+/* Dashboard */
+.dash-top{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:20px}
+.gauge-wrap svg{max-width:260px;width:100%}
+.gauge-label{font-size:1.8em;font-weight:700;margin-top:8px;font-variant-numeric:tabular-nums}
+.gauge-title{font-size:.8em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px}
+
+.readouts{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.readout{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center}
+.readout .val{font-size:1.5em;font-weight:700;font-variant-numeric:tabular-nums}
+.readout .lbl{font-size:.7em;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.readout .unit{font-size:.7em;color:var(--text-dim)}
+.val.green{color:var(--green)}.val.yellow{color:var(--yellow)}.val.red{color:var(--red)}
+
+/* Knock indicators */
+.knock-row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px}
+.knock-row .knock-title{font-size:.8em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;width:100%;text-align:center;margin-bottom:4px}
+.knock-cyl{display:flex;flex-direction:column;align-items:center;gap:4px}
+.knock-dot{width:22px;height:22px;border-radius:50%;background:var(--green);border:2px solid #333;transition:background .15s,box-shadow .15s}
+.knock-dot.active{background:var(--red);box-shadow:0 0 10px var(--red)}
+.knock-cyl-label{font-size:.65em;color:var(--text-dim);text-transform:uppercase}
+
+/* Sniffer */
+.sniff-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.sniff-stats{font-size:.85em;color:var(--text-dim);margin-left:auto;display:flex;gap:16px}
+.sniff-table-wrap{max-height:500px;overflow-y:auto;border:1px solid var(--border);border-radius:4px}
+table{width:100%;border-collapse:collapse;font-size:.82em}
+th{background:var(--bg-input);color:var(--accent);text-align:left;padding:6px 10px;position:sticky;top:0;z-index:1}
+td{padding:4px 10px;border-top:1px solid #222;font-family:'Cascadia Code','Fira Code',monospace;font-size:.9em}
+tr:hover td{background:var(--bg-hover)}
+.send-raw{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.send-raw input{width:100px}
+.send-raw input.data-input{width:240px}
+
+/* Diagnostics */
+.dtc-list{max-height:300px;overflow-y:auto}
+.dtc-item{padding:8px 12px;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center}
+.dtc-code{font-weight:700;color:var(--red);font-family:monospace}
+.ecu-info{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.ecu-field{padding:8px;background:var(--bg-input);border-radius:4px}
+.ecu-field .k{font-size:.7em;color:var(--text-dim);text-transform:uppercase}
+.ecu-field .v{font-size:.95em;font-weight:600;margin-top:2px;word-break:break-all}
+
+/* Tuning */
+.xdf-meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;font-size:.85em;color:var(--text-dim)}
+.xdf-search{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+.xdf-search input{flex:1;max-width:400px}
+.map-item{border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.map-header{padding:10px 14px;background:var(--bg-input);cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.map-header:hover{background:var(--bg-hover)}
+.map-header .title{font-weight:600;font-size:.9em}
+.map-header .info{font-size:.75em;color:var(--text-dim)}
+.map-header .arrow{transition:transform .2s;color:var(--text-dim)}
+.map-header .arrow.open{transform:rotate(90deg)}
+.map-body{padding:12px;display:none;overflow-x:auto}
+.map-body.open{display:block}
+.map-grid{border-collapse:collapse;font-size:.8em}
+.map-grid th{background:var(--accent-dark);color:#fff;padding:4px 8px;text-align:center;font-weight:600;min-width:60px}
+.map-grid td{padding:0}
+.map-grid .axis-cell{background:var(--bg-input);color:var(--accent);font-weight:600;text-align:center;padding:4px 8px}
+.map-grid input{width:100%;background:transparent;border:1px solid transparent;color:var(--text);text-align:center;padding:4px 6px;font-family:monospace;font-size:1em}
+.map-grid input:focus{border-color:var(--accent);background:var(--bg-input);outline:none}
+.map-grid input.flash-ok{background:rgba(0,204,102,.3) !important;transition:background .1s}
+.map-grid input.flash-err{background:rgba(255,51,51,.3) !important;transition:background .1s}
+.scalar-edit{display:flex;align-items:center;gap:10px;padding:8px}
+.scalar-edit input{width:120px;text-align:center;font-family:monospace}
+.scalar-edit .unit{font-size:.85em;color:var(--text-dim)}
+
+/* File Manager */
+.fs-path{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.fs-path input{flex:1}
+.fs-list{max-height:400px;overflow-y:auto}
+.fs-item{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid #222;cursor:pointer}
+.fs-item:hover{background:var(--bg-hover)}
+.fs-icon{width:20px;text-align:center;color:var(--accent)}
+.fs-name{flex:1;font-size:.9em}
+.fs-size{font-size:.8em;color:var(--text-dim)}
+.fs-actions{display:flex;gap:4px}
+.file-viewer{margin-top:10px}
+.file-viewer textarea{width:100%;height:200px;font-family:monospace;font-size:.85em}
+.upload-area{display:flex;gap:8px;align-items:center;margin-top:10px}
+
+/* System */
+.sys-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.sys-item{padding:10px;background:var(--bg-input);border-radius:4px;text-align:center}
+.sys-item .val{font-size:1.3em;font-weight:700;color:var(--accent)}
+.sys-item .lbl{font-size:.7em;color:var(--text-dim);margin-top:4px;text-transform:uppercase}
+.cmd-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-top:10px}
+.cmd-item{padding:6px 10px;background:var(--bg-input);border-radius:4px;font-family:monospace;font-size:.8em;color:var(--text-dim)}
+
+/* WiFi STA form */
+.wifi-sta-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.wifi-sta-form input{width:180px}
+.wifi-sta-status{margin-top:8px;font-size:.85em;color:var(--text-dim)}
+.wifi-sta-status .sta-ip{color:var(--green);font-weight:700;font-family:monospace}
+
+/* Log Config */
+.logcfg-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.logcfg-toolbar button{font-size:.82em}
+.logcfg-stats{display:flex;gap:16px;font-size:.82em;color:var(--text-dim);margin-left:auto}
+.logcfg-stats b{color:var(--accent)}
+
+.logcfg-category{border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.logcfg-cat-header{padding:10px 14px;background:var(--bg-input);cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.logcfg-cat-header:hover{background:var(--bg-hover)}
+.logcfg-cat-header .cat-name{font-weight:600;font-size:.9em;color:var(--accent)}
+.logcfg-cat-header .cat-count{font-size:.75em;color:var(--text-dim)}
+.logcfg-cat-header .arrow{transition:transform .2s;color:var(--text-dim)}
+.logcfg-cat-header .arrow.open{transform:rotate(90deg)}
+.logcfg-cat-body{display:none}
+.logcfg-cat-body.open{display:block}
+
+.logcfg-var-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid #222}
+.logcfg-var-row:hover{background:var(--bg-hover)}
+.logcfg-var-row input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
+.logcfg-var-name{font-family:'Cascadia Code','Fira Code',monospace;font-size:.85em;min-width:180px;color:var(--text)}
+.logcfg-var-desc{flex:1;font-size:.8em;color:var(--text-dim)}
+.logcfg-var-rate{width:110px}
+.logcfg-var-value{min-width:80px;text-align:right;font-family:'Cascadia Code','Fira Code',monospace;font-size:.85em;color:var(--green);font-variant-numeric:tabular-nums}
+
+.logcfg-bottom-bar{display:flex;gap:16px;align-items:center;padding:12px 16px;background:var(--bg-input);border-radius:6px;margin-top:12px;flex-wrap:wrap}
+.logcfg-bottom-bar .stat{font-size:.85em;color:var(--text-dim)}
+.logcfg-bottom-bar .stat b{color:var(--accent)}
+.logcfg-slot-counter{font-size:.85em;font-weight:600;color:var(--accent);margin-left:auto}
+.logcfg-slot-counter.at-limit{color:var(--red)}
+.logcfg-var-row.disabled-row{opacity:.4;pointer-events:none}
+.logcfg-var-row .slot-badge{font-size:.7em;color:var(--yellow);background:#332200;padding:1px 6px;border-radius:3px;margin-left:4px;white-space:nowrap}
+.logcfg-limit-warning{display:none;background:rgba(255,51,51,.15);border:1px solid var(--red);border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:.85em;color:var(--red)}
+.logcfg-limit-warning.show{display:block}
+
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--accent);color:var(--text);padding:10px 16px;border-radius:6px;font-size:.85em;z-index:1000;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.error{border-color:var(--red)}
+
+@media(max-width:768px){
+  /* Header */
+  .header{flex-direction:column;align-items:flex-start;padding:10px 12px}
+  .auth-group input{width:120px}
+  .auth-group{flex-wrap:wrap}
+  /* Tabs */
+  .tab{padding:8px 12px;font-size:.82em;min-height:44px;display:flex;align-items:center}
+  /* Dashboard */
+  .dash-top{grid-template-columns:1fr}
+  .gauge-wrap svg{max-width:200px}
+  .gauge-label{font-size:1.5em}
+  .readouts{grid-template-columns:repeat(2,1fr)}
+  /* Sniffer */
+  .sniff-controls{flex-direction:column;align-items:stretch}
+  .sniff-stats{margin-left:0;justify-content:space-between}
+  .sniff-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .send-raw{flex-direction:column;align-items:stretch}
+  .send-raw input,.send-raw input.data-input{width:100%}
+  /* Diagnostics */
+  .ecu-info{grid-template-columns:1fr}
+  .dtc-item{flex-direction:column;align-items:flex-start;gap:6px}
+  /* Tuning */
+  .map-body{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .map-header .info{white-space:normal;word-break:break-word}
+  .scalar-edit{flex-direction:column;align-items:flex-start;gap:6px}
+  .xdf-search input{max-width:none}
+  /* Log Config */
+  .logcfg-var-row{flex-wrap:wrap;gap:6px}
+  .logcfg-var-name{min-width:120px;flex:1 1 100%}
+  .logcfg-var-desc{flex:1 1 100%;order:3}
+  .logcfg-var-rate{width:100%;max-width:200px}
+  .logcfg-var-value{min-width:60px;text-align:left}
+  .logcfg-stats{margin-left:0;flex-basis:100%}
+  .logcfg-bottom-bar{gap:10px}
+  /* Files */
+  .file-viewer textarea{height:300px}
+  .upload-area{flex-direction:column;align-items:stretch}
+  .fs-path{flex-direction:column}
+  .fs-path input{width:100%}
+  /* System */
+  .wifi-sta-form{flex-direction:column;align-items:stretch}
+  .wifi-sta-form input{width:100%}
+  .cmd-list{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  .sys-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  /* Toast */
+  .toast{right:10px;left:10px;bottom:10px;text-align:center}
+  /* Touch targets */
+  button{min-height:44px;padding:8px 14px}
+  .logcfg-var-row input[type=checkbox]{width:22px;height:22px}
+  .panel{padding:10px}
+  .card{padding:12px}
+}
+@media(max-width:480px){
+  .brand h1{font-size:1.1em}
+  .brand span{font-size:.65em}
+  .readouts{grid-template-columns:1fr}
+  .readout .val{font-size:1.2em}
+  .readout{padding:8px}
+  .gauge-wrap svg{max-width:160px}
+  .gauge-label{font-size:1.2em}
+  .panel{padding:6px}
+  .card{padding:10px;margin-bottom:8px}
+  .card h3{font-size:.85em}
+  body{font-size:14px}
+  .tab{padding:6px 10px;font-size:.75em}
+  .sys-grid{grid-template-columns:1fr 1fr}
+  .sys-item .val{font-size:1.1em}
+  .knock-dot{width:18px;height:18px}
+  .sniff-stats{flex-direction:column;gap:4px}
+  .map-grid th,.map-grid td{padding:3px 4px}
+  .map-grid{font-size:.72em}
+  .xdf-meta{font-size:.78em}
+  .logcfg-bottom-bar{padding:8px 10px}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <h1>FUTUNER</h1>
+    <span>v2</span>
+  </div>
+  <div class="conn-group">
+    <div class="conn-dot" id="connDot"></div>
+    <span class="conn-label" id="connLabel">Disconnected</span>
+  </div>
+  <div class="auth-group">
+    <span class="lock-icon" id="lockIcon">&#128274;</span>
+    <input type="password" id="authPass" placeholder="Password" autocomplete="off">
+    <button onclick="doAuth()" id="authBtn">Unlock</button>
+    <span class="auth-status" id="authStatus">Locked</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('dashboard')">Dashboard</div>
+  <div class="tab" onclick="switchTab('sniffer')">CAN Sniffer</div>
+  <div class="tab" onclick="switchTab('diag')">Diagnostics</div>
+  <div class="tab" onclick="switchTab('tuning')">XDF Tuning</div>
+  <div class="tab" onclick="switchTab('logconfig')">Log Config</div>
+  <div class="tab" onclick="switchTab('files')">Files</div>
+  <div class="tab" onclick="switchTab('system')">System</div>
+</div>
+
+<!-- ===== DASHBOARD ===== -->
+<div class="panel active" id="panel-dashboard">
+  <div class="dash-top">
+    <div class="card gauge-wrap">
+      <svg viewBox="0 0 200 120" id="rpmGauge">
+        <defs>
+          <linearGradient id="gRpm" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="var(--green)"/>
+            <stop offset="70%" stop-color="var(--yellow)"/>
+            <stop offset="100%" stop-color="var(--red)"/>
+          </linearGradient>
+        </defs>
+        <path d="M20,100 A80,80 0 0,1 180,100" fill="none" stroke="#333" stroke-width="10" stroke-linecap="round"/>
+        <path d="M20,100 A80,80 0 0,1 180,100" fill="none" stroke="url(#gRpm)" stroke-width="10" stroke-linecap="round" id="rpmArc" stroke-dasharray="0 251.33"/>
+        <text x="100" y="78" text-anchor="middle" fill="var(--text-dim)" font-size="8">RPM</text>
+        <text x="20" y="115" text-anchor="middle" fill="var(--text-dim)" font-size="7">0</text>
+        <text x="180" y="115" text-anchor="middle" fill="var(--text-dim)" font-size="7">9000</text>
+      </svg>
+      <div class="gauge-label" id="rpmVal">0</div>
+      <div class="gauge-title">Engine RPM</div>
+    </div>
+    <div class="card gauge-wrap">
+      <svg viewBox="0 0 200 120" id="boostGauge">
+        <defs>
+          <linearGradient id="gBoost" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="var(--blue)"/>
+            <stop offset="25%" stop-color="var(--green)"/>
+            <stop offset="75%" stop-color="var(--yellow)"/>
+            <stop offset="100%" stop-color="var(--red)"/>
+          </linearGradient>
+        </defs>
+        <path d="M20,100 A80,80 0 0,1 180,100" fill="none" stroke="#333" stroke-width="10" stroke-linecap="round"/>
+        <path d="M20,100 A80,80 0 0,1 180,100" fill="none" stroke="url(#gBoost)" stroke-width="10" stroke-linecap="round" id="boostArc" stroke-dasharray="0 251.33"/>
+        <text x="100" y="78" text-anchor="middle" fill="var(--text-dim)" font-size="8">BOOST</text>
+        <text x="20" y="115" text-anchor="middle" fill="var(--text-dim)" font-size="7">-1</text>
+        <text x="180" y="115" text-anchor="middle" fill="var(--text-dim)" font-size="7">3</text>
+      </svg>
+      <div class="gauge-label" id="boostVal">0.00</div>
+      <div class="gauge-title">Boost (bar)</div>
+    </div>
+  </div>
+  <!-- Per-cylinder knock indicators -->
+  <div class="card">
+    <div class="knock-row">
+      <div class="knock-title">Per-Cylinder Knock Detection</div>
+      <div class="knock-cyl"><div class="knock-dot" id="knockCyl1"></div><div class="knock-cyl-label">Cyl 1</div></div>
+      <div class="knock-cyl"><div class="knock-dot" id="knockCyl2"></div><div class="knock-cyl-label">Cyl 2</div></div>
+      <div class="knock-cyl"><div class="knock-dot" id="knockCyl3"></div><div class="knock-cyl-label">Cyl 3</div></div>
+      <div class="knock-cyl"><div class="knock-dot" id="knockCyl4"></div><div class="knock-cyl-label">Cyl 4</div></div>
+      <div class="knock-cyl"><div class="knock-dot" id="knockCyl5"></div><div class="knock-cyl-label">Cyl 5</div></div>
+      <div class="knock-cyl"><div class="knock-dot" id="knockCyl6"></div><div class="knock-cyl-label">Cyl 6</div></div>
+      <div class="knock-cyl"><div class="knock-dot" id="knockCyl7"></div><div class="knock-cyl-label">Cyl 7</div></div>
+      <div class="knock-cyl"><div class="knock-dot" id="knockCyl8"></div><div class="knock-cyl-label">Cyl 8</div></div>
+    </div>
+  </div>
+  <div class="readouts" id="readouts"></div>
+</div>
+
+<!-- ===== CAN SNIFFER ===== -->
+<div class="panel" id="panel-sniffer">
+  <div class="card">
+    <h3>CAN Bus Sniffer</h3>
+    <div class="sniff-controls">
+      <button class="primary" onclick="sniffStart()">Start</button>
+      <button class="danger" onclick="sniffStop()">Stop</button>
+      <input type="text" id="sniffFilter" placeholder="Filter CAN ID (hex)" style="width:160px">
+      <button onclick="clearSniff()">Clear</button>
+      <div class="sniff-stats">
+        <span>Frames: <b id="sniffCount">0</b></span>
+        <span>Rate: <b id="sniffRate">0</b>/s</span>
+      </div>
+    </div>
+    <div class="sniff-table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>ID</th><th>Len</th><th>Data</th></tr></thead>
+        <tbody id="sniffBody"></tbody>
+      </table>
+    </div>
+    <div class="send-raw">
+      <span style="font-size:.85em;color:var(--text-dim)">Send:</span>
+      <input type="text" id="sendId" placeholder="ID (hex)" style="width:90px">
+      <input type="text" id="sendData" placeholder="Data (hex bytes)" class="data-input">
+      <button onclick="sendRawCan()">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DIAGNOSTICS ===== -->
+<div class="panel" id="panel-diag">
+  <div class="card">
+    <h3>Diagnostic Trouble Codes</h3>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="primary" onclick="readDtc()">Read DTCs</button>
+      <button class="danger" onclick="clearDtc()">Clear DTCs</button>
+    </div>
+    <div class="dtc-list" id="dtcList"><span style="color:var(--text-dim);font-size:.85em">Press "Read DTCs" to scan</span></div>
+  </div>
+  <div class="card">
+    <h3>ECU Information</h3>
+    <button onclick="getStatus()" style="margin-bottom:10px">Refresh</button>
+    <div class="ecu-info" id="ecuInfo"></div>
+  </div>
+</div>
+
+<!-- ===== XDF TUNING ===== -->
+<div class="panel" id="panel-tuning">
+  <div class="card">
+    <h3>XDF Live Tuning</h3>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <input type="file" id="xdfFile" accept=".xdf,.XDF" onchange="loadXdf(event)">
+      <span class="xdf-meta" id="xdfMeta"></span>
+    </div>
+    <div class="xdf-search" id="xdfSearchWrap" style="display:none">
+      <input type="text" id="xdfSearch" placeholder="Search maps..." oninput="filterMaps()">
+      <span style="font-size:.85em;color:var(--text-dim)" id="mapCount"></span>
+    </div>
+    <div id="xdfMaps"></div>
+  </div>
+</div>
+
+<!-- ===== LOG CONFIG ===== -->
+<div class="panel" id="panel-logconfig">
+  <div class="card">
+    <h3>Logger Variable Configuration</h3>
+    <div class="logcfg-toolbar">
+      <button class="primary" onclick="logcfgSelectAll()">Select All</button>
+      <button onclick="logcfgDeselectAll()">Deselect All</button>
+      <button onclick="logcfgExpandAll()">Expand All</button>
+      <button onclick="logcfgSaveProfile()">Save Profile</button>
+      <button onclick="logcfgLoadProfile()">Load Profile</button>
+      <input type="file" id="logcfgFileInput" accept=".json" style="display:none" onchange="logcfgDoLoad(event)">
+      <span class="logcfg-slot-counter" id="logcfgSlotCounter">0 / 32 slots</span>
+    </div>
+    <div class="logcfg-limit-warning" id="logcfgLimitWarn">32-slot limit reached. Deselect variables to free slots.</div>
+    <div id="logcfgCategories"></div>
+    <div class="logcfg-bottom-bar" id="logcfgBottomBar">
+      <div class="stat">Slots: <b id="logcfgVarCount">0</b> / 32</div>
+      <div class="stat">Est. bytes/poll: <b id="logcfgBytes">0</b></div>
+      <div class="stat">Est. Hz: <b id="logcfgHz">0</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FILES ===== -->
+<div class="panel" id="panel-files">
+  <div class="card">
+    <h3>File Manager</h3>
+    <div class="fs-path">
+      <input type="text" id="fsPath" value="/" style="flex:1">
+      <button onclick="fsList()">Go</button>
+      <button onclick="fsUp()">Up</button>
+    </div>
+    <div class="fs-list" id="fsList"></div>
+    <div class="file-viewer" id="fileViewer" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+        <b id="viewerName" style="font-size:.9em;flex:1"></b>
+        <button onclick="fileSave()">Save</button>
+        <button class="danger" onclick="fileDelete()">Delete</button>
+        <button onclick="fileViewerClose()">Close</button>
+      </div>
+      <textarea id="fileContent"></textarea>
+    </div>
+    <div class="upload-area">
+      <input type="file" id="uploadFile">
+      <button onclick="fileUpload()">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SYSTEM ===== -->
+<div class="panel" id="panel-system">
+  <div class="card">
+    <h3>System Status</h3>
+    <button onclick="getStatus()" style="margin-bottom:10px">Refresh</button>
+    <div class="sys-grid" id="sysGrid"></div>
+  </div>
+  <div class="card">
+    <h3>WiFi Station</h3>
+    <div class="wifi-sta-form">
+      <input type="text" id="staSSID" placeholder="SSID" list="ssidList">
+      <datalist id="ssidList"></datalist>
+      <input type="password" id="staPassword" placeholder="Password">
+      <button onclick="wifiScan()">Scan</button>
+      <button class="primary" onclick="wifiStaConnect()">Connect</button>
+      <button class="danger" onclick="wifiStaDisconnect()">Disconnect</button>
+    </div>
+    <div id="scanResults" style="max-height:150px;overflow-y:auto;margin:4px 0;font-size:12px"></div>
+    <div class="wifi-sta-status" id="wifiStaStatus">STA: Not connected</div>
+  </div>
+  <div class="card">
+    <h3>Vehicle</h3>
+    <div style="display:flex;gap:8px">
+      <button onclick="wsSend({command:'pair_vehicle'})">Pair Vehicle</button>
+      <button class="danger" onclick="wsSend({command:'unpair_vehicle'})">Unpair Vehicle</button>
+      <button class="danger" onclick="if(confirm('Reboot dongle?'))wsSend({command:'reboot'})" style="margin-left:20px">Reboot</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Available Commands</h3>
+    <button onclick="listCommands()" style="margin-bottom:10px">Load</button>
+    <div class="cmd-list" id="cmdList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ---- State ---- */
+let ws = null, authenticated = false, pollTimer = null;
+let sniffing = false, sniffFrames = 0, sniffRateCount = 0, sniffRateVal = 0;
+let xdfData = null; // parsed XDF
+let pendingCb = {}; // command -> callback
+let cbId = 0;
+let logcfgPollCounter = 0;
+
+/* ---- Readout definitions ---- */
+const READOUT_DEFS = [
+  {key:'nmot_w', label:'RPM', unit:'rpm', warn:6500, danger:7500, decimals:0},
+  {key:'pvdg_w', label:'Boost', unit:'hPa', warn:1800, danger:2500, decimals:0},
+  {key:'rl_w', label:'Load', unit:'%', warn:85, danger:95, decimals:1},
+  {key:'wdkba', label:'Throttle', unit:'%', warn:null, danger:null, decimals:1},
+  {key:'tmot', label:'Coolant', unit:'\u00B0C', warn:100, danger:105, decimals:0},
+  {key:'tans', label:'Intake', unit:'\u00B0C', warn:50, danger:65, decimals:0},
+  {key:'frm_w', label:'STFT B1', unit:'', warn:null, danger:null, decimals:4},
+  {key:'zwoutzyl_w', label:'Ignition', unit:'\u00B0', warn:null, danger:null, decimals:1},
+  {key:'lamsbg_w', label:'Lambda B1', unit:'', warn:null, danger:null, decimals:4},
+  {key:'lamsbg2_w', label:'Lambda B2', unit:'', warn:null, danger:null, decimals:4},
+  {key:'InjSys_ratEthPrtnBascFu', label:'Ethanol', unit:'%', warn:null, danger:null, decimals:0},
+  {key:'gang', label:'Gear', unit:'', warn:null, danger:null, decimals:0},
+];
+
+/* ---- Logger variable definitions (from ecu_variable_db.json) ---- */
+const LOGGER_MAX_SLOTS = 32;
+const ECU_VAR_DB = [
+  {name:'nmot_w', display:'Engine Speed', unit:'rpm', bytes:2, category:'engine'},
+  {name:'rl_w', display:'Load (actual)', unit:'%', bytes:2, category:'engine'},
+  {name:'rlp_w', display:'Load (predicted)', unit:'%', bytes:2, category:'engine'},
+  {name:'wdkba', display:'Throttle Position', unit:'%', bytes:1, category:'engine'},
+  {name:'mshfm_w', display:'MAF (modeled)', unit:'kg/h', bytes:2, category:'engine'},
+  {name:'Eng_tqCluAct_VW', display:'Engine Torque', unit:'Nm', bytes:2, category:'engine'},
+  {name:'APP_r', display:'Accelerator Pedal', unit:'%', bytes:2, category:'engine'},
+  {name:'pus_w', display:'Manifold Pressure', unit:'hPa', bytes:2, category:'pressure'},
+  {name:'pvdg_w', display:'Boost Target', unit:'hPa', bytes:2, category:'pressure'},
+  {name:'amp', display:'Ambient Pressure', unit:'hPa', bytes:2, category:'pressure'},
+  {name:'tmot', display:'Coolant Temp', unit:'\u00B0C', bytes:1, category:'temperature'},
+  {name:'tans', display:'Intake Air Temp', unit:'\u00B0C', bytes:1, category:'temperature'},
+  {name:'OilSwmpT_t', display:'Oil Temp', unit:'\u00B0C', bytes:2, category:'temperature'},
+  {name:'EnvT_t', display:'Outside Temp', unit:'\u00B0C', bytes:2, category:'temperature'},
+  {name:'ExhTSnsr_tSnsrAryB1', display:'EGT B1', unit:'\u00B0C', bytes:2, array:2, category:'temperature'},
+  {name:'ExhTSnsr_tSnsrAryB2', display:'EGT B2', unit:'\u00B0C', bytes:2, array:2, category:'temperature'},
+  {name:'GearBx_tOil_VW', display:'Gearbox Oil Temp', unit:'\u00B0C', bytes:1, category:'temperature'},
+  {name:'ldtvm', display:'Wastegate Duty', unit:'%', bytes:1, category:'turbo'},
+  {name:'zwoutzyl_w', display:'Ignition Timing (per-cyl)', unit:'deg', bytes:2, array:8, category:'ignition'},
+  {name:'klopfakt', display:'Knock Bitmask', unit:'-', bytes:1, category:'knock'},
+  {name:'IKCtl_agKnkRtdt_as8', display:'Knock Retard (per-cyl)', unit:'deg', bytes:1, array:8, category:'knock'},
+  {name:'IKCtl_agKnkInt_as8', display:'Knock Integrator (per-cyl)', unit:'deg', bytes:1, array:8, category:'knock'},
+  {name:'IKCtl_agKnkAvrg_s8', display:'Knock Retard Average', unit:'deg', bytes:1, category:'knock'},
+  {name:'Ign_diaKperm_s8', display:'Permanent Knock Penalty', unit:'deg', bytes:1, category:'knock'},
+  {name:'Ign_stiaBasKnk', display:'Knock Intervention Bitmask', unit:'-', bytes:1, category:'knock'},
+  {name:'IKCtl_agAdpn_as8', display:'Knock Adaptation Map', unit:'deg', bytes:1, array:160, category:'knock'},
+  {name:'frm_w', display:'STFT B1', unit:'-', bytes:2, category:'fuel'},
+  {name:'frm2_w_msg', display:'STFT B2', unit:'-', bytes:2, category:'fuel'},
+  {name:'lamsbg_w', display:'Lambda Target B1', unit:'-', bytes:2, category:'fuel'},
+  {name:'lamsbg2_w', display:'Lambda Target B2', unit:'-', bytes:2, category:'fuel'},
+  {name:'UEGO_ratLamSymS1B1', display:'Lambda Actual B1', unit:'-', bytes:2, category:'fuel'},
+  {name:'UEGO_ratLamSymS1B2', display:'Lambda Actual B2', unit:'-', bytes:2, category:'fuel'},
+  {name:'fra_w', display:'Fuel Adapt B1', unit:'-', bytes:2, category:'fuel'},
+  {name:'fra2_w', display:'Fuel Adapt B2', unit:'-', bytes:2, category:'fuel'},
+  {name:'dfrm_w', display:'STFT Delta', unit:'-', bytes:2, category:'fuel'},
+  {name:'fpvd_w', display:'Fuel Press Correction', unit:'-', bytes:2, category:'fuel'},
+  {name:'InjSys_ratEthPrtnBascFu', display:'Ethanol Content', unit:'%', bytes:2, category:'fuel'},
+  {name:'ti1a_l_msg', display:'Injector Time (per-cyl)', unit:'ms', bytes:4, array:8, category:'fuel'},
+  {name:'pbks_w_msg', display:'Fuel Low Pressure', unit:'kPa', bytes:2, category:'fuel_pressure'},
+  {name:'pbksoll_w_msg', display:'Fuel Low Pressure Target', unit:'kPa', bytes:2, category:'fuel_pressure'},
+  {name:'prroh_w_msg', display:'Rail Pressure B1', unit:'MPa', bytes:2, category:'fuel_pressure'},
+  {name:'prsoll_w_msg', display:'Rail Pressure Target', unit:'MPa', bytes:2, category:'fuel_pressure'},
+  {name:'prroh2_w_msg', display:'Rail Pressure B2', unit:'MPa', bytes:2, category:'fuel_pressure'},
+  {name:'BattU_u', display:'Battery Voltage', unit:'V', bytes:2, category:'electrical'},
+  {name:'gang', display:'Gear', unit:'-', bytes:1, category:'drivetrain'},
+  {name:'GearBx_nClu_VW', display:'Gearbox Input Speed', unit:'rpm', bytes:2, category:'drivetrain'},
+  {name:'VehV_v', display:'Vehicle Speed', unit:'km/h', bytes:2, category:'vehicle'},
+  {name:'Com_vWhlFrtL', display:'Wheel Speed FL', unit:'km/h', bytes:2, category:'vehicle'},
+  {name:'Com_vWhlFrtR', display:'Wheel Speed FR', unit:'km/h', bytes:2, category:'vehicle'},
+  {name:'Com_vWhlRrL', display:'Wheel Speed RL', unit:'km/h', bytes:2, category:'vehicle'},
+  {name:'Com_vWhlRrR', display:'Wheel Speed RR', unit:'km/h', bytes:2, category:'vehicle'},
+  {name:'StDa_phiStrgWhlAg', display:'Steering Angle', unit:'deg', bytes:2, category:'vehicle'},
+  {name:'Com_aXAxis', display:'Lateral Accel', unit:'g', bytes:2, category:'vehicle'},
+  {name:'GlbDa_aX', display:'Longitudinal Accel', unit:'m/s\u00B2', bytes:2, category:'vehicle'},
+  {name:'Com_stCrCtlPan', display:'Cruise Control Status', unit:'-', bytes:2, category:'vehicle'},
+];
+
+const CATEGORY_LABELS = {
+  engine: 'Engine',
+  pressure: 'Pressure / Boost',
+  temperature: 'Temperature',
+  turbo: 'Turbo',
+  ignition: 'Ignition',
+  knock: 'Knock',
+  fuel: 'Fuel / Lambda',
+  fuel_pressure: 'Fuel Pressure',
+  electrical: 'Electrical',
+  drivetrain: 'Drivetrain',
+  vehicle: 'Vehicle / Chassis',
+};
+
+/* Build grouped lookup: category -> [var, ...] */
+const LOG_VAR_BY_CAT = {};
+ECU_VAR_DB.forEach(v => {
+  if(!LOG_VAR_BY_CAT[v.category]) LOG_VAR_BY_CAT[v.category] = [];
+  LOG_VAR_BY_CAT[v.category].push(v);
+});
+
+/* Slot count helper: array variables consume N slots, scalars consume 1 */
+function varSlots(v){ return v.array || 1; }
+
+/* ---- Init readout grid ---- */
+(function initReadouts(){
+  const c = document.getElementById('readouts');
+  READOUT_DEFS.forEach(d => {
+    const div = document.createElement('div');
+    div.className = 'readout';
+    div.innerHTML = `<div class="val" id="ro_${d.key}">--</div><div class="lbl">${d.label}</div><div class="unit">${d.unit}</div>`;
+    c.appendChild(div);
+  });
+})();
+
+/* ---- Init Log Config categories ---- */
+(function initLogConfig(){
+  const container = document.getElementById('logcfgCategories');
+  const catOrder = Object.keys(CATEGORY_LABELS);
+  catOrder.forEach((catKey, ci) => {
+    const vars = LOG_VAR_BY_CAT[catKey];
+    if(!vars || !vars.length) return;
+    const catLabel = CATEGORY_LABELS[catKey] || catKey;
+    const catDiv = document.createElement('div');
+    catDiv.className = 'logcfg-category';
+    catDiv.dataset.cat = catKey;
+    let bodyHtml = '';
+    vars.forEach(v => {
+      const id = 'logvar_' + v.name;
+      const slots = varSlots(v);
+      const arrayNote = v.array ? `<span class="slot-badge">${v.array} ch = ${slots} slots</span>` : '';
+      const slotsAttr = slots;
+      bodyHtml += `<div class="logcfg-var-row" data-varname="${v.name}">
+        <input type="checkbox" id="${id}" data-key="${v.name}" data-bytes="${v.bytes * slots}" data-slots="${slotsAttr}" onchange="logcfgOnCheck(this)">
+        <div class="logcfg-var-name"><label for="${id}">${v.name}</label>${arrayNote}</div>
+        <div class="logcfg-var-desc">${esc(v.display)} [${v.unit}]</div>
+        <select class="logcfg-var-rate" data-key="${v.name}" onchange="logcfgUpdateStats()">
+          <option value="1">Every poll</option>
+          <option value="2">Every 2nd</option>
+          <option value="5">Every 5th</option>
+          <option value="10">Every 10th</option>
+        </select>
+        <div class="logcfg-var-value" id="logval_${v.name}">--</div>
+      </div>`;
+    });
+    catDiv.innerHTML = `<div class="logcfg-cat-header" onclick="toggleLogCat(this)">
+      <span class="cat-name">${esc(catLabel)}</span>
+      <span class="cat-count" id="logcatcount_${catKey}">0 / ${vars.length} selected</span>
+      <span class="arrow">&#9654;</span>
+    </div>
+    <div class="logcfg-cat-body${ci === 0 ? ' open' : ''}" id="logcat_${catKey}">${bodyHtml}</div>`;
+    container.appendChild(catDiv);
+    if(ci === 0){
+      catDiv.querySelector('.arrow').classList.add('open');
+    }
+  });
+  logcfgUpdateStats();
+})();
+
+function toggleLogCat(hdr){
+  const body = hdr.nextElementSibling;
+  const arrow = hdr.querySelector('.arrow');
+  const open = body.classList.toggle('open');
+  arrow.classList.toggle('open', open);
+}
+
+/* Called when any checkbox changes */
+function logcfgOnCheck(cb){
+  if(cb.checked){
+    const slots = parseInt(cb.dataset.slots) || 1;
+    const used = logcfgUsedSlots();
+    if(used + slots > LOGGER_MAX_SLOTS){
+      cb.checked = false;
+      toast('Cannot select: needs ' + slots + ' slot' + (slots>1?'s':'') + ' but only ' + (LOGGER_MAX_SLOTS - used) + ' remaining', 'error');
+      return;
+    }
+  }
+  logcfgUpdateStats();
+}
+
+function logcfgUsedSlots(){
+  let total = 0;
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:checked').forEach(cb => {
+    total += parseInt(cb.dataset.slots) || 1;
+  });
+  return total;
+}
+
+function logcfgSelectAll(){
+  /* Select variables in DOM order until we hit the 32-slot limit */
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => cb.checked = false);
+  let used = 0;
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => {
+    const slots = parseInt(cb.dataset.slots) || 1;
+    if(used + slots <= LOGGER_MAX_SLOTS){
+      cb.checked = true;
+      used += slots;
+    }
+  });
+  if(used >= LOGGER_MAX_SLOTS){
+    toast('Selected ' + used + ' slots (limit reached, some variables skipped)');
+  }
+  logcfgUpdateStats();
+}
+
+function logcfgDeselectAll(){
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => cb.checked = false);
+  logcfgUpdateStats();
+}
+
+function logcfgExpandAll(){
+  document.querySelectorAll('.logcfg-cat-body').forEach(b => b.classList.add('open'));
+  document.querySelectorAll('.logcfg-cat-header .arrow').forEach(a => a.classList.add('open'));
+}
+
+function logcfgGetSelected(){
+  const selected = [];
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:checked').forEach(cb => {
+    const key = cb.dataset.key;
+    const bytes = parseInt(cb.dataset.bytes);
+    const slots = parseInt(cb.dataset.slots) || 1;
+    const rateEl = document.querySelector('.logcfg-var-rate[data-key="' + key + '"]');
+    const rate = rateEl ? parseInt(rateEl.value) : 1;
+    selected.push({key, bytes, slots, rate});
+  });
+  return selected;
+}
+
+function logcfgUpdateStats(){
+  const selected = logcfgGetSelected();
+  const usedSlots = selected.reduce((s, v) => s + v.slots, 0);
+  const atLimit = usedSlots >= LOGGER_MAX_SLOTS;
+
+  // Update slot counter in toolbar
+  const counterEl = document.getElementById('logcfgSlotCounter');
+  counterEl.textContent = usedSlots + ' / ' + LOGGER_MAX_SLOTS + ' slots';
+  counterEl.classList.toggle('at-limit', atLimit);
+
+  // Show/hide limit warning
+  document.getElementById('logcfgLimitWarn').classList.toggle('show', atLimit);
+
+  // Disable unchecked checkboxes when at limit
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => {
+    if(!cb.checked){
+      const slots = parseInt(cb.dataset.slots) || 1;
+      const wouldExceed = usedSlots + slots > LOGGER_MAX_SLOTS;
+      cb.disabled = wouldExceed;
+      cb.closest('.logcfg-var-row').classList.toggle('disabled-row', wouldExceed);
+    } else {
+      cb.disabled = false;
+      cb.closest('.logcfg-var-row').classList.remove('disabled-row');
+    }
+  });
+
+  // Update per-category counts
+  Object.keys(LOG_VAR_BY_CAT).forEach(catKey => {
+    const vars = LOG_VAR_BY_CAT[catKey];
+    if(!vars) return;
+    let catSelected = 0;
+    vars.forEach(v => {
+      const cb = document.getElementById('logvar_' + v.name);
+      if(cb && cb.checked) catSelected++;
+    });
+    const el = document.getElementById('logcatcount_' + catKey);
+    if(el) el.textContent = catSelected + ' / ' + vars.length + ' selected';
+  });
+
+  // Bytes per poll (weighted by rate)
+  const avgBytesPerPoll = selected.reduce((s, v) => s + v.bytes / v.rate, 0);
+
+  // Estimate Hz: ~8ms per slot read via UDS
+  const timePerSlot = 8;
+  const activeSlotsPerPoll = selected.reduce((s, v) => s + v.slots / v.rate, 0);
+  const pollTimeMs = activeSlotsPerPoll * timePerSlot;
+  const basePollHz = 5;
+  const estHz = pollTimeMs > 0 ? Math.min(basePollHz, Math.round(1000 / pollTimeMs * 10) / 10) : 0;
+
+  document.getElementById('logcfgVarCount').textContent = usedSlots + ' / ' + LOGGER_MAX_SLOTS;
+  document.getElementById('logcfgBytes').textContent = Math.round(avgBytesPerPoll);
+  document.getElementById('logcfgHz').textContent = estHz > 0 ? estHz.toFixed(1) : '0';
+}
+
+function logcfgSaveProfile(){
+  const selected = logcfgGetSelected();
+  const profile = {};
+  selected.forEach(v => { profile[v.key] = v.rate; });
+  const blob = new Blob([JSON.stringify(profile, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'futuner_log_profile.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Profile saved');
+}
+
+function logcfgLoadProfile(){
+  document.getElementById('logcfgFileInput').click();
+}
+
+function logcfgDoLoad(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const profile = JSON.parse(e.target.result);
+      // Deselect all first
+      document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => cb.checked = false);
+      // Apply profile, respecting slot limit
+      let used = 0;
+      let skipped = 0;
+      Object.keys(profile).forEach(key => {
+        const cb = document.getElementById('logvar_' + key);
+        if(cb){
+          const slots = parseInt(cb.dataset.slots) || 1;
+          if(used + slots <= LOGGER_MAX_SLOTS){
+            cb.checked = true;
+            used += slots;
+            const rateEl = document.querySelector('.logcfg-var-rate[data-key="' + key + '"]');
+            if(rateEl) rateEl.value = String(profile[key]);
+          } else {
+            skipped++;
+          }
+        }
+      });
+      logcfgUpdateStats();
+      let msg = 'Profile loaded: ' + used + ' slots used';
+      if(skipped) msg += ' (' + skipped + ' vars skipped, would exceed 32 slots)';
+      toast(msg, skipped ? 'error' : '');
+    } catch(err) {
+      toast('Invalid profile file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+}
+
+/* Update log config live values from dashboard data */
+function updateLogConfigValues(d){
+  ECU_VAR_DB.forEach(v => {
+    const el = document.getElementById('logval_' + v.name);
+    if(!el) return;
+    const val = d[v.name];
+    if(val !== undefined && val !== null){
+      el.textContent = typeof val === 'number' ? (Number.isInteger(val) ? val : val.toFixed(2)) : val;
+    }
+  });
+}
+
+/* ---- Tab switching ---- */
+const TAB_NAMES = ['dashboard','sniffer','diag','tuning','logconfig','files','system'];
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', TAB_NAMES[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('panel-' + name);
+  if(el) el.classList.add('active');
+  if((name === 'dashboard' || name === 'logconfig') && ws && ws.readyState === 1) startPolling();
+  else if(name !== 'dashboard' && name !== 'logconfig') stopPolling();
+}
+
+/* ---- WebSocket ---- */
+function wsConnect(){
+  if(ws && ws.readyState <= 1) return;
+  const url = 'ws://' + window.location.host + '/ws';
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    setConn(true);
+    startPolling();
+    toast('Connected');
+  };
+  ws.onclose = () => {
+    setConn(false);
+    stopPolling();
+    setTimeout(wsConnect, 3000);
+  };
+  ws.onerror = () => ws.close();
+  ws.onmessage = e => {
+    try { handleMsg(JSON.parse(e.data)); } catch(err) { console.error('WS parse error', err); }
+  };
+}
+function setConn(ok){
+  document.getElementById('connDot').classList.toggle('connected', ok);
+  document.getElementById('connLabel').textContent = ok ? 'Connected' : 'Disconnected';
+}
+function wsSend(obj, cb){
+  if(!ws || ws.readyState !== 1){ toast('Not connected','error'); return; }
+  if(cb){ obj._cbId = ++cbId; pendingCb[cbId] = cb; }
+  ws.send(JSON.stringify(obj));
+}
+
+function handleMsg(msg){
+  // Handle callback
+  if(msg._cbId && pendingCb[msg._cbId]){
+    pendingCb[msg._cbId](msg);
+    delete pendingCb[msg._cbId];
+  }
+  // Events
+  if(msg.event === 'can_frame') return onCanFrame(msg);
+  // Responses
+  if(msg.command === 'get_logger_data' && msg.success && msg.data) return updateDash(msg.data);
+  if(msg.command === 'unlock') return onAuthResp(msg);
+  if(msg.command === 'get_errors') return onDtcResp(msg);
+  if(msg.command === 'clear_errors') return onClearDtcResp(msg);
+  if(msg.command === 'get_status') return onStatusResp(msg);
+  if(msg.command === 'fs_list') return onFsListResp(msg);
+  if(msg.command === 'fs_read') return onFsReadResp(msg);
+  if(msg.command === 'write_ecu') return onWriteEcuResp(msg);
+  if(msg.command === 'list_commands') return onListCmdsResp(msg);
+  if(msg.command === 'wifi_scan') return onWifiScanResp(msg);
+  if(msg.command === 'wifi_connect') return onWifiConnectResp(msg);
+  if(msg.command === 'wifi_disconnect') return onWifiDisconnectResp(msg);
+  if(msg.command === 'fs_write' || msg.command === 'fs_delete' || msg.command === 'fs_upload'){
+    toast(msg.success ? 'OK' : ('Error: ' + (msg.error||'unknown')), msg.success ? '' : 'error');
+    if(msg.success) fsList();
+  }
+}
+
+/* ---- Auth ---- */
+function doAuth(){
+  const p = document.getElementById('authPass').value;
+  if(!p) return;
+  wsSend({command:'unlock', password:p});
+}
+function onAuthResp(msg){
+  authenticated = !!msg.success;
+  document.getElementById('authStatus').textContent = authenticated ? 'Unlocked' : 'Locked';
+  document.getElementById('authStatus').classList.toggle('authed', authenticated);
+  document.getElementById('lockIcon').innerHTML = authenticated ? '&#128275;' : '&#128274;';
+  toast(authenticated ? 'Authenticated' : 'Auth failed: ' + (msg.error||''), authenticated ? '' : 'error');
+}
+
+/* ---- Dashboard polling ---- */
+function startPolling(){
+  stopPolling();
+  pollTimer = setInterval(() => {
+    logcfgPollCounter++;
+    wsSend({command:'get_logger_data'});
+  }, 200);
+}
+function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }}
+
+const ARC_LEN = 251.33; // pi * 80 (semicircle)
+function updateDash(d){
+  // RPM gauge
+  const rpm = d.nmot_w || 0;
+  const rpmPct = Math.min(rpm / 9000, 1);
+  document.getElementById('rpmArc').setAttribute('stroke-dasharray', (rpmPct * ARC_LEN) + ' ' + ARC_LEN);
+  document.getElementById('rpmVal').textContent = Math.round(rpm);
+
+  // Boost gauge (-1 to 3, range 4)
+  const boost = d.pvdg_w || 0;
+  const boostPct = Math.min(Math.max((boost + 1) / 4, 0), 1);
+  document.getElementById('boostArc').setAttribute('stroke-dasharray', (boostPct * ARC_LEN) + ' ' + ARC_LEN);
+  document.getElementById('boostVal').textContent = boost.toFixed(2);
+
+  // Knock indicators (klopfakt bitmask: bit 0=cyl1, bit 1=cyl2, etc.)
+  const knockBits = d.klopfakt || 0;
+  for(let i = 0; i < 8; i++){
+    const dot = document.getElementById('knockCyl' + (i + 1));
+    if(dot){
+      const active = !!(knockBits & (1 << i));
+      dot.classList.toggle('active', active);
+    }
+  }
+
+  // Readouts
+  READOUT_DEFS.forEach(r => {
+    const el = document.getElementById('ro_' + r.key);
+    if(!el) return;
+    const v = d[r.key];
+    if(v === undefined || v === null){ el.textContent = '--'; el.className = 'val'; return; }
+    el.textContent = (typeof v === 'number') ? v.toFixed(r.decimals) : v;
+    let cls = 'val';
+    if(r.danger !== null && v >= r.danger) cls += ' red';
+    else if(r.warn !== null && v >= r.warn) cls += ' yellow';
+    else if(r.warn !== null) cls += ' green';
+    el.className = cls;
+  });
+
+  // Update log config live values
+  updateLogConfigValues(d);
+}
+
+/* ---- CAN Sniffer ---- */
+function sniffStart(){ wsSend({command:'can_sniff_start'}); sniffing = true; }
+function sniffStop(){ wsSend({command:'can_sniff_stop'}); sniffing = false; }
+function clearSniff(){ document.getElementById('sniffBody').innerHTML = ''; sniffFrames = 0; document.getElementById('sniffCount').textContent = '0'; }
+
+setInterval(() => { sniffRateVal = sniffRateCount; sniffRateCount = 0; document.getElementById('sniffRate').textContent = sniffRateVal; }, 1000);
+
+function onCanFrame(f){
+  const filt = document.getElementById('sniffFilter').value.trim().toLowerCase();
+  if(filt && !f.hex_id.toLowerCase().includes(filt)) return;
+  sniffFrames++; sniffRateCount++;
+  document.getElementById('sniffCount').textContent = sniffFrames;
+  const tb = document.getElementById('sniffBody');
+  const tr = document.createElement('tr');
+  const ts = f.ts ? (f.ts / 1000).toFixed(3) : '--';
+  tr.innerHTML = `<td>${ts}</td><td>${f.hex_id||('0x'+f.id.toString(16).toUpperCase())}</td><td>${f.len}</td><td>${f.hex||arrayToHex(f.data)}</td>`;
+  tb.appendChild(tr);
+  // keep max 2000 rows
+  while(tb.children.length > 2000) tb.removeChild(tb.firstChild);
+  tr.scrollIntoView({block:'end', behavior:'auto'});
+}
+function arrayToHex(a){ return a ? a.map(b => b.toString(16).toUpperCase().padStart(2,'0')).join(' ') : ''; }
+
+function sendRawCan(){
+  const idStr = document.getElementById('sendId').value.trim();
+  const dataStr = document.getElementById('sendData').value.trim();
+  if(!idStr){ toast('Enter CAN ID','error'); return; }
+  const id = parseInt(idStr, 16);
+  const bytes = dataStr ? dataStr.replace(/[^0-9a-fA-F]/g,' ').trim().split(/\s+/).map(h => parseInt(h,16)) : [];
+  wsSend({command:'can_send_raw', id:id, data:bytes, len:bytes.length});
+  toast('Sent 0x' + id.toString(16).toUpperCase());
+}
+
+/* ---- Diagnostics ---- */
+function readDtc(){ wsSend({command:'get_errors'}); }
+function clearDtc(){
+  if(!authenticated){ toast('Authenticate first','error'); return; }
+  wsSend({command:'clear_errors'});
+}
+function onDtcResp(msg){
+  const c = document.getElementById('dtcList');
+  if(!msg.success){ c.innerHTML = '<span style="color:var(--red)">Error: ' + (msg.error||'') + '</span>'; return; }
+  const dtcs = msg.errors || msg.dtcs || msg.data || [];
+  if(!dtcs.length){ c.innerHTML = '<span style="color:var(--green)">No DTCs found</span>'; return; }
+  c.innerHTML = dtcs.map(d => {
+    const code = d.code || d;
+    const desc = d.description || d.desc || '';
+    return `<div class="dtc-item"><span class="dtc-code">${code}</span><span>${desc}</span></div>`;
+  }).join('');
+}
+function onClearDtcResp(msg){
+  toast(msg.success ? 'DTCs cleared' : 'Error: ' + (msg.error||''), msg.success ? '' : 'error');
+  if(msg.success) document.getElementById('dtcList').innerHTML = '<span style="color:var(--green)">Cleared</span>';
+}
+
+function getStatus(){ wsSend({command:'get_status'}); }
+function onStatusResp(msg){
+  if(!msg.success) return;
+  const d = msg.data || msg;
+  // ECU info
+  const fields = [
+    {k:'VIN', v:d.vin}, {k:'Boxcode', v:d.boxcode}, {k:'SW Version', v:d.sw_version||d.software_version},
+    {k:'Build ID', v:d.build_id}, {k:'Patch Status', v:d.patch_status||d.patched},
+  ];
+  const ec = document.getElementById('ecuInfo');
+  ec.innerHTML = fields.filter(f=>f.v!==undefined).map(f => `<div class="ecu-field"><div class="k">${f.k}</div><div class="v">${f.v}</div></div>`).join('');
+
+  // System info
+  const sys = [
+    {k:'Firmware', v:d.firmware||d.version}, {k:'Uptime', v:fmtUptime(d.uptime)},
+    {k:'Free Heap', v:fmtBytes(d.free_heap)}, {k:'Free PSRAM', v:fmtBytes(d.free_psram)},
+    {k:'SSID', v:d.ssid||d.wifi_ssid}, {k:'Clients', v:d.clients||d.wifi_clients},
+  ];
+  const sg = document.getElementById('sysGrid');
+  sg.innerHTML = sys.filter(s=>s.v!==undefined&&s.v!==null).map(s => `<div class="sys-item"><div class="val">${s.v}</div><div class="lbl">${s.k}</div></div>`).join('');
+
+  // WiFi STA status
+  if(d.sta_ip || d.sta_ssid){
+    const staStatus = document.getElementById('wifiStaStatus');
+    if(d.sta_ip && d.sta_ip !== '0.0.0.0'){
+      staStatus.innerHTML = 'STA: Connected to <b>' + esc(d.sta_ssid || '?') + '</b> - IP: <span class="sta-ip">' + esc(d.sta_ip) + '</span>';
+    } else {
+      staStatus.textContent = 'STA: Not connected';
+    }
+  }
+}
+function fmtUptime(s){ if(!s&&s!==0) return undefined; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; return h+'h '+m+'m '+sec+'s'; }
+function fmtBytes(b){ if(!b&&b!==0) return undefined; if(b>1048576) return (b/1048576).toFixed(1)+'MB'; if(b>1024) return (b/1024).toFixed(1)+'KB'; return b+'B'; }
+
+/* ---- WiFi STA ---- */
+function wifiScan(){
+  document.getElementById('scanResults').innerHTML = '<span style="color:var(--text-dim)">Scanning...</span>';
+  wsSend({command:'wifi_scan'});
+}
+function onWifiScanResp(msg){
+  const el = document.getElementById('scanResults');
+  const dl = document.getElementById('ssidList');
+  dl.innerHTML = '';
+  if(!msg.success || !msg.data || !msg.data.networks){
+    el.innerHTML = '<span style="color:var(--red)">Scan failed</span>';
+    return;
+  }
+  const nets = msg.data.networks;
+  el.innerHTML = nets.map(n =>
+    `<div style="cursor:pointer;padding:2px 4px;border-bottom:1px solid var(--border)" onclick="document.getElementById('staSSID').value='${esc(n.ssid)}'">
+      <b>${esc(n.ssid)}</b> &nbsp; ${n.rssi}dBm &nbsp; Ch${n.channel} &nbsp; ${n.auth}
+    </div>`
+  ).join('');
+  nets.forEach(n => { const o=document.createElement('option'); o.value=n.ssid; dl.appendChild(o); });
+}
+function wifiStaConnect(){
+  const ssid = document.getElementById('staSSID').value.trim();
+  const password = document.getElementById('staPassword').value;
+  if(!ssid){ toast('Enter SSID','error'); return; }
+  wsSend({command:'wifi_connect', params:{ssid:ssid, password:password}});
+  document.getElementById('wifiStaStatus').textContent = 'STA: Connecting to ' + ssid + '...';
+}
+function wifiStaDisconnect(){
+  wsSend({command:'wifi_disconnect'});
+  document.getElementById('wifiStaStatus').textContent = 'STA: Disconnecting...';
+}
+function onWifiConnectResp(msg){
+  const staStatus = document.getElementById('wifiStaStatus');
+  if(msg.success){
+    const ip = msg.ip || msg.sta_ip || '';
+    if(ip){
+      staStatus.innerHTML = 'STA: Connected - IP: <span class="sta-ip">' + esc(ip) + '</span>';
+    } else {
+      staStatus.textContent = 'STA: Connected (obtaining IP...)';
+    }
+    toast('WiFi STA connected');
+  } else {
+    staStatus.textContent = 'STA: Connection failed';
+    toast('WiFi connect failed: ' + (msg.error || 'unknown'), 'error');
+  }
+}
+function onWifiDisconnectResp(msg){
+  const staStatus = document.getElementById('wifiStaStatus');
+  if(msg.success){
+    staStatus.textContent = 'STA: Not connected';
+    toast('WiFi STA disconnected');
+  } else {
+    toast('WiFi disconnect failed: ' + (msg.error || 'unknown'), 'error');
+  }
+}
+
+/* ---- List Commands ---- */
+function listCommands(){ wsSend({command:'list_commands'}); }
+function onListCmdsResp(msg){
+  const cmds = msg.commands || msg.data || [];
+  document.getElementById('cmdList').innerHTML = cmds.map(c => `<div class="cmd-item">${typeof c==='string'?c:c.name||JSON.stringify(c)}</div>`).join('');
+}
+
+/* ---- XDF Parser ---- */
+function loadXdf(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      parseXdf(e.target.result);
+    } catch(err) {
+      toast('XDF parse error: ' + err.message, 'error');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseXdf(xmlStr){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlStr, 'text/xml');
+  const root = doc.querySelector('XDFFORMAT');
+  if(!root){ toast('Invalid XDF: no XDFFORMAT root','error'); return; }
+
+  const hdr = root.querySelector('XDFHEADER');
+  const meta = {
+    title: getText(hdr, 'deftitle') || 'Untitled',
+    desc: getText(hdr, 'description') || '',
+    author: getText(hdr, 'author') || '',
+    baseoffset: 0,
+  };
+  // base offset
+  const boEl = hdr ? hdr.querySelector('BASEOFFSET') : null;
+  if(boEl) meta.baseoffset = parseInt(boEl.getAttribute('offset')||'0', 0);
+
+  // Parse tables
+  const tables = [];
+  root.querySelectorAll('XDFTABLE').forEach(tEl => {
+    try { tables.push(parseTable(tEl, meta)); } catch(e){ console.warn('Skip table', e); }
+  });
+
+  // Parse constants
+  const constants = [];
+  root.querySelectorAll('XDFCONSTANT').forEach(cEl => {
+    try { constants.push(parseConstant(cEl, meta)); } catch(e){ console.warn('Skip const', e); }
+  });
+
+  xdfData = {meta, tables, constants};
+  renderXdf();
+}
+
+function parseTable(el, meta){
+  const t = {
+    title: getText(el, 'title') || 'Unnamed',
+    desc: getText(el, 'description') || '',
+    flags: el.getAttribute('flags') || '0',
+    axes: {},
+  };
+  el.querySelectorAll(':scope > XDFAXIS').forEach(ax => {
+    const id = ax.getAttribute('id'); // x, y, z
+    const a = {
+      id: id,
+      units: getText(ax, 'units') || '',
+      count: parseInt(getText(ax, 'indexcount') || '1'),
+      equation: '',
+      factor: 1, offset: 0,
+      address: 0, sizeBits: 8, signed: false,
+      labels: [],
+    };
+    // Math/equation
+    const mathEl = ax.querySelector('MATH');
+    if(mathEl){
+      a.equation = mathEl.getAttribute('equation') || '';
+      parseMathFactors(a);
+    }
+    // Embedded data (for z axis or embedded axes)
+    const emb = ax.querySelector('EMBEDDEDDATA');
+    if(emb){
+      a.address = parseInt(emb.getAttribute('mmedaddress') || emb.getAttribute('address') || '0', 0);
+      a.sizeBits = parseInt(emb.getAttribute('mmedelementsizebits') || emb.getAttribute('sizeinbits') || '8');
+      const fl = parseInt(emb.getAttribute('mmedtypeflags') || '0', 0);
+      a.signed = !!(fl & 1);
+    }
+    // DALINK embedded data (for x/y axis labels)
+    ax.querySelectorAll('DALINK').forEach(dl => {
+      const dEmb = dl.querySelector('EMBEDDEDDATA');
+      if(dEmb && !a.address){
+        a.address = parseInt(dEmb.getAttribute('mmedaddress') || '0', 0);
+        a.sizeBits = parseInt(dEmb.getAttribute('mmedelementsizebits') || '8');
+      }
+    });
+    // Static labels
+    ax.querySelectorAll('LABEL').forEach((lb, i) => {
+      a.labels[parseInt(lb.getAttribute('index')||i)] = lb.getAttribute('value') || lb.textContent;
+    });
+    t.axes[id] = a;
+  });
+  return t;
+}
+
+function parseConstant(el, meta){
+  const c = {
+    title: getText(el, 'title') || 'Unnamed',
+    desc: getText(el, 'description') || '',
+    units: getText(el, 'units') || '',
+    equation: '', factor: 1, offset: 0,
+    address: 0, sizeBits: 8, signed: false,
+  };
+  const mathEl = el.querySelector('MATH');
+  if(mathEl){
+    c.equation = mathEl.getAttribute('equation') || '';
+    parseMathFactors(c);
+  }
+  const emb = el.querySelector('EMBEDDEDDATA');
+  if(emb){
+    c.address = parseInt(emb.getAttribute('mmedaddress') || emb.getAttribute('address') || '0', 0);
+    c.sizeBits = parseInt(emb.getAttribute('mmedelementsizebits') || emb.getAttribute('sizeinbits') || '8');
+    const fl = parseInt(emb.getAttribute('mmedtypeflags') || '0', 0);
+    c.signed = !!(fl & 1);
+  }
+  return c;
+}
+
+function parseMathFactors(a){
+  // Try to extract factor/offset from "X*f+o" or "X/d+o" style
+  const eq = (a.equation || '').replace(/\s/g, '');
+  // X*factor+offset
+  let m = eq.match(/^X\*([+-]?[\d.]+)([+-][\d.]+)?$/i);
+  if(m){ a.factor = parseFloat(m[1]); a.offset = m[2] ? parseFloat(m[2]) : 0; return; }
+  // X/divisor+offset
+  m = eq.match(/^X\/([+-]?[\d.]+)([+-][\d.]+)?$/i);
+  if(m){ a.factor = 1 / parseFloat(m[1]); a.offset = m[2] ? parseFloat(m[2]) : 0; return; }
+  // X+offset
+  m = eq.match(/^X([+-][\d.]+)$/i);
+  if(m){ a.factor = 1; a.offset = parseFloat(m[1]); return; }
+  // fallback: just X
+  a.factor = 1; a.offset = 0;
+}
+
+function getText(parent, tag){
+  if(!parent) return '';
+  const el = parent.querySelector(tag);
+  return el ? el.textContent.trim() : '';
+}
+
+/* ---- XDF Rendering ---- */
+function renderXdf(){
+  if(!xdfData) return;
+  const {meta, tables, constants} = xdfData;
+  document.getElementById('xdfMeta').innerHTML =
+    `<span><b>${meta.title}</b></span>` +
+    (meta.author ? `<span>Author: ${meta.author}</span>` : '') +
+    (meta.desc ? `<span>${meta.desc}</span>` : '');
+  document.getElementById('xdfSearchWrap').style.display = 'flex';
+  document.getElementById('mapCount').textContent = (tables.length + constants.length) + ' items';
+
+  const wrap = document.getElementById('xdfMaps');
+  wrap.innerHTML = '';
+
+  // Tables
+  tables.forEach((t, idx) => {
+    const item = document.createElement('div');
+    item.className = 'map-item';
+    item.dataset.title = t.title.toLowerCase();
+    const z = t.axes.z;
+    const x = t.axes.x;
+    const y = t.axes.y;
+    const dims = [];
+    if(x && x.count > 1) dims.push(x.count);
+    if(y && y.count > 1) dims.push(y.count);
+    const dimStr = dims.length ? dims.join('x') : 'scalar';
+    const addr = z ? '0x' + z.address.toString(16).toUpperCase() : '';
+
+    item.innerHTML = `<div class="map-header" onclick="toggleMap(this)">
+      <span class="title">${esc(t.title)}</span>
+      <span class="info">${dimStr} ${z?z.units:''} @ ${addr}</span>
+      <span class="arrow">&#9654;</span>
+    </div><div class="map-body" id="mapBody_t${idx}"></div>`;
+    wrap.appendChild(item);
+  });
+
+  // Constants
+  constants.forEach((c, idx) => {
+    const item = document.createElement('div');
+    item.className = 'map-item';
+    item.dataset.title = c.title.toLowerCase();
+    const addr = '0x' + c.address.toString(16).toUpperCase();
+    item.innerHTML = `<div class="map-header" onclick="toggleMap(this)">
+      <span class="title">${esc(c.title)}</span>
+      <span class="info">const ${c.units} @ ${addr}</span>
+      <span class="arrow">&#9654;</span>
+    </div><div class="map-body" id="mapBody_c${idx}"></div>`;
+    wrap.appendChild(item);
+  });
+}
+
+function toggleMap(hdr){
+  const body = hdr.nextElementSibling;
+  const arrow = hdr.querySelector('.arrow');
+  const open = body.classList.toggle('open');
+  arrow.classList.toggle('open', open);
+  if(open && !body.dataset.rendered){
+    body.dataset.rendered = '1';
+    const id = body.id;
+    if(id.startsWith('mapBody_t')){
+      const idx = parseInt(id.replace('mapBody_t',''));
+      renderTable(body, xdfData.tables[idx]);
+    } else {
+      const idx = parseInt(id.replace('mapBody_c',''));
+      renderConstant(body, xdfData.constants[idx]);
+    }
+  }
+}
+
+function renderTable(container, t){
+  const z = t.axes.z;
+  const x = t.axes.x;
+  const y = t.axes.y;
+  if(!z) return;
+
+  const xCount = (x && x.count > 1) ? x.count : 1;
+  const yCount = (y && y.count > 1) ? y.count : 1;
+  const hasX = xCount > 1;
+  const hasY = yCount > 1;
+  const sizeBytes = z.sizeBits / 8;
+  const totalCells = xCount * yCount;
+
+  if(!hasX && !hasY){
+    // Scalar-like table
+    renderConstant(container, {title:t.title, units:z.units, factor:z.factor, offset:z.offset, address:z.address, sizeBits:z.sizeBits, signed:z.signed});
+    return;
+  }
+
+  const tbl = document.createElement('table');
+  tbl.className = 'map-grid';
+  let html = '<thead><tr>';
+  if(hasY) html += '<th></th>'; // corner
+  if(hasX){
+    for(let c=0;c<xCount;c++){
+      const lbl = (x.labels && x.labels[c] !== undefined) ? x.labels[c] : c;
+      html += `<th>${lbl}</th>`;
+    }
+  } else {
+    html += '<th>Value</th>';
+  }
+  html += '</tr></thead><tbody>';
+
+  for(let r=0; r<yCount; r++){
+    html += '<tr>';
+    if(hasY){
+      const lbl = (y.labels && y.labels[r] !== undefined) ? y.labels[r] : r;
+      html += `<td class="axis-cell">${lbl}</td>`;
+    }
+    for(let c=0; c<xCount; c++){
+      const cellIdx = r * xCount + c;
+      const cellAddr = z.address + cellIdx * sizeBytes;
+      html += `<td><input type="text" value="--" data-addr="${cellAddr}" data-size="${sizeBytes}" data-factor="${z.factor}" data-offset="${z.offset}" data-signed="${z.signed?1:0}" onchange="onCellEdit(this)"></td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  tbl.innerHTML = html;
+  if(t.desc) container.innerHTML = `<div style="font-size:.8em;color:var(--text-dim);margin-bottom:8px">${esc(t.desc)}</div>`;
+  container.appendChild(tbl);
+  // Add read button
+  const readBtn = document.createElement('button');
+  readBtn.textContent = 'Read from ECU';
+  readBtn.style.marginTop = '8px';
+  readBtn.onclick = () => readTableFromEcu(container, t);
+  container.appendChild(readBtn);
+}
+
+function renderConstant(container, c){
+  container.innerHTML = `<div class="scalar-edit">
+    <input type="text" value="--" data-addr="${c.address}" data-size="${c.sizeBits/8}" data-factor="${c.factor}" data-offset="${c.offset}" data-signed="${c.signed?1:0}" onchange="onCellEdit(this)">
+    <span class="unit">${esc(c.units)}</span>
+    <button onclick="readScalarFromEcu(this.parentNode, ${c.address}, ${c.sizeBits/8})">Read</button>
+  </div>` + (c.desc ? `<div style="font-size:.8em;color:var(--text-dim);margin-top:4px">${esc(c.desc)}</div>` : '');
+}
+
+function onCellEdit(inp){
+  const phys = parseFloat(inp.value);
+  if(isNaN(phys)){ flashCell(inp, false); return; }
+  const factor = parseFloat(inp.dataset.factor);
+  const offset = parseFloat(inp.dataset.offset);
+  const size = parseInt(inp.dataset.size);
+  const addr = parseInt(inp.dataset.addr);
+  const signed = inp.dataset.signed === '1';
+
+  // Invert: physical = raw * factor + offset => raw = (physical - offset) / factor
+  let raw = Math.round((phys - offset) / factor);
+
+  // Clamp
+  if(signed){
+    const min = -(1 << (size*8-1));
+    const max = (1 << (size*8-1)) - 1;
+    raw = Math.max(min, Math.min(max, raw));
+  } else {
+    raw = Math.max(0, Math.min((1 << (size*8)) - 1, raw));
+  }
+
+  // Convert to bytes (big-endian)
+  const bytes = [];
+  for(let i=size-1; i>=0; i--){
+    bytes.unshift((raw >> (i*8)) & 0xFF);
+  }
+
+  wsSend({command:'write_ecu', address:addr, data:bytes, size:size}, msg => {
+    flashCell(inp, msg && msg.success);
+  });
+}
+
+function flashCell(inp, ok){
+  inp.classList.add(ok ? 'flash-ok' : 'flash-err');
+  setTimeout(() => inp.classList.remove('flash-ok','flash-err'), 600);
+}
+
+function readTableFromEcu(container, t){
+  // Send read commands for each cell. For simplicity, read the whole block.
+  toast('Read not yet implemented - write values manually');
+}
+function readScalarFromEcu(parent, addr, size){
+  toast('Read not yet implemented - write values manually');
+}
+
+function filterMaps(){
+  const q = document.getElementById('xdfSearch').value.toLowerCase();
+  document.querySelectorAll('#xdfMaps .map-item').forEach(item => {
+    item.style.display = item.dataset.title.includes(q) ? '' : 'none';
+  });
+}
+
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ---- File Manager ---- */
+function fsList(){
+  const p = document.getElementById('fsPath').value || '/';
+  wsSend({command:'fs_list', path:p});
+}
+function fsUp(){
+  const p = document.getElementById('fsPath').value;
+  const parts = p.replace(/\/$/,'').split('/');
+  parts.pop();
+  document.getElementById('fsPath').value = parts.join('/') || '/';
+  fsList();
+}
+function onFsListResp(msg){
+  const c = document.getElementById('fsList');
+  if(!msg.success){ c.innerHTML = '<span style="color:var(--red)">Error: '+(msg.error||'')+'</span>'; return; }
+  const items = msg.files || msg.entries || msg.data || [];
+  if(!items.length){ c.innerHTML = '<span style="color:var(--text-dim)">Empty directory</span>'; return; }
+  c.innerHTML = items.map(f => {
+    const isDir = f.type === 'dir' || f.type === 'd' || f.is_dir;
+    const name = f.name || f;
+    const size = f.size !== undefined ? f.size : '';
+    return `<div class="fs-item" onclick="fsNav('${esc(name)}',${isDir})">
+      <span class="fs-icon">${isDir?'&#128193;':'&#128196;'}</span>
+      <span class="fs-name">${esc(name)}</span>
+      <span class="fs-size">${isDir?'':fmtBytes(size)}</span>
+      ${!isDir?'<div class="fs-actions"><button onclick="event.stopPropagation();fsRead(\''+esc(name)+'\')">Open</button><button class="danger" onclick="event.stopPropagation();fsDel(\''+esc(name)+'\')">Del</button></div>':''}
+    </div>`;
+  }).join('');
+}
+function fsNav(name, isDir){
+  if(isDir){
+    let p = document.getElementById('fsPath').value.replace(/\/$/,'');
+    document.getElementById('fsPath').value = p + '/' + name;
+    fsList();
+  } else {
+    fsRead(name);
+  }
+}
+function fsRead(name){
+  const p = document.getElementById('fsPath').value.replace(/\/$/,'') + '/' + name;
+  document.getElementById('viewerName').textContent = p;
+  document.getElementById('fileViewer').style.display = '';
+  wsSend({command:'fs_read', path:p});
+}
+function onFsReadResp(msg){
+  document.getElementById('fileContent').value = msg.success ? (msg.content || msg.data || '') : 'Error: ' + (msg.error||'');
+}
+function fileSave(){
+  if(!authenticated){ toast('Authenticate first','error'); return; }
+  const p = document.getElementById('viewerName').textContent;
+  const content = document.getElementById('fileContent').value;
+  wsSend({command:'fs_write', path:p, content:content});
+}
+function fileDelete(){
+  if(!authenticated){ toast('Authenticate first','error'); return; }
+  const p = document.getElementById('viewerName').textContent;
+  if(!confirm('Delete '+p+'?')) return;
+  wsSend({command:'fs_delete', path:p});
+  fileViewerClose();
+}
+function fsDel(name){
+  if(!authenticated){ toast('Authenticate first','error'); return; }
+  const p = document.getElementById('fsPath').value.replace(/\/$/,'') + '/' + name;
+  if(!confirm('Delete '+p+'?')) return;
+  wsSend({command:'fs_delete', path:p});
+}
+function fileViewerClose(){ document.getElementById('fileViewer').style.display='none'; }
+function fileUpload(){
+  if(!authenticated){ toast('Authenticate first','error'); return; }
+  const fileInput = document.getElementById('uploadFile');
+  if(!fileInput.files.length){ toast('Select a file','error'); return; }
+  const file = fileInput.files[0];
+  const p = document.getElementById('fsPath').value.replace(/\/$/,'') + '/' + file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(e.target.result)));
+    wsSend({command:'fs_upload', path:p, data:b64, size:file.size});
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ---- Write ECU response ---- */
+function onWriteEcuResp(msg){
+  // Handled via callback, but just in case:
+  if(!msg.success) toast('Write failed: '+(msg.error||''), 'error');
+}
+
+/* ---- Toast ---- */
+let toastTimer = null;
+function toast(msg, type){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type==='error'?' error':'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+/* ---- Auth via Enter key ---- */
+document.getElementById('authPass').addEventListener('keydown', e => { if(e.key==='Enter') doAuth(); });
+
+/* ---- Auto-connect ---- */
+wsConnect();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/rabbit/esp/obd/FUTV1.1/firmware/test/wot_logger/host_test_runner'
+relocations:     []
+...

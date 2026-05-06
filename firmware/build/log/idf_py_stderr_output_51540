@@ -1,0 +1,9 @@
+Command: ninja all
+CMake Warning at /Users/rabbit/esp/esp-idf/tools/cmake/gdbinit.cmake:52 (message):
+  Error while generating esp_rom gdbinit
+Call Stack (most recent call first):
+  /Users/rabbit/esp/esp-idf/tools/cmake/project.cmake:356 (__generate_gdbinit)
+  /Users/rabbit/esp/esp-idf/tools/cmake/project.cmake:974 (__project_info)
+  CMakeLists.txt:7 (project)
+
+

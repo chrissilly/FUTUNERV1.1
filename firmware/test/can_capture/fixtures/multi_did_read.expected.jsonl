@@ -1,0 +1,2 @@
+{"ts": 1714900000.000100, "dir": "tx", "src": "0x7E0", "dst": "0x710", "service": "ReadDataByIdentifier", "service_id": "0x22", "did": "0xF190,0xF187", "raw": "22 F1 90 F1 87", "decoded": null}
+{"ts": 1714900000.001500, "dir": "rx", "src": "0x710", "dst": "0x7E0", "service": "ReadDataByIdentifier (positive response)", "service_id": "0x62", "did": "0xF190,0xF187", "raw": "62 F1 90 57 41 55 5A 5A 5A 34 4D 31 32 32 30 30 30 31 32 33 F1 87 34 4B 30 39 30 37 35 35 37 47 5F 5F 30 30 30 33", "decoded": "0xF190=WAUZZZ4M122000123, 0xF187=4K0907557G__0003"}

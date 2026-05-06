@@ -1,0 +1,202 @@
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "can/can_manager.h"
+#include "nvs/nvs_manager.h"
+#include "nvs/ecu_info.h"
+#include "config/futuner_config.h"
+#include "state_machine/connection_manager.h"
+#include "wifi/wifi_ap.h"
+#include "websocket/ws_server.h"
+#include "commands/command_handler.h"
+#include "error/error_tracker.h"
+#include "filesystem/fs_manager.h"
+#include "logger/logger_profile.h"
+#include "logger/wot_logger.h"
+#include "ecu_write/ecu_write.h"
+#include "flex_fuel/flex_fuel.h"
+#include "commands/serial_console.h"
+#include "feature_manager/feature_manager.h"
+#include "dtc/dtc.h"
+
+static const char *TAG = "MAIN";
+
+#define WIFI_AP_IP "192.168.10.1"
+/* C1 fix: password removed from source — loaded from NVS at runtime */
+
+#define CAN_TASK_STACK_SIZE 8192
+#define CAN_TASK_PRIORITY   5
+#define CAN_TASK_CORE       1
+
+/**
+ * CAN + connection manager task.
+ * Runs on a dedicated task with its own stack so the blocking CAN
+ * transmits and deep isotp/connection_manager call chains don't
+ * starve the WiFi/LWIP tasks or overflow the main task stack.
+ */
+static void can_task(void *arg) {
+    ESP_LOGI(TAG, "CAN task started on core %d", xPortGetCoreID());
+
+    connection_manager_start_connection();
+
+    uint32_t last_log_ticks = xTaskGetTickCount();
+    int log_counter = 0;
+
+    while (1) {
+        can_manager_poll();
+        connection_manager_update();
+        ecu_write_poll();
+        flex_fuel_update();
+
+        uint32_t now_ticks = xTaskGetTickCount();
+        if ((now_ticks - last_log_ticks) >= pdMS_TO_TICKS(5000)) {
+            ESP_LOGI(TAG, "Heartbeat: System running... count=%d", log_counter++);
+            last_log_ticks = now_ticks;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+void app_main(void) {
+    ESP_LOGI(TAG, "Starting FUTUNER v%s", FUTUNER_VERSION_STRING);
+
+    esp_err_t err = error_tracker_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize error tracker");
+        return;
+    }
+
+    err = nvs_manager_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize NVS manager");
+        return;
+    }
+
+    err = wifi_ap_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WiFi AP");
+        return;
+    }
+
+    err = wifi_ap_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start WiFi AP");
+        return;
+    }
+
+    err = ws_server_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WebSocket server");
+        return;
+    }
+
+    /* Web server starts lazily when a WiFi client connects (wifi_ap.c event handler).
+       No need to call ws_server_start() here - saves resources when no one is connected. */
+
+    err = command_handler_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize command handler");
+        return;
+    }
+
+    ws_server_set_message_handler(command_handler_process_message);
+
+    err = fs_manager_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize filesystem manager");
+        return;
+    }
+
+    err = fs_manager_mount_partition(FS_PARTITION_STORAGE);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to mount storage partition");
+        error_tracker_log(ERROR_CATEGORY_SYSTEM, ERROR_SEVERITY_ERROR,
+                        "Failed to mount filesystem");
+    } else {
+        ESP_LOGI(TAG, "Filesystem mounted successfully");
+
+        /* Initialize logger profile system (creates /cal/profiles/ dir) */
+        err = logger_profile_init();
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Logger profile init failed (non-fatal)");
+        }
+
+        err = flex_fuel_init();
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Flex fuel init failed (non-fatal)");
+        }
+    }
+
+    err = can_manager_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize CAN manager");
+        return;
+    }
+
+    err = can_manager_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start CAN manager");
+        return;
+    }
+
+    err = connection_manager_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize connection manager");
+        return;
+    }
+
+    /* Feature manager — central ON/OFF arbiter. Must be initialized
+       before any feature_manager_register() call so wot_logger and
+       future features can plug in. */
+    err = feature_manager_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize feature manager");
+        return;
+    }
+
+    /* WOT logger — registers itself with feature_manager. Defaults
+       to inactive; activated only via wot_log_start command. */
+    err = wot_logger_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "WOT logger init failed (non-fatal): rc=%d", (int)err);
+    }
+
+    /* DTC read/clear feature — registers itself with feature_manager.
+       Defaults to inactive; activated on-demand via dtc_read /
+       dtc_clear commands which arbitrate through feature_manager. */
+    err = dtc_feature_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "DTC feature init failed (non-fatal): rc=%d", (int)err);
+    }
+
+    ESP_LOGI(TAG, "System initialized");
+    ESP_LOGI(TAG, "Device Serial: 0x%012llX", wifi_ap_get_serial_number());
+    /* C1 fix: do not log password in plaintext */
+    ESP_LOGI(TAG, "WiFi AP: SSID=%s, IP=%s", wifi_ap_get_ssid(), WIFI_AP_IP);
+    ESP_LOGI(TAG, "Web server: http://%s/ (starts on first WiFi client)", WIFI_AP_IP);
+
+    /* Launch CAN + connection manager on its own task so app_main returns.
+       This frees the main task stack and lets WiFi/LWIP run without contention. */
+    BaseType_t ret = xTaskCreatePinnedToCore(
+        can_task,
+        "can_task",
+        CAN_TASK_STACK_SIZE,
+        NULL,
+        CAN_TASK_PRIORITY,
+        NULL,
+        CAN_TASK_CORE
+    );
+
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create CAN task");
+        return;
+    }
+
+    /* Start serial console (USB UART) for direct config commands */
+    serial_console_start();
+
+    ESP_LOGI(TAG, "CAN task launched, app_main exiting");
+    /* app_main returns - FreeRTOS reclaims the main task stack */
+}

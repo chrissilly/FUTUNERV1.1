@@ -1,0 +1,36 @@
+Command: ninja all
+[1/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/commands/profile_commands.c.obj
+[2/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/ecu_write/ecu_write.c.obj
+[3/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/bdef/bdef_file.c.obj
+[4/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/logger/wot_recorder.c.obj
+[5/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/filesystem/fs_manager.c.obj
+[6/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/error/error_tracker.c.obj
+[7/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/scal/scal_file.c.obj
+[8/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/logger/wot_logger.c.obj
+[9/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/commands/flex_commands.c.obj
+/Users/rabbit/esp/obd/FUTV1.1/firmware/src/commands/flex_commands.c:5:20: warning: 'TAG' defined but not used [-Wunused-variable]
+    5 | static const char *TAG = "flex_cmds";
+      |                    ^~~
+[10/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/commands/wot_log_commands.c.obj
+[11/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/flex_fuel/flex_fuel.c.obj
+[12/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/flex_fuel/blend_engine.c.obj
+[13/24] Building ASM object esp-idf/src/CMakeFiles/__idf_src.dir/__/__/futuner_control_panel.html.S.obj
+[14/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/commands/can_sniffer.c.obj
+[15/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/feature_manager/feature_manager.c.obj
+[16/24] Performing build step for 'bootloader'
+[1/1] cd /Users/rabbit/esp/obd/FUTV1.1/firmware/build/bootloader/esp-idf/esptool_py && /Users/rabbit/.espressif/python_env/idf5.5_py3.9_env/bin/python /Users/rabbit/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /Users/rabbit/esp/obd/FUTV1.1/firmware/build/bootloader/bootloader.bin
+Bootloader binary size 0x5260 bytes. 0x2da0 bytes (36%) free.
+[17/24] Building C object esp-idf/src/CMakeFiles/__idf_src.dir/commands/serial_console.c.obj
+[18/24] No install step for 'bootloader'
+[19/24] Completed 'bootloader'
+[20/24] Linking C static library esp-idf/src/libsrc.a
+[21/24] Generating esp-idf/esp_system/ld/sections.ld
+[22/24] Linking CXX executable futuner_v2.elf
+[23/24] Generating binary image from built executable
+esptool.py v4.12.dev1
+Creating esp32s3 image...
+Merged 2 ELF sections
+Successfully created esp32s3 image.
+Generated /Users/rabbit/esp/obd/FUTV1.1/firmware/build/futuner_v2.bin
+[24/24] cd /Users/rabbit/esp/obd/FUTV1.1/firmware/build/esp-idf/esptool_py && /Users/rabbit/.espressif/python_env/idf5.5_py3.9_env/bin/python /Users/rabbit/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /Users/rabbit/esp/obd/FUTV1.1/firmware/build/partition_table/partition-table.bin /Users/rabbit/esp/obd/FUTV1.1/firmware/build/futuner_v2.bin
+futuner_v2.bin binary size 0x11aeb0 bytes. Smallest app partition is 0x280000 bytes. 0x165150 bytes (56%) free.

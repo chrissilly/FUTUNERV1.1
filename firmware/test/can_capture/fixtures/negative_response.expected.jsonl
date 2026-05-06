@@ -1,0 +1,2 @@
+{"ts": 1714895000.000100, "dir": "tx", "src": "0x7E0", "dst": "0x710", "service": "ReadDataByIdentifier", "service_id": "0x22", "did": "0xF190", "raw": "22 F1 90", "decoded": null}
+{"ts": 1714895000.001000, "dir": "rx", "src": "0x710", "dst": "0x7E0", "service": "Negative Response", "service_id": "0x7F", "did": null, "raw": "7F 22 33", "decoded": "rejected=ReadDataByIdentifier (0x22), nrc=0x33 (Security Access Denied)"}
