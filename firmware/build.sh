@@ -18,4 +18,15 @@ PYTHON_PATH=${IDF_PYTHON:-$HOME/.espressif/python_env/idf5.5_py3.9_env/bin/pytho
 echo "IDF: $IDF_PATH"
 echo "Python: $PYTHON_PATH"
 
+# Bundle the split UI sources (ui/{html,css,js}) into the single
+# firmware/futuner_control_panel.html that the dongle's flash partition
+# serves. Deterministic — same inputs, same output bytes. See
+# tools/bundle_ui.py and the Prompt-9 UI eval for the contract.
+PROJECT_ROOT="$(cd "$DIR/.." && pwd)"
+"$PYTHON_PATH" "$PROJECT_ROOT/tools/bundle_ui.py" \
+    --in  "$PROJECT_ROOT/ui/control_panel.html" \
+          "$PROJECT_ROOT/ui/control_panel.css" \
+          "$PROJECT_ROOT/ui/control_panel.js" \
+    --out "$DIR/futuner_control_panel.html"
+
 "$PYTHON_PATH" "$IDF_PATH/tools/idf.py" build

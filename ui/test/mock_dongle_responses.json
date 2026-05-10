@@ -1,0 +1,75 @@
+{
+  "_doc": "Fixture for mock_dongle.py. Each top-level key (except those starting with _) maps a COMMAND_REGISTRY entry to its canned response. Plus a `_sequences` block defining named scripted event sequences for the round-trip test. Top-level keys mirror the firmware's command names exactly. Response shapes mirror the real handlers' contracts in firmware/src/commands/*. The eval verifies that every COMMAND_REGISTRY entry has a key here (modulo EVAL_COMMAND_EXEMPTIONS) AND that every required sequence is present.",
+  "_eval_command_exemptions": [
+    "pair_ecu", "remove_pairing", "configure_logger", "get_single_variable",
+    "flex_load_scal", "flex_unload_scal", "flex_status", "flex_enable", "flex_disable", "flex_set_override",
+    "logger_start", "logger_stop", "fs_info", "fs_mkdir", "list_available_vars",
+    "delete_logger_profile", "can_sniff_status", "wifi_status"
+  ],
+
+  "get_logger_data":     {"success": true, "command": "get_logger_data", "data": {"nmot_w": 1234, "pvdg_w": 1500, "klopfakt": 0}},
+  "write_ecu":           {"success": true, "command": "write_ecu"},
+  "get_status":          {"success": true, "command": "get_status", "data": {"vin": "WAUZZZ4M9PA000001", "boxcode": "8R0907115L", "active_feature": "idle", "uptime": 12, "free_heap": 200000}},
+  "list_commands":       {"success": true, "command": "list_commands", "commands": ["dtc_read", "dtc_clear"]},
+  "get_errors":          {"success": true, "command": "get_errors", "errors": []},
+  "clear_errors":        {"success": true, "command": "clear_errors"},
+  "wifi_connect":        {"success": true, "command": "wifi_connect", "ip": "192.168.1.42"},
+  "wifi_disconnect":     {"success": true, "command": "wifi_disconnect"},
+  "fs_list":             {"success": true, "command": "fs_list", "files": [{"name": "boot.cfg", "type": "file", "size": 128}]},
+  "fs_read":             {"success": true, "command": "fs_read", "content": "ok"},
+  "fs_write":            {"success": true, "command": "fs_write"},
+  "fs_delete":           {"success": true, "command": "fs_delete"},
+  "get_logger_profile":  {"success": true, "command": "get_logger_profile", "profile": {"nmot_w": 1, "pvdg_w": 1}},
+  "set_logger_profile":  {"success": true, "command": "set_logger_profile"},
+  "can_sniff_start":     {"success": true, "command": "can_sniff_start"},
+  "can_sniff_stop":      {"success": true, "command": "can_sniff_stop"},
+  "can_send_raw":        {"success": true, "command": "can_send_raw"},
+
+  "wot_log_start":       {"success": true, "command": "wot_log_start", "active_feature": "wot_logging"},
+  "wot_log_stop":        {"success": true, "command": "wot_log_stop", "active_feature": "none"},
+
+  "dtc_read":            {"command": "dtc_read", "ok": true, "codes": [
+    {"code": "P0420", "status": 9, "description": "Catalyst System Efficiency Below Threshold (Bank 1)"},
+    {"code": "P0301", "status": 9, "description": "Cylinder 1 Misfire Detected"},
+    {"code": "P0171", "status": 4, "description": "System Too Lean (Bank 1)"}
+  ]},
+  "dtc_clear":           {"command": "dtc_clear", "ok": true, "cleared_count": 3},
+
+  "vin_pair_now":        {"command": "vin_pair_now", "ok": true, "message": "VIN paired and license refreshed"},
+  "set_auth_token":      {"command": "set_auth_token", "ok": true},
+  "license_status":      {"command": "license_status", "ok": true, "present": true, "paid": true, "revoked": false, "vin": "WAUZZZ4M9PA000001", "revoked_reason": "", "last_sync_ms": 1714680000000},
+
+  "live_tune_start":     {"command": "live_tune_start", "ok": true, "message": "live tune apply enqueued", "active_feature": "live_tune"},
+  "live_tune_set":       {"command": "live_tune_set", "ok": true, "message": "re-apply enqueued"},
+  "live_tune_stop":      {"command": "live_tune_stop", "ok": true, "active_feature": "none"},
+  "live_tune_status":    {"command": "live_tune_status", "ok": true, "state": 3, "current_stage": 2, "current_ethanol_pct": 30, "last_apply_ms": 1714680000000, "last_apply_elapsed_ms": 480, "sbf_filename": "/sbf/cache/stage2.sbf", "last_error": ""},
+
+  "_overrides": {
+    "_doc": "Tests can ask the mock to return an alternate response for one command, scoped to one connection. See mock_dongle.py admin endpoint /admin/override.",
+    "live_tune_start_unpaid": {"command": "live_tune_start", "ok": false, "success": false, "error": "license unpaid"},
+    "wot_log_start_busy":     {"command": "wot_log_start", "success": false, "error": "feature_manager busy", "active_feature": "live_tune"}
+  },
+
+  "_sequences": {
+    "_doc": "Each named sequence is a list of {event, payload, delay_ms} steps. The mock's admin POST /admin/fire {sequence:NAME} fires them in order against currently-connected WS clients. Required sequences (Q4 sub-clarification) are: apply_progress_3_then_complete, apply_failed_unload, license_revoked_then_paid.",
+
+    "apply_progress_3_then_complete": [
+      {"event": "apply_started",   "payload": {"stage": 2, "ethanol_pct": 30}, "delay_ms": 0},
+      {"event": "apply_progress",  "payload": {"maps_done": 1, "maps_total": 3}, "delay_ms": 50},
+      {"event": "apply_progress",  "payload": {"maps_done": 2, "maps_total": 3}, "delay_ms": 50},
+      {"event": "apply_progress",  "payload": {"maps_done": 3, "maps_total": 3}, "delay_ms": 50},
+      {"event": "apply_completed", "payload": {"elapsed_ms": 220, "maps_applied": 3, "bytes": 4096}, "delay_ms": 50}
+    ],
+
+    "apply_failed_unload": [
+      {"event": "apply_started", "payload": {"stage": 3, "ethanol_pct": 85}, "delay_ms": 0},
+      {"event": "apply_failed",  "payload": {"reason": "unknown variant", "elapsed_ms": 120, "maps_applied": 0}, "delay_ms": 50},
+      {"event": "unload",        "payload": {}, "delay_ms": 30}
+    ],
+
+    "license_revoked_then_paid": [
+      {"event": "license_changed", "payload": {"paid": false, "revoked": true,  "reason": "subscription expired", "vin": "WAUZZZ4M9PA000001"}, "delay_ms": 0},
+      {"event": "license_changed", "payload": {"paid": true,  "revoked": false, "reason": "",                     "vin": "WAUZZZ4M9PA000001"}, "delay_ms": 60}
+    ]
+  }
+}

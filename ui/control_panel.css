@@ -1,0 +1,432 @@
+/*
+ * control_panel.css — FUTUNER v2 single-page UI styles.
+ *
+ * Bundled into firmware/futuner_control_panel.html by tools/bundle_ui.py
+ * (the dongle's flash partition serves a single file; there is no
+ * separate static asset server). Keep this file UTF-8, LF newlines,
+ * and free of build-time identifiers — bundle determinism depends on
+ * stable inputs.
+ *
+ * Theme: orange / black (existing). New color values in this file
+ * MUST reference a CSS custom property declared in the :root block
+ * below; literal hex codes outside :root fail the eval.
+ */
+
+:root {
+  /* Existing palette — DO NOT change values (Q6: no theme migration). */
+  --bg-dark: #0d0d0d;
+  --bg-card: #1a1a1a;
+  --bg-input: #252525;
+  --bg-hover: #2a2a2a;
+  --border: #333;
+  --text: #e0e0e0;
+  --text-dim: #888;
+  --accent: #ff6600;
+  --accent-dark: #cc5200;
+  --accent-glow: rgba(255,102,0,0.3);
+  --green: #00cc66;
+  --yellow: #ffcc00;
+  --red: #ff3333;
+  --blue: #3399ff;
+
+  /*
+   * New tokens — Prompt 9. Each "Proposed default — needs Sean's
+   * approval before lock." Same annotation pattern as the firmware
+   * config headers. CSS variables, not magic numbers.
+   */
+  --theme-name: 'orange';                 /* forward-compat marker; future re-skin = one-line edit */
+  --modal-overlay: rgba(0,0,0,0.7);       /* full-screen modal backdrop */
+  --modal-radius: 8px;                    /* modal + stage-card corner radius */
+  --modal-z: 2000;                        /* above toast (z=1000) */
+  --warn-bg: rgba(255,204,0,0.15);        /* refusal/warning banner background */
+  --warn-border: rgba(255,204,0,0.45);
+  --error-bg: rgba(255,51,51,0.15);       /* error banner background (license refused, etc.) */
+  --error-border: rgba(255,51,51,0.45);
+  --success-bg: rgba(0,204,102,0.15);     /* completion banner background */
+  --success-border: rgba(0,204,102,0.45);
+  --touch-target-min: 44px;               /* iOS HIG minimum tap target */
+  --slider-track-height: 6px;
+  --slider-thumb-size: 24px;
+  --stage-card-min-width: 110px;
+  --progress-bar-height: 14px;
+  --license-tooltip-bg: #0d0d0d;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg-dark);color:var(--text);min-height:100vh;overflow-x:hidden}
+a{color:var(--accent)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-dark)}
+::-webkit-scrollbar-thumb{background:#444;border-radius:3px}
+
+.header{background:linear-gradient(135deg,#1a1a1a 0%,#0d0d0d 100%);border-bottom:2px solid var(--accent);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:100}
+.brand{display:flex;align-items:center;gap:12px}
+.brand h1{font-size:1.4em;font-weight:700;letter-spacing:2px;color:var(--accent);text-shadow:0 0 20px var(--accent-glow)}
+.brand span{font-size:.75em;color:var(--text-dim);border:1px solid #444;padding:2px 8px;border-radius:3px}
+.conn-group{display:flex;align-items:center;gap:12px}
+.conn-dot{width:10px;height:10px;border-radius:50%;background:var(--red);transition:background .3s}
+.conn-dot.connected{background:var(--green);box-shadow:0 0 8px var(--green)}
+.conn-label{font-size:.85em;color:var(--text-dim)}
+.auth-group{display:flex;gap:6px;align-items:center}
+.auth-group input{background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:.85em;width:160px}
+.auth-group input:focus{outline:none;border-color:var(--accent)}
+.lock-icon{font-size:1.1em;margin-right:2px}
+.auth-status{font-size:.75em;padding:2px 8px;border-radius:3px;background:#331a00;color:var(--accent)}
+.auth-status.authed{background:#003300;color:var(--green)}
+
+/* License + active-feature header indicators (Prompt 9). */
+.header-state{display:flex;align-items:center;gap:14px;font-size:.82em;color:var(--text-dim)}
+.license-lock{cursor:pointer;font-size:1.05em;position:relative;line-height:1}
+.license-lock.paid{color:var(--green)}
+.license-lock.unpaid{color:var(--yellow)}
+.license-lock.revoked{color:var(--red)}
+.license-tooltip{position:absolute;top:24px;right:0;background:var(--license-tooltip-bg);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-size:.8em;color:var(--text);min-width:200px;box-shadow:0 4px 12px rgba(0,0,0,0.5);display:none;z-index:200;text-align:left;white-space:normal}
+.license-lock.tooltip-open .license-tooltip{display:block}
+.license-tooltip .lt-row{margin-bottom:4px}
+.license-tooltip .lt-key{color:var(--text-dim);text-transform:uppercase;font-size:.75em;letter-spacing:.5px}
+.active-feature{padding:2px 8px;border-radius:3px;background:var(--bg-input);color:var(--accent);font-family:'Cascadia Code','Fira Code',monospace;font-size:.8em}
+.active-feature.idle{color:var(--text-dim)}
+
+button{background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:4px;cursor:pointer;font-size:.85em;transition:all .15s}
+button:hover{background:var(--accent);color:#000;border-color:var(--accent)}
+button:active{transform:scale(.97)}
+button.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
+button.primary:hover{background:#ff8533}
+button.danger{border-color:var(--red)}
+button.danger:hover{background:var(--red);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+
+.tabs{display:flex;background:var(--bg-card);border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{padding:10px 20px;cursor:pointer;font-size:.9em;color:var(--text-dim);border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;user-select:none}
+.tab:hover{color:var(--text);background:var(--bg-hover)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.panel{display:none;padding:16px;max-width:1600px;margin:0 auto}
+.panel.active{display:block}
+
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:12px}
+.card h3{color:var(--accent);font-size:.95em;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px}
+
+input[type=text],input[type=number],input[type=password],select,textarea{background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:.85em;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{resize:vertical}
+
+/* Dashboard */
+.dash-top{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:20px}
+.gauge-wrap svg{max-width:260px;width:100%}
+.gauge-label{font-size:1.8em;font-weight:700;margin-top:8px;font-variant-numeric:tabular-nums}
+.gauge-title{font-size:.8em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px}
+
+.readouts{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.readout{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center}
+.readout .val{font-size:1.5em;font-weight:700;font-variant-numeric:tabular-nums}
+.readout .lbl{font-size:.7em;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.readout .unit{font-size:.7em;color:var(--text-dim)}
+.val.green{color:var(--green)}.val.yellow{color:var(--yellow)}.val.red{color:var(--red)}
+
+/* Knock indicators */
+.knock-row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px}
+.knock-row .knock-title{font-size:.8em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;width:100%;text-align:center;margin-bottom:4px}
+.knock-cyl{display:flex;flex-direction:column;align-items:center;gap:4px}
+.knock-dot{width:22px;height:22px;border-radius:50%;background:var(--green);border:2px solid #333;transition:background .15s,box-shadow .15s}
+.knock-dot.active{background:var(--red);box-shadow:0 0 10px var(--red)}
+.knock-cyl-label{font-size:.65em;color:var(--text-dim);text-transform:uppercase}
+
+/* Sniffer */
+.sniff-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.sniff-stats{font-size:.85em;color:var(--text-dim);margin-left:auto;display:flex;gap:16px}
+.sniff-table-wrap{max-height:500px;overflow-y:auto;border:1px solid var(--border);border-radius:4px}
+table{width:100%;border-collapse:collapse;font-size:.82em}
+th{background:var(--bg-input);color:var(--accent);text-align:left;padding:6px 10px;position:sticky;top:0;z-index:1}
+td{padding:4px 10px;border-top:1px solid #222;font-family:'Cascadia Code','Fira Code',monospace;font-size:.9em}
+tr:hover td{background:var(--bg-hover)}
+.send-raw{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.send-raw input{width:100px}
+.send-raw input.data-input{width:240px}
+
+/* Diagnostics */
+.dtc-list{max-height:300px;overflow-y:auto}
+.dtc-item{padding:8px 12px;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.dtc-code{font-weight:700;color:var(--red);font-family:monospace}
+.dtc-desc{flex:1;font-size:.88em;color:var(--text)}
+.dtc-status-chip{font-size:.7em;padding:2px 8px;border-radius:3px;background:var(--bg-input);color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.dtc-status-chip.active{background:var(--error-bg);color:var(--red);border:1px solid var(--error-border)}
+.dtc-status-chip.pending{background:var(--warn-bg);color:var(--yellow);border:1px solid var(--warn-border)}
+.dtc-status-chip.confirmed{background:var(--error-bg);color:var(--red);border:1px solid var(--error-border)}
+.dtc-meta{display:flex;justify-content:space-between;font-size:.78em;color:var(--text-dim);margin-top:8px}
+.ecu-info{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.ecu-field{padding:8px;background:var(--bg-input);border-radius:4px}
+.ecu-field .k{font-size:.7em;color:var(--text-dim);text-transform:uppercase}
+.ecu-field .v{font-size:.95em;font-weight:600;margin-top:2px;word-break:break-all}
+
+/* Tuning */
+.xdf-meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;font-size:.85em;color:var(--text-dim)}
+.xdf-search{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+.xdf-search input{flex:1;max-width:400px}
+.map-item{border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.map-header{padding:10px 14px;background:var(--bg-input);cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.map-header:hover{background:var(--bg-hover)}
+.map-header .title{font-weight:600;font-size:.9em}
+.map-header .info{font-size:.75em;color:var(--text-dim)}
+.map-header .arrow{transition:transform .2s;color:var(--text-dim)}
+.map-header .arrow.open{transform:rotate(90deg)}
+.map-body{padding:12px;display:none;overflow-x:auto}
+.map-body.open{display:block}
+.map-grid{border-collapse:collapse;font-size:.8em}
+.map-grid th{background:var(--accent-dark);color:#fff;padding:4px 8px;text-align:center;font-weight:600;min-width:60px}
+.map-grid td{padding:0}
+.map-grid .axis-cell{background:var(--bg-input);color:var(--accent);font-weight:600;text-align:center;padding:4px 8px}
+.map-grid input{width:100%;background:transparent;border:1px solid transparent;color:var(--text);text-align:center;padding:4px 6px;font-family:monospace;font-size:1em}
+.map-grid input:focus{border-color:var(--accent);background:var(--bg-input);outline:none}
+.map-grid input.flash-ok{background:rgba(0,204,102,.3) !important;transition:background .1s}
+.map-grid input.flash-err{background:rgba(255,51,51,.3) !important;transition:background .1s}
+.scalar-edit{display:flex;align-items:center;gap:10px;padding:8px}
+.scalar-edit input{width:120px;text-align:center;font-family:monospace}
+.scalar-edit .unit{font-size:.85em;color:var(--text-dim)}
+
+/* File Manager */
+.fs-path{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.fs-path input{flex:1}
+.fs-list{max-height:400px;overflow-y:auto}
+.fs-item{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid #222;cursor:pointer}
+.fs-item:hover{background:var(--bg-hover)}
+.fs-icon{width:20px;text-align:center;color:var(--accent)}
+.fs-name{flex:1;font-size:.9em}
+.fs-size{font-size:.8em;color:var(--text-dim)}
+.fs-actions{display:flex;gap:4px}
+.file-viewer{margin-top:10px}
+.file-viewer textarea{width:100%;height:200px;font-family:monospace;font-size:.85em}
+.upload-area{display:flex;gap:8px;align-items:center;margin-top:10px}
+
+/* System */
+.sys-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.sys-item{padding:10px;background:var(--bg-input);border-radius:4px;text-align:center}
+.sys-item .val{font-size:1.3em;font-weight:700;color:var(--accent)}
+.sys-item .lbl{font-size:.7em;color:var(--text-dim);margin-top:4px;text-transform:uppercase}
+.cmd-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-top:10px}
+.cmd-item{padding:6px 10px;background:var(--bg-input);border-radius:4px;font-family:monospace;font-size:.8em;color:var(--text-dim)}
+
+/* WiFi STA form */
+.wifi-sta-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.wifi-sta-form input{width:180px}
+.wifi-sta-status{margin-top:8px;font-size:.85em;color:var(--text-dim)}
+.wifi-sta-status .sta-ip{color:var(--green);font-weight:700;font-family:monospace}
+
+/* Log Config */
+.logcfg-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.logcfg-toolbar button{font-size:.82em}
+.logcfg-stats{display:flex;gap:16px;font-size:.82em;color:var(--text-dim);margin-left:auto}
+.logcfg-stats b{color:var(--accent)}
+
+.logcfg-category{border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.logcfg-cat-header{padding:10px 14px;background:var(--bg-input);cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.logcfg-cat-header:hover{background:var(--bg-hover)}
+.logcfg-cat-header .cat-name{font-weight:600;font-size:.9em;color:var(--accent)}
+.logcfg-cat-header .cat-count{font-size:.75em;color:var(--text-dim)}
+.logcfg-cat-header .arrow{transition:transform .2s;color:var(--text-dim)}
+.logcfg-cat-header .arrow.open{transform:rotate(90deg)}
+.logcfg-cat-body{display:none}
+.logcfg-cat-body.open{display:block}
+
+.logcfg-var-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid #222}
+.logcfg-var-row:hover{background:var(--bg-hover)}
+.logcfg-var-row input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
+.logcfg-var-name{font-family:'Cascadia Code','Fira Code',monospace;font-size:.85em;min-width:180px;color:var(--text)}
+.logcfg-var-desc{flex:1;font-size:.8em;color:var(--text-dim)}
+.logcfg-var-rate{width:110px}
+.logcfg-var-value{min-width:80px;text-align:right;font-family:'Cascadia Code','Fira Code',monospace;font-size:.85em;color:var(--green);font-variant-numeric:tabular-nums}
+
+.logcfg-bottom-bar{display:flex;gap:16px;align-items:center;padding:12px 16px;background:var(--bg-input);border-radius:6px;margin-top:12px;flex-wrap:wrap}
+.logcfg-bottom-bar .stat{font-size:.85em;color:var(--text-dim)}
+.logcfg-bottom-bar .stat b{color:var(--accent)}
+.logcfg-slot-counter{font-size:.85em;font-weight:600;color:var(--accent);margin-left:auto}
+.logcfg-slot-counter.at-limit{color:var(--red)}
+.logcfg-var-row.disabled-row{opacity:.4;pointer-events:none}
+.logcfg-var-row .slot-badge{font-size:.7em;color:var(--yellow);background:#332200;padding:1px 6px;border-radius:3px;margin-left:4px;white-space:nowrap}
+.logcfg-limit-warning{display:none;background:rgba(255,51,51,.15);border:1px solid var(--red);border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:.85em;color:var(--red)}
+.logcfg-limit-warning.show{display:block}
+
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--accent);color:var(--text);padding:10px 16px;border-radius:6px;font-size:.85em;z-index:1000;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.error{border-color:var(--red)}
+
+/*
+ * --- Prompt 9: new components ---
+ * Live Tune, WOT Logger, VIN Pairing tabs + cross-cutting modal /
+ * banners. All colors reference :root tokens.
+ */
+
+/* Banner — refusal / status messaging on feature panels. */
+.banner{padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:.85em;display:none;border:1px solid var(--border)}
+.banner.show{display:block}
+.banner.warn{background:var(--warn-bg);border-color:var(--warn-border);color:var(--yellow)}
+.banner.error{background:var(--error-bg);border-color:var(--error-border);color:var(--red)}
+.banner.success{background:var(--success-bg);border-color:var(--success-border);color:var(--green)}
+.banner-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.banner-row .ack{background:transparent;border-color:currentColor;color:inherit}
+
+/* Stage cards — Live Tune (Q5: 3 large cards, not a <select>). */
+.stage-cards{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.stage-card{flex:1 1 var(--stage-card-min-width);min-width:var(--stage-card-min-width);min-height:var(--touch-target-min);border:2px solid var(--border);border-radius:var(--modal-radius);background:var(--bg-input);padding:12px;cursor:pointer;text-align:center;transition:all .15s;user-select:none}
+.stage-card:hover{border-color:var(--accent);background:var(--bg-hover)}
+.stage-card.selected{border-color:var(--accent);background:var(--bg-card);box-shadow:0 0 12px var(--accent-glow)}
+.stage-card .stage-num{font-size:1.4em;font-weight:700;color:var(--accent);letter-spacing:1px}
+.stage-card .stage-desc{font-size:.78em;color:var(--text-dim);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+
+/* Ethanol slider + paired number input. */
+.ethanol-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.ethanol-row label{font-size:.85em;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;min-width:80px}
+.ethanol-slider{flex:1;min-width:200px;height:var(--touch-target-min);-webkit-appearance:none;appearance:none;background:transparent}
+.ethanol-slider::-webkit-slider-runnable-track{height:var(--slider-track-height);background:var(--bg-input);border-radius:3px}
+.ethanol-slider::-moz-range-track{height:var(--slider-track-height);background:var(--bg-input);border-radius:3px}
+.ethanol-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:var(--slider-thumb-size);height:var(--slider-thumb-size);border-radius:50%;background:var(--accent);cursor:pointer;margin-top:-9px;box-shadow:0 0 6px var(--accent-glow)}
+.ethanol-slider::-moz-range-thumb{width:var(--slider-thumb-size);height:var(--slider-thumb-size);border-radius:50%;background:var(--accent);cursor:pointer;border:none;box-shadow:0 0 6px var(--accent-glow)}
+.ethanol-num{width:80px;text-align:center}
+
+/* Live Tune progress bar + state badge. */
+.lt-progress-wrap{margin-bottom:12px}
+.lt-progress-track{width:100%;height:var(--progress-bar-height);background:var(--bg-input);border-radius:4px;overflow:hidden;border:1px solid var(--border)}
+.lt-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent-dark),var(--accent));width:0%;transition:width .25s ease-out}
+.lt-progress-label{font-size:.78em;color:var(--text-dim);text-align:right;margin-top:4px;font-variant-numeric:tabular-nums}
+
+.lt-state-badge{display:inline-block;padding:4px 12px;border-radius:14px;font-size:.78em;text-transform:uppercase;letter-spacing:1px;font-weight:600;border:1px solid var(--border);background:var(--bg-input);color:var(--text-dim)}
+.lt-state-badge.idle{color:var(--text-dim)}
+.lt-state-badge.loading{color:var(--blue);border-color:var(--blue)}
+.lt-state-badge.applying{color:var(--yellow);border-color:var(--yellow)}
+.lt-state-badge.active{color:var(--green);border-color:var(--green);background:var(--success-bg)}
+.lt-state-badge.error{color:var(--red);border-color:var(--red);background:var(--error-bg)}
+.lt-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.lt-controls button{min-height:var(--touch-target-min)}
+.lt-meta{font-size:.8em;color:var(--text-dim);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap}
+.lt-meta b{color:var(--accent)}
+
+/* WOT logger panel/card. */
+.wot-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px}
+.wot-stat{padding:10px;background:var(--bg-input);border-radius:4px;text-align:center}
+.wot-stat .val{font-size:1.3em;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.wot-stat .lbl{font-size:.7em;color:var(--text-dim);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+.wot-controls{display:flex;gap:8px;flex-wrap:wrap}
+.wot-controls button{min-height:var(--touch-target-min)}
+.wot-teaser{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.wot-teaser .teaser-msg{font-size:.85em;color:var(--text-dim)}
+
+/* VIN Pairing + License panel. */
+.vinpair-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:12px}
+.vinpair-cell{padding:10px;background:var(--bg-input);border-radius:4px}
+.vinpair-cell .k{font-size:.7em;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
+.vinpair-cell .v{font-size:.95em;font-weight:600;margin-top:2px;word-break:break-all}
+.vinpair-cell .v.paid{color:var(--green)}
+.vinpair-cell .v.unpaid{color:var(--yellow)}
+.vinpair-cell .v.revoked{color:var(--red)}
+.vinpair-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.vinpair-controls button{min-height:var(--touch-target-min)}
+.token-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.token-row input{flex:1;min-width:240px;font-family:monospace;font-size:.85em}
+.admin-only{opacity:.6}
+.admin-only.authed{opacity:1}
+
+/* Feature-swap confirmation modal — full-screen on phones, centered card on desktop. */
+.modal-backdrop{position:fixed;inset:0;background:var(--modal-overlay);display:none;align-items:center;justify-content:center;z-index:var(--modal-z);padding:16px}
+.modal-backdrop.show{display:flex}
+.modal-card{background:var(--bg-card);border:1px solid var(--accent);border-radius:var(--modal-radius);padding:20px;max-width:480px;width:100%;box-shadow:0 12px 48px rgba(0,0,0,0.6)}
+.modal-title{color:var(--accent);font-size:1em;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px}
+.modal-body{font-size:.9em;color:var(--text);margin-bottom:16px;line-height:1.5}
+.modal-body code{font-family:'Cascadia Code','Fira Code',monospace;color:var(--accent);background:var(--bg-input);padding:1px 6px;border-radius:3px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.modal-actions button{min-height:var(--touch-target-min);min-width:96px}
+
+@media(max-width:480px){
+  .modal-backdrop{padding:0}
+  .modal-card{max-width:none;width:100%;height:100%;border-radius:0;display:flex;flex-direction:column;justify-content:center}
+}
+
+@media(max-width:768px){
+  /* Header */
+  .header{flex-direction:column;align-items:flex-start;padding:10px 12px}
+  .auth-group input{width:120px}
+  .auth-group{flex-wrap:wrap}
+  .header-state{flex-wrap:wrap}
+  /* Tabs */
+  .tab{padding:8px 12px;font-size:.82em;min-height:var(--touch-target-min);display:flex;align-items:center}
+  /* Dashboard */
+  .dash-top{grid-template-columns:1fr}
+  .gauge-wrap svg{max-width:200px}
+  .gauge-label{font-size:1.5em}
+  .readouts{grid-template-columns:repeat(2,1fr)}
+  /* Sniffer */
+  .sniff-controls{flex-direction:column;align-items:stretch}
+  .sniff-stats{margin-left:0;justify-content:space-between}
+  .sniff-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .send-raw{flex-direction:column;align-items:stretch}
+  .send-raw input,.send-raw input.data-input{width:100%}
+  /* Diagnostics */
+  .ecu-info{grid-template-columns:1fr}
+  .dtc-item{flex-direction:column;align-items:flex-start;gap:6px}
+  /* Tuning */
+  .map-body{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .map-header .info{white-space:normal;word-break:break-word}
+  .scalar-edit{flex-direction:column;align-items:flex-start;gap:6px}
+  .xdf-search input{max-width:none}
+  /* Log Config */
+  .logcfg-var-row{flex-wrap:wrap;gap:6px}
+  .logcfg-var-name{min-width:120px;flex:1 1 100%}
+  .logcfg-var-desc{flex:1 1 100%;order:3}
+  .logcfg-var-rate{width:100%;max-width:200px}
+  .logcfg-var-value{min-width:60px;text-align:left}
+  .logcfg-stats{margin-left:0;flex-basis:100%}
+  .logcfg-bottom-bar{gap:10px}
+  /* Files */
+  .file-viewer textarea{height:300px}
+  .upload-area{flex-direction:column;align-items:stretch}
+  .fs-path{flex-direction:column}
+  .fs-path input{width:100%}
+  /* System */
+  .wifi-sta-form{flex-direction:column;align-items:stretch}
+  .wifi-sta-form input{width:100%}
+  .cmd-list{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  .sys-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  /* Toast */
+  .toast{right:10px;left:10px;bottom:10px;text-align:center}
+  /* Touch targets */
+  button{min-height:var(--touch-target-min);padding:8px 14px}
+  .logcfg-var-row input[type=checkbox]{width:22px;height:22px}
+  .panel{padding:10px}
+  .card{padding:12px}
+  /* Live Tune */
+  .stage-cards{flex-direction:column}
+  .stage-card{width:100%}
+  .ethanol-row{flex-direction:column;align-items:stretch}
+  .ethanol-row label{min-width:auto}
+  .ethanol-num{width:100%}
+  /* WOT + VIN cards */
+  .wot-stats{grid-template-columns:repeat(2,1fr)}
+  .vinpair-grid{grid-template-columns:1fr}
+  .token-row{flex-direction:column;align-items:stretch}
+  .token-row input{min-width:auto}
+}
+@media(max-width:480px){
+  .brand h1{font-size:1.1em}
+  .brand span{font-size:.65em}
+  .readouts{grid-template-columns:1fr}
+  .readout .val{font-size:1.2em}
+  .readout{padding:8px}
+  .gauge-wrap svg{max-width:160px}
+  .gauge-label{font-size:1.2em}
+  .panel{padding:6px}
+  .card{padding:10px;margin-bottom:8px}
+  .card h3{font-size:.85em}
+  body{font-size:14px}
+  .tab{padding:6px 10px;font-size:.75em}
+  .sys-grid{grid-template-columns:1fr 1fr}
+  .sys-item .val{font-size:1.1em}
+  .knock-dot{width:18px;height:18px}
+  .sniff-stats{flex-direction:column;gap:4px}
+  .map-grid th,.map-grid td{padding:3px 4px}
+  .map-grid{font-size:.72em}
+  .xdf-meta{font-size:.78em}
+  .logcfg-bottom-bar{padding:8px 10px}
+  .wot-stats{grid-template-columns:1fr 1fr}
+  .stage-card{padding:14px}
+  .stage-card .stage-num{font-size:1.6em}
+}

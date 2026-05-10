@@ -1,0 +1,4 @@
+Sniffing CAN @ 500kbps for 1800s with TP keep-alive on 0x7E0 every 2.0s...
+Filtering: 0x7E0, 0x7E8
+
+0 frames captured, 706 TP keep-alives sent

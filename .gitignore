@@ -1,4 +1,4 @@
-_secrets_/
+secrets/
 
 # Host test build artifacts — rebuilt every eval run; never source.
 firmware/test/*/host_test_runner
@@ -7,3 +7,12 @@ firmware/test/*/host_test_runner.dSYM/
 # build artifacts and IDE cache (rebuilt every session, never source of truth)
 firmware/build/
 firmware/.cache/
+
+# UI eval Python caches (sources are mock_dongle.py / test_round_trip.py).
+ui/test/__pycache__/
+ui/test/*.pyc
+
+# Tool Python caches (sources are bundle_ui.py / sbf_to_json.py /
+# can_sniff.py / bench_push.py).
+tools/__pycache__/
+tools/*.pyc

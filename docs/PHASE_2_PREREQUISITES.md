@@ -5,19 +5,93 @@
 > on a customer device.
 >
 > Owner: Sean / SRM Engineering. Updated as items close out.
-> Created: 2026-05-05.
+> Created: 2026-05-05. Last revision: 2026-05-07.
 
 ---
 
 ## Status legend
 
 - 🔴 NOT STARTED
-- 🟡 IN PROGRESS
+- 🟡 IN PROGRESS / PARTIALLY ANSWERED
 - 🟢 DONE
 
 ---
 
+## 2026-05-07 update — SEFIV1.0 discovery context
+
+A find at `~/esp/obd/SEFIV1.0/` (moved in from `~/Downloads/` on
+2026-05-07) provided substantial new ground truth:
+
+- The original Scorpion EFI tool output for `4K0907557G__0003`
+  (Sean's RS7) is on disk: `EXE TOOL/data/4K0907557G__0003/`.
+- `output/stage1_patched.sbf` (35,571 bytes) is the **canonical
+  Scorpion-emitted live-tune binary** for the dev car's Stage 1.
+- `output/stage1_patched.stf` (119,951 bytes) is the **human-readable
+  text equivalent** with all 1 segment + 150 inverse segments + 21
+  maps spelled out byte-for-byte.
+- `input/config.json` (25 KB) is the **per-variant manifest** that
+  drove the build — labels, address resolution rules, modifications,
+  21 maps with full ethanol+gasoline z-axis source references.
+- `scorpion-bin-tools/` is the **Node.js reference implementation** of
+  the binary build pipeline. Includes `docs/binary-format-v3.md` (the
+  authoritative format spec for v3; production output is **format
+  v4**, which is undocumented but observable from the `.stf` header
+  and the `.sbf` byte structure).
+- `EXE TOOL/data/4K0907557G__0003/srm prime 91 unpatched.bin` — the
+  unpatched stock binary for Sean's boxcode (8 MB).
+- `Customers/Dan Bui/` — second boxcode (`4M0906014__0005` / Audi SQ7)
+  with full asset bundle (stock, patched, stage1, stage1_flexfuel,
+  XDF). Candidate for variant matrix expansion.
+
+The Scorpion EFI build pipeline produces **two outputs that matter to
+FUTUNER**, in two stages:
+
+**Stage A — `stage1_primed.bin`** (8 MB, what gets FLASHED to the ECU
+in Phase 2):
+- Starts from `stage1.bin` (full performance Stage 1 base).
+- Merges 889 byte differences from `stock_patched.bin` (live-tune +
+  logging patches).
+- Sets address `0x9F93E` (engine_speed_display) to `12000` raw → 3000
+  RPM displayed (limp/safety mode).
+- Sets address `0xF0A0C` (max_load_1, 84 entries × 2 bytes) uniformly
+  to ~80% (load reduction).
+- Sets address `0x11E6AE` (ethanol) to `70%` baseline.
+
+**Stage B — `stage1_patched.sbf`** (35 KB, what gets APPLIED OVER RAM
+in Phase 1):
+- Reverts the rev-limit display from limp to full Stage 1
+  (1 regular segment, 2 bytes at `0x9F93E`).
+- Reverts the max_load_1 table and 19 calibration maps (lambda + 17
+  ZWGRU ignition + 1 BGRLXVD compression) from primed-safe back to
+  full Stage 1 values (150 inverse segments, 9272 bytes).
+- 21 maps with z-axis blend data (gasoline + ethanol variants) for
+  runtime ethanol blending.
+
+This validates the FUTUNER product design end-to-end: the flashed
+binary is **fail-safe** (limp mode + 70% ethanol baseline) so the car
+drives even if the dongle never connects; the SBF "unlocks" full
+Stage 1 by reverting the safety reductions. MISSION_SPEC §4.5's
+rev-limit-during-update safety rail (drop to 4000 RPM during the 2 s
+RAM-rewrite window) is specifically protecting the rev-limit toggle
+inside Stage B.
+
+**What this changes for the P-list, item by item, is annotated inline
+below.** TL;DR: most P-items remain open; P-11(a) is materially
+solved (variant manifest schema = adopt the existing `config.json`
+shape); two new items P-12 and P-13 surface from the find.
+
+---
+
 ## P-01 🔴 MagicMotorsport flash capture session — reference UDS sequences
+
+**2026-05-07 status update.** Importance unchanged but scope narrowed.
+The SEFIV1.0 find solves the question of WHAT to flash (per-VIN
+`stage1_primed.bin` produced by the Scorpion EFI build pipeline) but
+not HOW to flash it at the wire level. P-01 was always about capturing
+the wire-level UDS choreography (security access, challenge-response,
+chunked TransferData, CRC verify, reset) — that remains entirely
+unaddressed by the find. **Still 🔴, still the practical unblocker
+for P-02, P-08.** Phase 1 work continues to be unblocked without it.
 
 **Why this is critical.** Phase 2 requires producing a UDS sequence
 that an MG1/MDG1 ECU accepts as authoritative. We have AES keys and
@@ -108,7 +182,17 @@ sign-off.
 
 ---
 
-## P-05 🔴 Per-variant base binary signed and stored
+## P-05 🟡 Per-variant base binary signed and stored
+
+**2026-05-07 status update.** Partially answered. The SEFIV1.0 find
+shows that the Scorpion EFI build pipeline already **produces** the
+per-variant base binary (`stage1_primed.bin`, 8 MB) as a build target
+output. For `4K0907557G__0003` (dev car) this binary exists on disk
+today at `~/esp/obd/SEFIV1.0/EXE TOOL/data/4K0907557G__0003/output/stage1_primed.bin`
+(reproducible from the build pipeline given the customer's input
+files). **What's still 🔴:** signing, storage, signed-URL delivery,
+firmware-side signature verification. Build-pipeline integration on
+the cloud (P-13, NEW) is the natural home for this work.
 
 Per SCALE_ARCHITECTURE_PROPOSAL §7. SRM-built and SRM-signed Phase 2
 base binary per ECU variant (Stage 1 power + logging + live-tune
@@ -159,6 +243,11 @@ device is allowed to do a Phase 2 flash.
 
 ## P-10 🔴 Cloud server Phase 2 endpoints
 
+**2026-05-07 status update.** No closure, but design clarified. The
+cloud's Phase 2 binary delivery should fetch from the cloud-side
+build pipeline (see P-13, NEW) rather than serving a static SRM-built
+binary. The endpoint shape is otherwise unchanged.
+
 Per SCALE_ARCHITECTURE_PROPOSAL §3.4. New endpoints:
 - `GET /api/v1/phase2/base` — signed URL to this variant's base binary
 - Admin endpoints for uploading + assigning per-variant binaries
@@ -167,7 +256,14 @@ These don't exist in `cloud/src/main.py` today.
 
 ---
 
-## P-11 🔴 Per-variant manifest replaces sbf_variants table + ECU sentinel check
+## P-11 🟡 Per-variant manifest replaces sbf_variants table + ECU sentinel check
+
+**2026-05-07 status update.** Sub-item (a) is materially solved by
+the SEFIV1.0 find: the Scorpion EFI tool's `config.json` schema is a
+complete, working per-variant manifest. Adopt it (with FUTUNER-specific
+extensions) rather than designing one from scratch. Sub-item (b)
+(ECU sentinel check) is unchanged in scope but easier to implement
+now that the manifest schema is settled.
 
 Two related items grouped because both close out together when
 `SCALE_ARCHITECTURE_PROPOSAL §2.2` ships.
@@ -187,6 +283,27 @@ This same table is duplicated structurally by
 `_get_write_address_offset()`. Both must coexist with matching
 values until the manifest migration unifies them.
 
+**Schema target (NEW 2026-05-07):** the canonical schema is the
+Scorpion EFI tool's `config.json` (see `~/esp/obd/SEFIV1.0/EXE TOOL/data/4K0907557G__0003/input/config.json`):
+
+- `version` (int, format version of this manifest)
+- `max_gap`, `max_segment_length` (segment-merging tuning)
+- `live_regions` ([address_lo, address_hi] pairs — bounded write region)
+- `ignored_segments` (array of label names to exclude from segments)
+- `maps[]` — per-map metadata: name, path, dimensions, axis specs
+  (name, unit, type, scaling, decimals, address(es)), `force_revert`,
+  `allow_in_segment`, `allow_in_inverse_segment`, `ethanol`, `blend_map`
+  references
+- `labels[]` (NEW name needed) — symbolic-address resolution for
+  things like `engine_speed_display` (direct address) or `ethanol`
+  (byte-pattern search). Today the Scorpion tool encodes these as
+  `name`/`address` or `name`/`pattern` entries.
+
+**FUTUNER additions to the manifest** (not in Scorpion's
+`config.json`): `boxcode`, `ecu_software_version`,
+`memory_map.write_mid_byte`, `memory_map.write_offset`, `sentinel`
+(per (b) below).
+
 **(b) ECU sentinel check before live-tune apply.** The orchestrator
 does NOT verify the ECU's currently-running binary contains the
 live-tune patches before applying. A paid-but-stock-flashed customer
@@ -194,15 +311,103 @@ could attempt a live-tune apply, get "success", and see no behavior
 change. v1 relies on operator discipline (dev-car only); customer
 rollout requires:
 - A per-variant sentinel address + expected byte sequence in the
-  manifest.
+  manifest (a known byte pair touched by the live-tune patch — e.g.,
+  one of the 889 `merge_diff` differences from `stock_patched.bin`).
 - A pre-apply UDS read at that sentinel; mismatch → refuse with a
   clear "ECU not flashed for live tune" message.
 - A separate cloud-side gate so the order is enforced (Phase 2
   first, then live tune).
 
 Closes when: `docs/SCALE_ARCHITECTURE_PROPOSAL.md` §2.2 schema is
-locked, the dongle reads variant manifest at boot, and the
+locked (with FUTUNER extensions over the Scorpion `config.json`
+baseline), the dongle reads variant manifest at boot, and the
 sentinel check is wired into `sbf_orchestrator`.
+
+---
+
+## P-12 🔴 Frozen `scal_file.c` parser format-v4 verification (NEW 2026-05-07)
+
+**Why this is needed.** The frozen `scal/scal_file.{c,h}` parser was
+carry-forward from FUTV1.0 reverse-engineering. The on-disk Scorpion
+tool emits **format v4** binaries (header field `version: 4`, with
+`TOTAL_INVERSE_SEGMENTS` and `INVERSE_SEGMENT_START` fields per the
+v3 spec). The available format documentation only covers v2 and v3.
+Either (i) FUTV1.0's parser was reverse-engineered against real v4
+files even though no v4 spec was written down — in which case it
+works correctly but the rationale wasn't recorded — or (ii) the
+parser handles v3 and v4 files happen to load because v4 is mostly
+backward-compatible — in which case there are quiet correctness gaps
+around the inverse-segment count / start fields. Either possibility
+must be empirically verified before any Phase 2 work assumes parser
+correctness.
+
+**Verification procedure:**
+
+1. Load `~/esp/obd/SEFIV1.0/EXE TOOL/data/4K0907557G__0003/output/stage1_patched.sbf`
+   (the canonical Scorpion-emitted v4 file, hash `460263de...`)
+   through FUTV1.1's frozen parser.
+2. Dump the parsed `flex_map_entry`, `blend_map`, `gasoline_data`,
+   and `ethanol_data` for every map.
+3. Cross-reference against the human-readable
+   `output/stage1_patched.stf` (1272 lines, all 21 maps spelled out)
+   for byte-exact match.
+4. Repeat for the existing FUTUNER sample at
+   `~/esp/obd/FUTV1.1/sbf/stage1_patched.sbf` (hash `25ac8b17...`,
+   different `build_timestamp`).
+5. Both files MUST parse identically modulo timestamp.
+
+**Closes when:** verification round complete, results documented in
+`docs/FROZEN_MODULES.md` history section, no parser changes needed.
+If parser changes ARE needed: this is no longer a verification round
+but a frozen-module modification, and the four-step approval ritual
+in `firmware/src/FROZEN_MODULES.md` applies. Sean must approve in
+writing before any frozen-module byte changes.
+
+---
+
+## P-13 🔴 Cloud build pipeline integration (NEW 2026-05-07)
+
+**Why this is needed.** The Scorpion EFI tool (Windows .exe) and the
+companion `scorpion-bin-tools` Node.js project on disk implement the
+full SBF / primed-binary build pipeline. Customer requests for Stage
+1 (or any stage) need the cloud server to produce a per-VIN
+`stage1_primed.bin` (Phase 2 flash payload) and `stage1_patched.sbf`
+(Phase 1 RAM update) on demand. **Reimplementing this in
+`cloud/src/main.py` is wasted effort.** The cloud server should wrap
+the existing pipeline.
+
+**Decision needed:** which implementation does the cloud invoke?
+
+- **Option A — `scorpion-bin-tools` (Node.js).** Native cross-platform,
+  open in `~/esp/obd/SEFIV1.0/scorpion-bin-tools/`, can run as a
+  subprocess of the FastAPI server. No wine/emulation. Likely faster
+  to integrate. Trade-off: brings a Node runtime onto the cloud box.
+- **Option B — Scorpion `.exe` via Wine on Linux.** Runs the exact
+  same binary Sean has used on Windows. Identical output guaranteed.
+  Trade-off: heavier dependency, slower per-build.
+- **Option C — Reimplement in Python alongside FastAPI.** No
+  external runtime. Trade-off: significant new code, divergence risk
+  from the canonical implementation.
+
+**Recommended:** Option A. `scorpion-bin-tools` is the cleanest fit
+and Sean already has it on disk. Cloud builds become:
+`node scorpion-bin-tools data/<boxcode>/` → produces `output/`
+directory → cloud serves the contents as signed URLs.
+
+**Sub-tasks:**
+- Lift `scorpion-bin-tools` source into the FUTUNER cloud repo (or
+  reference it as a submodule / vendored copy)
+- Per-VIN customer config.json generation (template + ethanol_random
+  injection per existing FUTV1.1 cloud DRM)
+- Build-on-demand vs. build-on-upload caching strategy
+- Monitoring + error-handling around subprocess invocation
+
+**Closes when:** cloud's `/api/v1/phase2/base` and
+`/api/v1/device/calibration` endpoints serve build-pipeline output
+that is byte-identical to running the .exe locally on Sean's
+Windows machine.
+
+---
 
 ---
 
