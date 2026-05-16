@@ -1,5 +1,11 @@
 secrets/
 
+# Drive-pull of Bosch MDG1 reference material (~2.5 GB). Contains ODX files
+# with embedded RSA pubkeys, encrypted FRF flash containers, per-variant
+# block maps, and Bosch's protocol PDFs. All proprietary IP per Hard Rule 5.
+# Stays local; never committed.
+hw_reference/vag_mdg1_drive_pull/
+
 # Host test build artifacts — rebuilt every eval run; never source.
 firmware/test/*/host_test_runner
 firmware/test/*/host_test_runner.dSYM/

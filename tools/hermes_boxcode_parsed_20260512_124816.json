@@ -1,0 +1,602 @@
+[
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/8W0907559AB S0002, 034-103-2921, Stage 1-91 R3.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/8W0907559AB S0002, 034-103-2921, Stage 1-91 R3.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/8W0907559AB S0002, 034-103-2921, Stage 1-93 R3.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/8W0907559AB S0002, 034-103-2921, Stage 1-93 R3.0.2 (Coolant Pump Stuck Test).bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/8W0907559AB S0002, 034-103-2921, Stage 1-E85 R3.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/8W0907559AB S0002, 034-103-2921, Stage 1-E85 R3.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-91 R2.00.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-91 R2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-91 R2.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-93 R2.00.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-93 R2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-93 R2.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-93 R3.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-E85 R2.00.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-E85 R2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/Archive/8W0907559AB S0002, 034-103-2921, Stage 1-E85 R2.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/DEV/8W0907559AB S0002, 034-103-2921, Stage 1 - DEV-91 D2.2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/DEV/8W0907559AB S0002, 034-103-2921, Stage 1-93 R3.0.3 (Coolant Pump Stuck Test).bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/DEV/8W0907559AB S0002, 034-103-2921, Stage 1-93 R3.0.4 (Coolant Pump Stuck Test).bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2921, Stage 1/DEV/8W0907559AB S0002, 034-103-2921, Stage 1-93 R3.0.5 (Coolant Pump Stuck Test).bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/8W0907559AB S0002, 034-103-2922, Stage 2-91 R3.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/8W0907559AB S0002, 034-103-2922, Stage 2-91 R3.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/8W0907559AB S0002, 034-103-2922, Stage 2-93 R3.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/8W0907559AB S0002, 034-103-2922, Stage 2-93 R3.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/8W0907559AB S0002, 034-103-2922, Stage 2-E85 R3.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Box code extracted from filename prefix before the first space/comma.",
+    "_processed_at": "2026-05-12 12:49:12",
+    "_batch_idx": 1
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/8W0907559AB S0002, 034-103-2922, Stage 2-E85 R3.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-91 R2.00.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-91 R2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-91 R2.2.1 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-91 R2.2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-91 R2.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-93 R2.00.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-93 R2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-93 R2.2.1 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-93 R2.2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-93 R2.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-E85 R2.00.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-E85 R2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-E85 R2.2.1 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-E85 R2.2.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Archive/8W0907559AB S0002, 034-103-2922, Stage 2-E85 R2.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Support/8W0907559AB S0002, 034-103-2922, Stage 2-Support-93 D3.0.1 - croguzac.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Support/8W0907559AB S0002, 034-103-2922, Stage 2-Support-93 D3.0.1 - jramsumairsingh.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2922, Stage 2/Support/8W0907559AB S0002, 034-103-2922, Stage 2-Support-93 D3.0.2 - croguzac.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.4 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.4.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.5 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.5.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-91 R1.0.2 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-91 R1.0.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename begins with '8W0907559AB' matching the VAG box code pattern.",
+    "_processed_at": "2026-05-12 12:51:07",
+    "_batch_idx": 2
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-93 R1.0.2 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-93 R1.0.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.1 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.2 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3 Pure750-E60-E85 R1.0.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-91 R1.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-91 R1.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-91 R1.0.1 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-91 R1.0.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-93 R1.0.0 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-93 R1.0.0.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-93 R1.0.1 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3 Pure750/Archive/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-93 R1.0.1.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-91 R1.0.2 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-91 R1.0.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-93 R1.0.2 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-93 R1.0.2.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-E60 R1.0.4 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-E60 R1.0.4.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-E60 R1.0.5 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-E60 R1.0.5.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  },
+  {
+    "bin_path": "/Users/rabbit/034_local/8W0907559AB S0002/034-103-2923, Stage 3+ Pure750/8W0907559AB S0002, 034-103-2923, Stage 3+ Pure750-E85 R1.0.4 - No Crackle.bin",
+    "box_code": "8W0907559AB",
+    "confidence": "high",
+    "reasoning": "Filename contains the clear box code '8W0907559AB' before the first space.",
+    "_processed_at": "2026-05-12 12:53:03",
+    "_batch_idx": 3
+  }
+]

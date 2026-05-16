@@ -71,6 +71,8 @@ EVAL_COMMAND_EXEMPTIONS = {
     "logger_start", "logger_stop", "fs_info", "fs_mkdir",
     "list_available_vars", "delete_logger_profile",
     "can_sniff_status", "wifi_status",
+    # 2026-05-12 — HIL preflight commands; engineering surface only.
+    "phase2_hil_preflight", "phase2_hil_preflight_arm",
 }
 
 # Events excluded from the wsEvents handler-coverage check.

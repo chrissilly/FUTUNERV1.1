@@ -195,6 +195,48 @@ void app_main(void) {
         }
     }
 
+    /* Phase 2 full binary flash — wires the mbedtls-backed AES iface
+       into mdg1_payload and (in a follow-up prompt) registers
+       FEATURE_PHASE2_FLASH with feature_manager. Gated by
+       FUTUNER_PHASE2_ENABLED in config/futuner_config.h; default 0
+       in customer firmware so the orchestrator stays dormant.
+
+       Override at build time via `idf.py build -DFUTUNER_PHASE2_ENABLED=1`
+       to bring the orchestrator online for bench validation. */
+#if FUTUNER_PHASE2_ENABLED
+    {
+        extern void mdg1_aes_mbedtls_register(void);
+        mdg1_aes_mbedtls_register();
+        ESP_LOGI(TAG, "Phase 2 flash: mbedtls AES iface registered (FUTUNER_PHASE2_ENABLED=1)");
+    }
+    /* HIL preflight NVS-armed autostart. Reads the armed flag, clears
+     * it BEFORE running anything (one-shot, crash-safe), and either
+     * (dry-run build) just logs the marker or (full build) runs the
+     * shadow preflight + dumps the log over UART. Safe no-op when
+     * not armed. See flash/phase2_hil_autostart.h. */
+    {
+        extern esp_err_t phase2_hil_autostart_run_if_armed(void);
+#ifdef PHASE2_HIL_AUTOSTART_FORCE_ARM_THIS_BUILD
+        /* Bench-only helper to validate the autostart pipeline without
+         * needing a working command-input channel. Forces the armed
+         * flag on this boot. NEVER ship this in customer firmware. */
+        extern esp_err_t phase2_hil_autostart_arm(void);
+        ESP_LOGW(TAG, "PHASE2_HIL_AUTOSTART_FORCE_ARM_THIS_BUILD set — "
+                      "forcing armed flag (shadow mode) for one-shot test");
+        phase2_hil_autostart_arm();
+#endif
+#ifdef PHASE2_HIL_AUTOSTART_FORCE_ARM_PROD_THIS_BUILD
+        /* Bench-only helper, prod variant. Same caveats as the shadow
+         * helper. Use ONE OR THE OTHER, not both — last write wins. */
+        extern esp_err_t phase2_hil_autostart_arm_with_mode(int);
+        ESP_LOGW(TAG, "PHASE2_HIL_AUTOSTART_FORCE_ARM_PROD_THIS_BUILD set — "
+                      "forcing armed flag (PROD mode) — quiet bench expected");
+        phase2_hil_autostart_arm_with_mode(2 /*PHASE2_HIL_MODE_PROD*/);
+#endif
+        phase2_hil_autostart_run_if_armed();
+    }
+#endif
+
     ESP_LOGI(TAG, "System initialized");
     ESP_LOGI(TAG, "Device Serial: 0x%012llX", wifi_ap_get_serial_number());
     /* C1 fix: do not log password in plaintext */

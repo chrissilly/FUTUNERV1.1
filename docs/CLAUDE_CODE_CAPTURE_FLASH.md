@@ -128,6 +128,66 @@ Write a cross-cycle summary at:
   firmware/test/can_capture/fixtures/magicmotorsport/SUMMARY.md
 
 ==========================================================
+PHASE 3.5 — SA2 + RSA + RoutineControl extraction
+==========================================================
+
+(NEW 2026-05-10 — added once the SA2 VM + per-variant manifest
+landed in firmware/src/flash/. These extractions feed the open
+items in docs/PHASE_2_PREREQUISITES.md P-01 and the §5 gap list
+in hw_reference/MG1_MDG1_Flashing_Research_Part2.md.)
+
+For each cycle:
+
+  Extract the SA2 (seed, key) pair:
+    - Find the 0x67 01 <4-byte seed>  positive response.
+    - Find the immediately-following tester request 0x27 02
+      <4-byte key>.
+    - Print: cycle N: seed=0x........  key=0x........
+    - Cross-reference each captured script (next bullet) against
+      the three SA2 scripts already in the manifest at
+      secrets/mdg1_variant_manifest.json. Print which one
+      matches, OR "new SA2 script not yet in manifest" with the
+      hex bytes if it's a 4th.
+
+  Identify RoutineControl exact byte formats:
+    - For each 0x31 01 <RID> ... request, log the full 7-byte
+      data field. We need authoritative parameter formats for:
+        * RID 0xFF00 — erase block
+        * RID 0x0202 — verify per-block CRC32
+        * RID 0xFF01 — verify dependencies
+      Write each to:
+        firmware/test/can_capture/fixtures/magicmotorsport/routinecontrol_observed.md
+      (one file across all 5 cycles, deduped — same params per
+      RID across cycles is expected and confirms determinism).
+
+  Scan for RSA signature blocks:
+    - Walk every 0x36 nn TransferData payload.
+    - For each, compute a sliding 256-byte entropy estimate
+      (bytewise distinct-count over a 256-byte window).
+    - Flag any window with > 240 distinct bytes (high entropy,
+      consistent with RSA modulus / signature).
+    - Look for 0x31 01 <RID> calls before the first TransferData
+      of each block — if an RID is dedicated to "verify RSA
+      signature" the parameter typically carries a 256-byte
+      signature in following TransferData.
+    - Report the count + offsets of any high-entropy hits in
+      SUMMARY.md under a new "## RSA observations" section. Zero
+      hits across all 5 cycles is also a meaningful answer — log
+      it explicitly as "no RSA-shaped payloads observed; MG1
+      flash chain appears to bypass signature verification at
+      runtime".
+
+  Append per-cycle (seed, key) pairs to:
+    firmware/test/test_sa2.c
+
+  in a new "test_runtime_seed_key_vectors_from_capture" function,
+  guarded by an #ifdef RUNTIME_VECTORS macro so it only compiles
+  when the harness is invoked with that define. Each pair becomes
+  one EXPECT(sa2_run(seed, captured_script, ...) == captured_key).
+  This is the authoritative runtime validation that the SA2 VM is
+  byte-for-byte correct against MagicMotorsport's behavior.
+
+==========================================================
 PHASE 4 — Report
 ==========================================================
 
@@ -143,7 +203,20 @@ Print:
   Cycle 5:           PASS — ...
   Seed rotation:     CONFIRMED (5 distinct seeds across cycles)
   Bytes-transferred: <range>, mean <X> bytes per cycle
-  
+
+  SA2 vectors captured:
+    cycle 1: seed=0x........  key=0x........
+    cycle 2: seed=0x........  key=0x........
+    ... (5 total)
+  SA2 script identified: matches manifest entry <hex prefix>...
+                         OR  NEW (not in manifest, 4th script)
+  RoutineControl RIDs seen: 0xFF00 / 0x0202 / 0xFF01 / ...
+                            (each with byte format documented in
+                            routinecontrol_observed.md)
+  RSA observations:    <count> high-entropy 256+ B windows found
+                       across 5 cycles  (zero is meaningful —
+                       implies no runtime RSA verify on MG1)
+
   Anomalies:
    - <anything that surprised you across cycles>
 
@@ -151,10 +224,14 @@ Print:
     firmware/test/can_capture/fixtures/magicmotorsport/flash_run_1..5_4K0907557G_0003.candump
     firmware/test/can_capture/fixtures/magicmotorsport/flash_run_1..5_4K0907557G_0003.notes.md
     firmware/test/can_capture/fixtures/magicmotorsport/SUMMARY.md
+    firmware/test/can_capture/fixtures/magicmotorsport/routinecontrol_observed.md
+    firmware/test/test_sa2.c   (new RUNTIME_VECTORS-guarded test added)
 
-Append the report block to ~/esp/obd/status-2026-05-07.md (today's
+Append the report block to ~/esp/obd/status-YYYY-MM-DD.md (today's
 log; create if missing) under a new "## P-01 capture session"
-heading.
+heading. Also update docs/PHASE_2_PREREQUISITES.md P-01 status
+emoji to 🟢 if all 5 cycles passed and the SA2 + RoutineControl +
+RSA extractions in Phase 3.5 produced consistent results.
 
 Hand back. Don't commit.
 

@@ -1,6 +1,11 @@
-# Use default UART for console (normal USB via USB-to-UART chip)
-CONFIG_ESP_CONSOLE_UART_DEFAULT=y
-CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=n
+# Console: USB Serial JTAG primary (USB-CDC = stdin AND stdout),
+# UART0 kept as secondary output so ./monitor.sh and existing boot-log
+# capture paths still work. Flipped 2026-05-12 to close P-16 (the
+# command dispatcher's stdin reads were never reaching the cable because
+# UART0's physical RX pin isn't wired on BOARD_V10 — only USJ is).
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_UART=y
+# CONFIG_ESP_CONSOLE_UART_DEFAULT is not set
 CONFIG_ESP_CONSOLE_USB_CDC=n
 
 # Logging

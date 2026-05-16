@@ -20,13 +20,12 @@
 #include "serial_console.h"
 #include "wifi/wifi_ap.h"
 #include "state_machine/connection_manager.h"
+#include "phase2_hil_preflight_commands.h"
+#include "sdkconfig.h"
 #include "esp_log.h"
 #include "esp_system.h"
-#include "esp_vfs_dev.h"
-#include "driver/uart_vfs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/uart.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -34,10 +33,23 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+/* USJ primary (BOARD_V10 / customer-stock: USB-CDC carries both stdin
+ * and stdout). The USJ driver must be installed before stdin works
+ * non-blocking. IDF v5.5: the non-deprecated VFS helpers live in
+ * `driver/usb_serial_jtag_vfs.h`. */
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
+#else
+/* UART0 primary (legacy / dev-board builds with physical RX wired). */
+#include "esp_vfs_dev.h"
+#include "driver/uart.h"
+#include "driver/uart_vfs.h"
+#endif
+
 static const char *TAG = "SERIAL_CON";
 
 #define CON_LINE_MAX 128
-#define UART_PORT UART_NUM_0
 
 static void trim(char *s) {
     /* Strip trailing CR/LF/space */
@@ -146,6 +158,25 @@ static void handle_line(char *line) {
         vTaskDelay(pdMS_TO_TICKS(100));
         esp_restart();
     }
+    else if (strcmp(line, "phase2_hil_preflight") == 0) {
+        /* Local USB-UART surface for the HIL preflight shadow dry-run.
+         * Authenticated by physical access (USB cable); no password check.
+         * Args: "" / "shadow" (only mode supported pre-go-HIL). */
+        static char preflight_resp[2048];
+        preflight_resp[0] = '\0';
+        cmd_phase2_hil_preflight(0, args, preflight_resp, sizeof(preflight_resp));
+        printf("%s\n", preflight_resp);
+    }
+    else if (strcmp(line, "phase2_hil_preflight_arm") == 0) {
+        /* Local USB-UART surface for arming the NVS one-shot autostart.
+         * Reboot the dongle after this to trigger the preflight run.
+         * `args` is the bare string the user typed after the command
+         * name — e.g. "prod" / "shadow" / "" (defaults to shadow). */
+        static char arm_resp[512];
+        arm_resp[0] = '\0';
+        cmd_phase2_hil_preflight_arm(0, args, arm_resp, sizeof(arm_resp));
+        printf("%s\n", arm_resp);
+    }
     else {
         printf("Unknown: '%s'  (type 'help')\n", line);
     }
@@ -155,12 +186,26 @@ static void serial_console_task(void *arg) {
     char buf[CON_LINE_MAX];
     int pos = 0;
 
-    /* Configure UART driver for line-buffered stdin via VFS */
-    uart_driver_install(UART_PORT, 256, 0, 0, NULL, 0);
-    uart_vfs_dev_use_driver(UART_PORT);
-    /* Use line-ending CR for incoming, CR-LF for outgoing */
-    uart_vfs_dev_port_set_rx_line_endings(UART_PORT, ESP_LINE_ENDINGS_CR);
-    uart_vfs_dev_port_set_tx_line_endings(UART_PORT, ESP_LINE_ENDINGS_CRLF);
+    /* Install the right driver for whichever console kconfig picked as
+     * primary. After this, stdin/stdout flow through the chosen path
+     * and the dispatcher's read(STDIN_FILENO, ...) below is config-
+     * agnostic. CR-on-RX → LF-on-read so the line splitter sees '\n'
+     * regardless of whether the host sent CR, LF, or CRLF. */
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+    usb_serial_jtag_driver_config_t usj_cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    if (usb_serial_jtag_driver_install(&usj_cfg) != ESP_OK) {
+        ESP_LOGE(TAG, "usb_serial_jtag_driver_install failed; "
+                      "stdin will not work over USB-CDC");
+    }
+    usb_serial_jtag_vfs_use_driver();
+    usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+    usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+#else
+    uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
+    uart_vfs_dev_use_driver(UART_NUM_0);
+    uart_vfs_dev_port_set_rx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CR);
+    uart_vfs_dev_port_set_tx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CRLF);
+#endif
 
     /* Make stdin non-blocking-ish so we can poll */
     setvbuf(stdin, NULL, _IONBF, 0);

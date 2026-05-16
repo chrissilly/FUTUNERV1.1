@@ -38,7 +38,12 @@ esp_err_t can_driver_init(void) {
 
     driver_initialized = true;
     xSemaphoreGive(s_mutex);
-    ESP_LOGI(TAG, "CAN driver initialized successfully");
+    /* Boot-log fingerprint for quiet-bench Phase 2 verification. Confirms
+     * which pins + bitrate + mode the build actually compiled with so a
+     * misconfigured board manifests as a one-line config dump instead of
+     * silent TX timeouts later. */
+    ESP_LOGI(TAG, "CAN driver initialized: TX=GPIO%d RX=GPIO%d bitrate=500kbps mode=NORMAL filter=ACCEPT_ALL",
+             (int)CAN_TX_GPIO_NUM, (int)CAN_RX_GPIO_NUM);
     return ESP_OK;
 }
 
@@ -91,7 +96,21 @@ esp_err_t can_driver_start(void) {
 
     driver_started = true;
     xSemaphoreGive(s_mutex);
-    ESP_LOGI(TAG, "CAN driver started");
+    /* Query TWAI state right after start so the boot log reports
+     * RUNNING vs BUS_OFF vs STOPPED — a bench dongle with miswired
+     * pins still reaches "started" but cannot reach RUNNING. */
+    twai_status_info_t status;
+    if (twai_get_status_info(&status) == ESP_OK) {
+        const char *state_name =
+            (status.state == TWAI_STATE_RUNNING) ? "RUNNING (BUS_ON)" :
+            (status.state == TWAI_STATE_BUS_OFF) ? "BUS_OFF" :
+            (status.state == TWAI_STATE_RECOVERING) ? "RECOVERING" :
+            (status.state == TWAI_STATE_STOPPED) ? "STOPPED" : "?";
+        ESP_LOGI(TAG, "CAN driver started: TWAI state=%s (%lu)",
+                 state_name, status.state);
+    } else {
+        ESP_LOGI(TAG, "CAN driver started (twai_get_status_info unavailable)");
+    }
     return ESP_OK;
 }
 

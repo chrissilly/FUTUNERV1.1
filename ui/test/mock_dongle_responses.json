@@ -4,7 +4,8 @@
     "pair_ecu", "remove_pairing", "configure_logger", "get_single_variable",
     "flex_load_scal", "flex_unload_scal", "flex_status", "flex_enable", "flex_disable", "flex_set_override",
     "logger_start", "logger_stop", "fs_info", "fs_mkdir", "list_available_vars",
-    "delete_logger_profile", "can_sniff_status", "wifi_status"
+    "delete_logger_profile", "can_sniff_status", "wifi_status",
+    "phase2_hil_preflight", "phase2_hil_preflight_arm"
   ],
 
   "get_logger_data":     {"success": true, "command": "get_logger_data", "data": {"nmot_w": 1234, "pvdg_w": 1500, "klopfakt": 0}},

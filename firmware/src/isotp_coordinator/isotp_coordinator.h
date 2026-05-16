@@ -24,7 +24,8 @@ typedef enum {
     ISOTP_OWNER_NONE,
     ISOTP_OWNER_CONNECTION_MANAGER,  // Initial connection, tester present, etc.
     ISOTP_OWNER_LOGGER,              // Logger polling
-    ISOTP_OWNER_ECU_WRITE            // ECU write operations
+    ISOTP_OWNER_ECU_WRITE,           // ECU write operations
+    ISOTP_OWNER_PHASE2_FLASH         // Phase 2 full-binary flash orchestrator
 } isotp_owner_t;
 
 /**

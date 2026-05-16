@@ -12,6 +12,7 @@
 #include "dtc_commands.h"
 #include "vin_pair_commands.h"
 #include "sbf_commands.h"
+#include "phase2_hil_preflight_commands.h"
 
 const command_def_t COMMAND_REGISTRY[] = {
     {"pair_ecu", "Pair with current ECU", CMD_SECURITY_UNSECURED, cmd_pair_ecu},
@@ -67,6 +68,10 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"live_tune_set",    "Update active live-tune (params: stage, ethanol_pct)", CMD_SECURITY_UNSECURED, cmd_live_tune_set},
     {"live_tune_stop",   "Drain queue and unload active SBF",            CMD_SECURITY_UNSECURED, cmd_live_tune_stop},
     {"live_tune_status", "Snapshot of orchestrator state (read-only)",   CMD_SECURITY_UNSECURED, cmd_live_tune_status},
+    /* Phase 2 HIL preflight — shadow dry-run for dev-RS7 halt-before-erase
+     * validation. Args: "" or "shadow" (only mode supported pre-go-HIL). */
+    {"phase2_hil_preflight",     "Phase 2 HIL preflight (shadow dry-run; halt before erase)", CMD_SECURITY_SECURED, cmd_phase2_hil_preflight},
+    {"phase2_hil_preflight_arm", "Arm NVS one-shot autostart; next boot runs shadow preflight", CMD_SECURITY_SECURED, cmd_phase2_hil_preflight_arm},
 };
 
 const uint8_t COMMAND_COUNT = sizeof(COMMAND_REGISTRY) / sizeof(command_def_t);

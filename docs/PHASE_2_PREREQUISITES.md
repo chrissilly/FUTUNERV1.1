@@ -5,7 +5,7 @@
 > on a customer device.
 >
 > Owner: Sean / SRM Engineering. Updated as items close out.
-> Created: 2026-05-05. Last revision: 2026-05-07.
+> Created: 2026-05-05. Last revision: 2026-05-10.
 
 ---
 
@@ -82,7 +82,90 @@ shape); two new items P-12 and P-13 surface from the find.
 
 ---
 
-## P-01 🔴 MagicMotorsport flash capture session — reference UDS sequences
+## P-01 🟡 MagicMotorsport flash capture session — reference UDS sequences
+
+**2026-05-10 late update — capture session complete, analysis published.**
+Two captures landed (`mm_FULL_Flash.log` 5-section full flash, ~5 min 51 s;
+`mm_MAPS_upload.log` CAL-only, ~47 s) plus the flashed binary and MM
+console output. The wire-level UDS choreography is now fully decoded in
+[`hw_reference/MM_Flash_Capture_Analysis.md`](../hw_reference/MM_Flash_Capture_Analysis.md).
+Of the four open questions the capture was supposed to close:
+
+1. **SA2 runtime ground truth — DONE.** Two `(seed, key)` pairs captured:
+   `C361B058 → F0F2BDD2` and `168BC5E2 → F1CB900F`. Bake into
+   `firmware/test/test_sa2.c` as runtime vectors against the variant
+   manifest's SA2 script for 4K0907557G_0003 before merging.
+2. **Per-variant SA2 script identification — DEFERRED.** Validation of
+   "which of the 3 known scripts the 4K0907557G_0003 ECU actually runs"
+   waits on running each candidate script through `sa2_vm` against the two
+   captured pairs and matching output. Mechanical work; not blocking.
+3. **RSA-on-MG1 question — TENTATIVELY: NO RSA OBSERVED.** No
+   high-entropy ≥256 B blocks in the TransferData stream consistent with
+   an RSA modulus, no pre-flash `31 01 <RID> <sig>` calls beyond
+   `0x0203` (preconditions). MM's flash chain on MDG1 appears to rely on
+   `0xFF01 CheckProgrammingDependencies` for cross-section consistency
+   only, not on per-block signatures. Re-verify once decrypt+decompress
+   is implemented — a signature could still live inside a section's
+   plaintext (e.g. the CBOOT block).
+4. **RoutineControl byte formats — DONE.** §2.4.1 (EraseMemory),
+   §2.4.5 (CheckMemory), §2.6 (CheckProgrammingDependencies) document
+   every captured parameter byte.
+
+**Material protocol correction from the captures:** MDG1 RequestDownload
+addresses sections by **1-byte logical block ID** (0x02–0x06), not by
+4-byte physical address. ALFID is `0x31` (size 3 bytes, address 1 byte)
+and dataFormatIdentifier is `0x2A` (LZRB compression + Bosch AES). The
+prior `firmware/src/flash/mdg1_flash.c::mdg1_flash_request_download`
+signature (32-bit address parameter, ALFID 0x44) has been updated to
+match (see `firmware/src/flash/mdg1_flash.h` and the §4 implementation
+gap table in the analysis doc). **Do not assume this 1-byte block-ID
+scheme generalises to MED17 / EDC17** — those families historically use
+4-byte physical addresses and need their own capture before Phase 2 can
+target them.
+
+**Material checksum confirmation:** the CheckMemory parameter is plain
+`zlib.crc32` over the section's plaintext bytes (init 0xFFFFFFFF,
+reflected, final XOR 0xFFFFFFFF). All five captured CRCs reproduce
+exactly from slices of the flashed binary. Five golden vectors are
+listed in analysis doc §2.4.5 — bake into a unit test.
+
+What remains 🟡 rather than 🟢:
+
+- The encryption portion of dataFormat 0x2A (algorithm + key derivation
+  + IV) is not provable from the captures alone — see analysis doc §3.2.
+  A round-trip "decrypt the captured CAL TransferData stream and compare
+  to file offset 0x80000 of the binary" test will close it. Until that
+  succeeds, Phase 2 firmware can't actually transfer payloads even
+  though the choreography is known.
+- ASW3 erase + transfer cycle is captured but only one transition was
+  byte-by-byte verified (§3.4) — spot-check the other three.
+
+**2026-05-10 status update.** Importance and urgency *increased*. After
+this session's SA2 VM + per-variant manifest work, the capture session
+now resolves four open questions in one bench day:
+
+1. **SA2 runtime ground truth.** `firmware/src/flash/sa2_vm.c` (host-tested
+   green on all 5 spec test pairs) has never been validated against a
+   real ECU's `(seed, key)` pair. Each MagicMotorsport cycle's
+   `0x67 01 <seed>` + `0x27 02 <key>` pair gives us authoritative
+   ground truth — write each pair as a runtime test vector in
+   `firmware/test/test_sa2.c`.
+2. **Per-variant SA2 script identification.** The dev RS7 is
+   `4K0907557G__0003`; per `docs/boxcode_database.md` it uses the
+   "MG1CS002 key" but its variant family in our manifest isn't yet
+   indexed (the manifest covers 3 SA2 scripts, none yet bound to
+   `4K0907557G`). Capture either confirms one of the 3 known scripts
+   or adds a 4th — either is forward progress.
+3. **The RSA-on-MG1 question** (§5.1 of `hw_reference/MG1_MDG1_Flashing_Research_Part2.md`).
+   No MG1 RSAPublicKeys JSON was found in the entire 2.5 GB drive
+   pull. Either the exploit chain bypasses signature verification on
+   MG1 or the keys live somewhere we haven't pulled. The capture
+   answers this empirically: scan TransferData payloads for
+   high-entropy ≥256-byte blocks (RSA modulus shape) and look for
+   pre-flash signature-verify RoutineControl calls.
+4. **RoutineControl byte formats.** We have zero authoritative samples
+   of the erase / verify-block / verify-dependencies parameter
+   formats. The capture is the only way to lock these in.
 
 **2026-05-07 status update.** Importance unchanged but scope narrowed.
 The SEFIV1.0 find solves the question of WHAT to flash (per-VIN
@@ -220,7 +303,68 @@ Phase 2 (fine for Phase 1).
 
 ---
 
-## P-08 🔴 Dongle firmware Phase 2 flash code written + eval harness green
+## 2026-05-12 update — orchestrator landing + shadow-validation contract
+
+**P-08 status:** 🔴 → 🟡. First end-to-end shadow-validated implementation
+landed this session.
+
+The MDG1 5-section flash orchestrator (`firmware/src/flash/mdg1_flash_orchestrator.{c,h}`)
+runs the full UDS choreography (SecurityAccess → fingerprint → 5×{Erase,
+RequestDownload, TransferData, TransferExit, CheckMemory} → CheckProgrammingDependencies
+→ ECUReset). Transport-agnostic via `mdg1_uds_transport_t`. Two impls:
+shadow (host-side log + replay) and production CAN (firmware, **dormant**).
+Gated by `FUTUNER_PHASE2_ENABLED` in `firmware/src/config/futuner_config.h`
+(default 0). `idf.py build` with both `-DFUTUNER_PHASE2_ENABLED=0` and
+`=1` exits 0.
+
+**Shadow validation gate is "protocol-perfect + plaintext-equivalent",
+NOT "wire byte-perfect":**
+
+- Non-TransferData UDS frames must match MM's bytes byte-for-byte after
+  masking session-variant fields (SA seed/key, fingerprint, TesterPresent)
+  and filtering pending negative responses (`7F xx 78`).
+- TransferData chunks: wire-bit-equality is structurally impossible —
+  LZRB encoders make valid-but-non-deterministic match choices. Our
+  encoder and Bosch's both produce LZRB-valid outputs that decompress
+  to the same plaintext, but the byte streams differ. See
+  `hw_reference/FINDINGS_2026-05-12_phase2_key_recovery.md` (246,132 vs
+  260,528 bytes for CAL on the same plaintext).
+- The shadow test replicates the ECU's real correctness gate (CRC32
+  over plaintext) by per-section AES-decrypt + LZRB-decompress + SHA256
+  compare on both shadow and MM sides.
+
+3 of 5 sections (ASW1, CBOOT, CAL) verify plaintext-equivalent
+end-to-end. ASW2/ASW3 are REF_WIRE_MODEL_INCOMPLETE — the MM-side
+decode model for those sections is off by 3 bytes from 16-alignment
+(1,081,923 and 1,126,835 bytes total; off-by-3). Root cause is
+wire-format reverse-engineering of a per-section element I haven't
+decoded yet — not an orchestrator defect (shadow side decrypts those
+sections cleanly to byte-equal-to-oracle plaintext).
+
+See `firmware/test/can_capture/fixtures/magicmotorsport/SUMMARY.md`
+for the full per-section status table + masking rules.
+
+**Eval gates touched:** all 6 prior gates (feature_manager, wot_logger,
+dtc, vin_pairing, sbf, ui) extended with a shared
+`firmware/test/_shared/eval_forbidden_overrides.txt` reader so
+authorized cross-cutting prompts don't trip overlapping FORBIDDEN
+lists. Same mechanism added to mdg1_payload's eval. New orchestrator
+eval (`firmware/test/mdg1_flash_orchestrator/eval.sh`) installed.
+All 8 gates plus `verify_frozen.sh` green at commit landing.
+
+**Not yet done (deferred to a follow-up prompt):**
+- Register `FEATURE_PHASE2_FLASH` with `feature_manager`. The
+  `mdg1_aes_mbedtls_register()` call lands in main.c gated by
+  FUTUNER_PHASE2_ENABLED, but the feature_manager registration
+  (start/stop/is_running callbacks) is a separate step.
+- WS command surface for triggering Phase 2 from the UI.
+- Production CAN transport (`mdg1_transport_can.c`) is built but
+  intentionally dormant — `mdg1_transport_can_open()` returns a
+  stub iface; no init call from main.c.
+
+---
+
+## P-08 🟡 Dongle firmware Phase 2 flash code written + eval harness green
 
 The actual flash module under `firmware/src/flash/` — Phase 2 specific
 work. Lots of sub-tasks: UDS challenge-response mirroring, AES-128-CBC
@@ -229,6 +373,17 @@ TransferData with per-block checksums, fault recovery sequence,
 integration with feature_manager (`FEATURE_PHASE2_FLASH`), pre-flash
 gate enforcement. Eval harness diffs FUTUNER output against the
 MagicMotorsport reference from P-01 and asserts bit-exact match.
+
+**2026-05-10 status update.** Wire format is now known
+(`hw_reference/MM_Flash_Capture_Analysis.md`). `mdg1_flash.c` has been
+partially corrected (RequestDownload now uses 1-byte block ID + ALFID
+0x31 + dataFormat 0x2A; SecurityAccess sub-function configurable on ctx
+with MDG1 default 0x11; SA2 VM integration already in place from
+earlier today). Per-section orchestrator (the 5-block loop) and
+encryptionMethod 0xA implementation are the two large outstanding
+pieces. `mdg1_flash_execute()` now returns `ESP_ERR_NOT_SUPPORTED` so
+it can't be invoked from feature_manager before the orchestrator
+exists.
 
 ---
 
@@ -365,6 +520,126 @@ writing before any frozen-module byte changes.
 
 ---
 
+## P-15 🔴 Recover key bytes for 48 NEW fingerprints from the 2026-05-12 corpus sweep (NEW 2026-05-12)
+
+**What was found:** Pre-scan of `~/034_local/` (123 GB, 3,521 bins from
+the SanDisk 034 archive) found **53 unique AES-128 key fingerprints**
+at the documented bootloader offsets (`0x18200` plain, `0x600200`
+IFX). 5 match keys we already have (MG1 generic, MG1CS002, MG1CS011,
+MD1CP004 T1+T2, MD1CP014). **48 are NEW** — distinct AES-128 keys
+this project doesn't have bytes for today.
+
+**Top NEW fingerprints by bin count:**
+
+| sha256[:8] | Offset | Bins | Inferred ECU family |
+|---|---|---|---|
+| `0e2cad79` | `0x18200` | 27 | MED9 |
+| `d6f4b42a` | `0x18200` | 16 | MED17 |
+| `f5d0d2c3` | `0x18200` | 12 | MED17 |
+| `72e22b78` | `0x18200` | 10 | MED17 (TP2) |
+| `b0cb819b` | `0x18200` | 10 | EDC17 C74 (diesel) |
+| `66678bb9` | `0x18200` |  9 | unknown (CAN-log parser artifact?) |
+| `664419e3` | `0x18200` |  8 | MG1_CS002 Autotuner variant |
+| `b7d39dab` | `0x18200` |  6 | TCU DQ38x G2 |
+| `5f0731e8` | `0x18200` |  6 | TCU DQ500 |
+| + 39 more  | — | <6 each | mixed |
+
+**Status:** 🔴 NOT blocking Phase 2 (the MG1CS002IFX RS path for
+4K0907557G__0003 is independent and already validated). REQUIRED
+for Phase 3 ECU-family coverage — every customer ECU outside the
+MG1CS002 master + MG1 generic + MG1CS011 universe needs a key
+sourced before we can flash it.
+
+**Recovery recipe (per FINDINGS_2026-05-12_phase2_key_recovery.md):**
+For each NEW fingerprint:
+1. Open the listed sample bin at the listed offset.
+2. Read 16 bytes. SHA-256 those bytes → confirm first 4 bytes match
+   the fingerprint.
+3. The bytes ARE the AES-128 key. Add to `secrets/AES_KEYS_MASTER.md`
+   (key bytes never leave `secrets/`).
+4. Map any boxcodes that share that fingerprint into
+   `secrets/aes_keys_per_boxcode.json`.
+5. Per-family enablement (SA2 script + section map + CRC algorithm
+   + post-commit dependencies) is separate work — having the key
+   is necessary but not sufficient.
+
+**Reference data:**
+- Full inventory: `hw_reference/ecu_key_corpus_2026-05-12/`
+  (machine-readable JSON + human-readable table)
+- Per-bin pre-scan: `firmware/test/bin_inventory.md`
+- Proposed manifest entries: `tools/proposed_manifest_merge_2026-05-12.json`
+- Methodology + architecture decision (why no Hermes dispatch):
+  `tools/hermes_extraction_report_2026-05-12.md`
+
+**Owner:** Sean / SRM Engineering. **Cross-ref:** P-06 (AES key
+custody decided and implemented) closes once these are merged.
+
+---
+
+## P-14 🔴 MM wire-format reverse-engineering: ASW2/ASW3 off-by-3 element (NEW 2026-05-12)
+
+**What was observed:** Shadow-vs-MM diff for box `4K0907557G__0003`,
+sections ASW2 (BID `0x03`) and ASW3 (BID `0x04`), marked
+`REF_WIRE_MODEL_INCOMPLETE` by `tools/flash_shadow_diff.py`. MM's
+reassembled per-section ciphertext stream comes out 1,081,923 bytes
+(ASW2) and 1,126,835 bytes (ASW3) — both off by 3 from 16-alignment.
+The naive "concat all TransferData chunks → single AES-CBC stream
+→ strip PKCS#7" model — which works byte-perfect for ASW1, CBOOT,
+and CAL — fails on these two sections.
+
+**What was verified (2026-05-12):**
+- The diff tool's parser reads MM's wire bytes correctly. Per-chunk
+  sizes match the FirstFrame declared lengths byte-for-byte. The
+  reassembler is consistent.
+- ASW2 chunk[0]'s first 16 ciphertext bytes are identical to ASW1
+  chunk[0]'s first 16 bytes (`36 01 4b 7c d6 8d 4c c8 a7 ad 62 9c
+  a1 5d 47 16 99 f5`). That's the deterministic post-AES-CBC encoding
+  of LZRB-encoded `EF BE AD DE 00 ...` (DEADBEEF marker + zeros) with
+  the Bosch fixed IV — so the section START is correctly aligned in
+  both ASW1 (which works) and ASW2 (which doesn't).
+- The shadow side of the orchestrator decrypts those sections cleanly:
+  ASW2 plaintext = 2,097,152 B, byte-equal to oracle bin slice
+  `0x200000..0x400000` (SHA256 `a9b3c2ed7b606f93...`). ASW3 plaintext
+  = 1,900,544 B, byte-equal to oracle slice `0x630000..0x800000`
+  (SHA256 `ab5f536caa52b15d...`). So the orchestrator IS correct;
+  the gap is in MM's decode model, not in our pack path.
+
+**What was NOT identified:** the 3-byte wire-format element that
+appears in MM's ASW2/ASW3 transmissions. Possibilities (not yet
+verified): per-section header/footer not part of the AES stream, MM
+tool-side framing artifact, ECU-side decode rule that tolerates
+trailing wire bytes, or a different cipher-mode boundary on these
+specific BIDs. Per-chunk-CBC-reset is consistent with the byte-count
+math but contradicts what AES_KEYS_MASTER.md + RL_MDG1.cpp document
+about Bosch's wire-format.
+
+**Suggested next steps:**
+- Capture a fresh MM flash of ASW2 + ASW3 in isolation (single-section
+  RequestDownload runs) and annotate the bytes that fall outside
+  16-alignment.
+- Or: write a brute-force decoder that, for each plausible per-chunk
+  AES boundary (per-section, per-chunk, every-N-chunks), tries
+  AES-CBC + LZRB-decompress and accepts the candidate that yields
+  oracle-byte-equal plaintext.
+- Or: ask the MM vendor for the per-section wire format spec for
+  large (>1 MiB) sections.
+
+**Status:** 🔴 NOT blocking shadow validation today — diff exits 0
+with 3/5 sections plaintext-equivalent + 2/5 marked
+REF_WIRE_MODEL_INCOMPLETE (acknowledged as RE gap, not orchestrator
+defect). **REQUIRED** before any real-car ASW2/ASW3 flash, because
+without understanding the 3-byte element the orchestrator can't
+match MM's bit-exact wire format and we don't know if the ECU
+tolerates our (likely subtly different) byte stream for those
+sections.
+
+**Owner:** Sean / SRM Engineering. **Cross-ref:**
+`firmware/test/can_capture/fixtures/magicmotorsport/SUMMARY.md`
+documents the per-section status table; `tools/flash_shadow_diff.py`
+implements the REF_WIRE_MODEL_INCOMPLETE status code.
+
+---
+
 ## P-13 🔴 Cloud build pipeline integration (NEW 2026-05-07)
 
 **Why this is needed.** The Scorpion EFI tool (Windows .exe) and the
@@ -408,6 +683,77 @@ that is byte-identical to running the .exe locally on Sean's
 Windows machine.
 
 ---
+
+---
+
+## P-16 🔴 USB-Serial-JTAG primary console for interactive HIL commands (NEW 2026-05-12)
+
+**Discovered during Layer 2 HIL preflight wire-up (2026-05-12).**
+
+`firmware/sdkconfig` today has `CONFIG_ESP_CONSOLE_UART_DEFAULT=y`
+(primary console = UART0 physical pins) with
+`CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y` (USJ = output-only
+mirror). That means:
+
+- Boot logs and `printf` output flow fine over USB-CDC
+  (`/dev/cu.usbmodem*`), because USJ mirrors stdout.
+- **stdin from USB-CDC lands on UART0 RX**, which on BOARD_REV2 is
+  not wired to anything — so the `serial_console_task` in
+  `commands/serial_console.c` never receives operator input over
+  the USB cable.
+
+The blast radius: `phase2_hil_preflight`, `phase2_hil_preflight_arm`,
+`status`, `wifi_status`, and every other interactive serial command
+is unreachable from a host on the USB cable. The workaround in place
+for Layer 2 is the NVS-armed autostart (`phase2_hil_autostart.c`) plus
+the `phase2_hil_preflight_arm` WS command (requires AP-client first to
+spin up the WS server), or the bench-only
+`PHASE2_HIL_AUTOSTART_FORCE_ARM_THIS_BUILD` compile-time flag.
+
+**Fix scope:** flip `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y` (primary)
++ verify all log/stdio paths still route correctly, then drop the
+bench helper. Probably one-line change in `sdkconfig.defaults` plus a
+boot-log smoke test.
+
+**Why not done in the Layer 2 prompt:** scope creep — Layer 2's
+acceptance was "dongle produces a shadow log matching the host
+reference," and we hit that via autostart. Console wiring is a
+separate, broader fix that should not be bundled.
+
+**Closes when:** sending `phase2_hil_preflight_arm\n` to
+`/dev/cu.usbmodem*` from a host echoes the JSON ACK and arms the
+flag without needing AP-client interaction.
+
+---
+
+## P-17 🔴 Doc-cleanup: CAN pin assignments in HIL preflight + HW reference docs (NEW 2026-05-12)
+
+**Two doc inconsistencies surfaced during Step A wiring of `mdg1_transport_can.c`.**
+
+1. `docs/HIL_PREFLIGHT_RS7_CAL_FLASH_READINESS.md` references `BOARD_REV2`
+   (TX=GPIO5, RX=GPIO16) as the bench-dongle pinout. The actual bench dongle
+   is the FUTV1.0 reference hardware (MAC `30:ed:a0:b6:35:40`, 16 MB flash
+   + 8 MB PSRAM), which is `BOARD_V10` (TX=GPIO21, RX=GPIO14). `BOARD_V10`
+   is binary-verified per `firmware/src/can/can_config.h:17-24` — extracted
+   from the DROM segment of the working v1.5 firmware's `app0.bin` at
+   offset `0x6cc0`. `BOARD_REV2` is the planned future hardware; its
+   pinout has been asserted by Sean but is NOT yet binary-verified.
+
+   Fix: update the HIL preflight doc to specify `BOARD_V10` for the
+   current bench dongle, and frame `BOARD_REV2` as "future hardware,
+   asserted but not binary-verified."
+
+2. `hw_reference/SEFI-ECU-Flasher-Project-Reference-v3.md` lists CAN pins
+   as TX=GPIO17, RX=GPIO18 in at least one place. That's neither V10 nor
+   REV2; it's incorrect. Per the `can_config.h:38-46` warning, "Never
+   guess pins from flash size alone."
+
+   Fix: correct or remove the TX/RX assertion in that doc, OR mark the
+   whole doc as "DO NOT trust for pin info — see `can_config.h`."
+
+**Closes when:** both docs reference `BOARD_V10` (TX=21 / RX=14) as the
+binary-verified current bench dongle, with `BOARD_REV2` clearly framed
+as a future-hardware claim awaiting verification.
 
 ---
 
