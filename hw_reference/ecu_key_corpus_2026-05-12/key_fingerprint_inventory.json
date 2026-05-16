@@ -1,0 +1,792 @@
+{
+  "generated_at": "2026-05-12T07:30:00",
+  "scanned_root": "/Users/rabbit/034_local",
+  "scanned_bin_count": 3521,
+  "classified_bin_count": 3059,
+  "unique_fingerprints": 53,
+  "known_fingerprints": 5,
+  "new_fingerprints": 48,
+  "bins_with_no_acceptable_offset": 462,
+  "unreadable_bins": 0,
+  "known_fingerprint_table": [
+    {
+      "fingerprint": "251194eb",
+      "key_name": "MG1 generic"
+    },
+    {
+      "fingerprint": "29fd0bf7",
+      "key_name": "MG1CS011"
+    },
+    {
+      "fingerprint": "51866eb2",
+      "key_name": "MD1CP004 T2"
+    },
+    {
+      "fingerprint": "51ffa96a",
+      "key_name": "MD1CP014"
+    },
+    {
+      "fingerprint": "a65a5bb0",
+      "key_name": "MD1CP004 T1"
+    },
+    {
+      "fingerprint": "f57f3534",
+      "key_name": "MG1CS002"
+    }
+  ],
+  "fingerprints": [
+    {
+      "fingerprint": "f57f3534",
+      "offset": "0x600200",
+      "known_key": "MG1CS002",
+      "is_new": false,
+      "bin_count": 2827,
+      "inferred_family": "mg1 cs002",
+      "family_breakdown": {
+        "tcu": 16,
+        "mg1 cs002": 32,
+        "mg1 cs002ifx": 20
+      },
+      "sample_paths": [
+        "2.9TT B9 MG1/8W0907551 S0008/Original/8W0907551 0008.bin",
+        "2.9TT B9 MG1/8W0907551 S0008/Original/8W0907551 0008.bin.patched.bin",
+        "2.9TT B9 MG1/8W0907551 S0008/Original/8W0907551 S0008, Original.bin"
+      ]
+    },
+    {
+      "fingerprint": "0e2cad79",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 27,
+      "inferred_family": "mex9",
+      "family_breakdown": {
+        "mex9": 24,
+        "med9": 3
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MEx9/MED 9.1.2 Dual ECU/420910552L-0261S02817-1037509722-0010.BIN",
+        "Bosch/Motronic/MEx9/MED 9.1.2 Dual ECU/424910560N S0010 - RIGHT, Stock +Crackle +Port Flash Test.bin",
+        "Bosch/Motronic/MEx9/MED 9.1.2 Dual ECU/424910560N S0010 - RIGHT, Stock +Crackle +Port Flash Test.mod.bin"
+      ]
+    },
+    {
+      "fingerprint": "251194eb",
+      "offset": "0x18200",
+      "known_key": "MG1 generic",
+      "is_new": false,
+      "bin_count": 26,
+      "inferred_family": "mg1 cs001",
+      "family_breakdown": {
+        "mg1 cs001": 22
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MG1/MG1 CS001 Flexray/.testignore/8W0907115C 0006 - MOD.bin",
+        "Bosch/Motronic/MG1/MG1 CS001 Flexray/.testignore/8W0907115C 0006.bin",
+        "Bosch/Motronic/MG1/MG1 CS001 Flexray/.testignore/8W0907115C.bin"
+      ]
+    },
+    {
+      "fingerprint": "d6f4b42a",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 16,
+      "inferred_family": "mex17",
+      "family_breakdown": {
+        "mex17": 16
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MEx17/UDS/MED 17.5.2/04E906016F S5760, Original.bin",
+        "Bosch/Motronic/MEx17/UDS/MED 17.5.2/04E906016H S7521, Original.bin",
+        "Bosch/Motronic/MEx17/UDS/MED 17.5.2/04E906016H S7521/04E906016H S7521, Original.bin"
+      ]
+    },
+    {
+      "fingerprint": "f5d0d2c3",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 12,
+      "inferred_family": "mex17",
+      "family_breakdown": {
+        "mex17": 12
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MEx17/UDS/MED 17.1.1 Dual ECU/4S0907552F 0003.bin",
+        "Bosch/Motronic/MEx17/UDS/MED 17.1.1/2.5T/8V0907404 S0004/8V0907404 S0004, Original.bin",
+        "Bosch/Motronic/MEx17/UDS/MED 17.1.1/4.0T/4G0906014D 0001/034-103-2440, 4.0T Stage 1/Testing/4G0906014D _0001, 034-103-2440, 4.0T Stage 1-91 B1.00.bin"
+      ]
+    },
+    {
+      "fingerprint": "72e22b78",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 10,
+      "inferred_family": "mex17",
+      "family_breakdown": {
+        "mex17": 10
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MEx17/TP2/MED 17.5.2 TP2/2.0TFSI 06J906027FJ S4352 Stock Complete MOD.bin",
+        "Bosch/Motronic/MEx17/TP2/MED 17.5.2 TP2/2.0TFSI 06J906027FJ S4352 Stock Complete MOD_CS.bin",
+        "Bosch/Motronic/MEx17/UDS/EDC 17 C46/03L906018BC S7819/03L906018BC S7819, Original.bin"
+      ]
+    },
+    {
+      "fingerprint": "b0cb819b",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 10,
+      "inferred_family": "mex17",
+      "family_breakdown": {
+        "mex17": 10
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MEx17/UDS/EDC 17 C74/04L906026JF S4137/04L906026JF S4137, Original.bin",
+        "Bosch/Motronic/MEx17/UDS/EDC 17 CP74 C67/03N906026_1008_boot.bin",
+        "Bosch/Motronic/MEx17/UDS/MED 17.1.62/83A907404B S0001, Original.bin"
+      ]
+    },
+    {
+      "fingerprint": "66678bb9",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 9,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/1 - Flashed to Sector-0x1_DECODED.bin",
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/2 - Flashed to Sector-0x1_DECODED.bin",
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/3 - Flashed to Sector-0x1_DECODED.bin"
+      ]
+    },
+    {
+      "fingerprint": "664419e3",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 8,
+      "inferred_family": "mg1 cs002",
+      "family_breakdown": {
+        "mg1 cs002": 6
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MG1/MG1 CS002 (Autotuner)/8W0907559G S0008/8W0907559G S0008, [Flash Container Extract].bin",
+        "Bosch/Motronic/MG1/MG1 CS002 (Autotuner)/8W0907559H S0004/8W0907559H S0004, [Flash Container Extract].bin",
+        "Bosch/Motronic/MG1/MG1 CS002 (Autotuner)/8W0907559H S0005/8W0907559H S0005, [Flash Container Extract].bin"
+      ]
+    },
+    {
+      "fingerprint": "b7d39dab",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 6,
+      "inferred_family": "tcu",
+      "family_breakdown": {
+        "tcu": 6
+      },
+      "sample_paths": [
+        "Bosch TCU/DQ/DSG DQ38x G2/0GC906557AM 4162  - Original BENCH A46E .bin",
+        "Bosch TCU/DQ/DSG DQ38x G2/FL_0GC906557AT_4260_LH4VBL_V001[0GC906557AT S4260].bin",
+        "Bosch/TCU/DQ/DSG DQ38x G2/0GC906557AM 4162  - Original BENCH A46E .bin"
+      ]
+    },
+    {
+      "fingerprint": "5f0731e8",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 6,
+      "inferred_family": "tcu",
+      "family_breakdown": {
+        "tcu": 6
+      },
+      "sample_paths": [
+        "Bosch TCU/DQ/DSG DQ500/0DL300012H S2110, [Flash Container Extract].bin",
+        "Bosch TCU/DQ/DSG DQ500/FL_0DL300012E_2011_ZdSK_sw[0DL300012E S2011].bin",
+        "Bosch/TCU/DQ/DSG DQ500/0DL300012H S2110, [Flash Container Extract].bin"
+      ]
+    },
+    {
+      "fingerprint": "b6267173",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 6,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/B9_3.0T_OBD_parsed_________/0x1_2_DECODED.bin",
+        "MG1 (1)/B9_3.0T_OBD_parsed_________/0x1_3_DECODED.bin",
+        "MG1 (1)/B9_3.0T_OBD_parsed_________/0x1_DECODED.bin"
+      ]
+    },
+    {
+      "fingerprint": "5c62f84d",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 5,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/Bosch ME7.5/2C2SFGB3/2C2SFGB3.BIN",
+        "Damos and Defs/Bosch ME7.5/2C2TFGB4/2C2TFGB4.BIN",
+        "Damos and Defs/Bosch ME7.5/7436.bin"
+      ]
+    },
+    {
+      "fingerprint": "2fc78b3a",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 4,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/Bosch ME7.5/8N0906018AM_0261207417_1037360844.bin",
+        "Damos and Defs/Bosch ME7.5/Audi A3 1.8T 180HP 06A906032HP 0261207441 360647.bin",
+        "Damos and Defs/Bosch ME7.5/VW_Jetta_1.8T_06A906032HS_0261207446_362563.bin"
+      ]
+    },
+    {
+      "fingerprint": "08829054",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 4,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Dokumentation/Fresh dumps/03-10-25_04-51-28_CANlog_t7toMod/10-0x80800100-_RAW.bin",
+        "Dokumentation/Fresh dumps/03-10-25_04-51-28_CANlog_t7toStock/10-0x80800100-_RAW.bin",
+        "Unzipped/Fresh dumps/03-10-25_04-51-28_CANlog_t7toMod/10-0x80800100-_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "12f6fefd",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 4,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Dokumentation/Fresh dumps/03-10-25_04-51-28_CANlog_t7toMod/12-0x80980100-_RAW.bin",
+        "Dokumentation/Fresh dumps/03-10-25_04-51-28_CANlog_t7toStock/12-0x80980100-_RAW.bin",
+        "Unzipped/Fresh dumps/03-10-25_04-51-28_CANlog_t7toMod/12-0x80980100-_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "3402b3f1",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 4,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Dokumentation/Fresh dumps/03-10-25_04-51-28_CANlog_t7toMod/8-0x80500100-_RAW.bin",
+        "Dokumentation/Fresh dumps/03-10-25_04-51-28_CANlog_t7toStock/8-0x80500100-_RAW.bin",
+        "Unzipped/Fresh dumps/03-10-25_04-51-28_CANlog_t7toMod/8-0x80500100-_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "e05643d3",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 4,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/B9_3.0T_OBD_parsed_________/0x5_2_RAW.bin",
+        "MG1 (1)/B9_3.0T_OBD_parsed_________/0x5_RAW.bin",
+        "MG1 (2)/B9_3.0T_OBD_parsed_________/0x5_2_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "bcd4a935",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 3,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "2.9TT B9 MG1/8W0907551D S0002/Original/Customer Backup for ORI/20220426-120426-201904A1-Audi-RS5-2017-MG1CS002-Bench-backup (FAIL, TUNED)/dflash0.bin",
+        "2.9TT B9 MG1/8W0907551D S0002/Original/Customer Backup for ORI/20220509-091618-201904A1-Audi-RS5-2017-MG1CS002-Bench-backup/dflash0.bin",
+        "2.9TT B9 MG1/8W0907551D S0002/Original/Customer Backup for ORI/Derp/20220509-091618-201904A1-Audi-RS5-2017-MG1CS002-Bench-backup/dflash0.bin"
+      ]
+    },
+    {
+      "fingerprint": "d8191fbd",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 3,
+      "inferred_family": "tcu",
+      "family_breakdown": {
+        "tcu": 3
+      },
+      "sample_paths": [
+        "Bosch TCU/DQ/DSG DQ38x G2 (Cal Only VR)/0GC906557M 3562.bin",
+        "Bosch/TCU/DQ/DSG DQ38x G2 (Cal Only VR)/0GC906557M 3562.bin",
+        "Unzipped/Bosch ECM/TCU/DQ/DSG DQ38x G2 (Cal Only VR)/0GC906557M 3562.bin"
+      ]
+    },
+    {
+      "fingerprint": "7971a7e5",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 3,
+      "inferred_family": "tcu",
+      "family_breakdown": {
+        "tcu": 3
+      },
+      "sample_paths": [
+        "Bosch TCU/DQ/DSG DQ38x G2 (Cal Only VR)/0GC906557P 3560.bin",
+        "Bosch/TCU/DQ/DSG DQ38x G2 (Cal Only VR)/0GC906557P 3560.bin",
+        "Unzipped/Bosch ECM/TCU/DQ/DSG DQ38x G2 (Cal Only VR)/0GC906557P 3560.bin"
+      ]
+    },
+    {
+      "fingerprint": "44985e85",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 3,
+      "inferred_family": "tcu",
+      "family_breakdown": {
+        "tcu": 3
+      },
+      "sample_paths": [
+        "Bosch TCU/DQ/DSG DQ500 (CMD File)/0DL300012H S2112, Original.bin",
+        "Bosch/TCU/DQ/DSG DQ500 (CMD File)/0DL300012H S2112, Original.bin",
+        "Unzipped/Bosch ECM/TCU/DQ/DSG DQ500 (CMD File)/0DL300012H S2112, Original.bin"
+      ]
+    },
+    {
+      "fingerprint": "a614dd18",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 3,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/Bosch ME7.1/ME7.5.bin",
+        "Damos and Defs/VAG ME7.1 VW GOLF4 1.8T/ME71.bin",
+        "Damos and Defs/VAG ME7.5 29F400/ME7.5.bin"
+      ]
+    },
+    {
+      "fingerprint": "7105af75",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 3,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Dokumentation/Fresh dumps/20240822 AL551 AL552/MG1/FL_8W0907551R_0001__V001.bin",
+        "MG1 (2)/DMG1002AH2C1793_MA24A01_8W0907551R_0001/FL_8W0907551R_0001__V001.bin",
+        "Unzipped/Fresh dumps/20240822 AL551 AL552/MG1/FL_8W0907551R_0001__V001.bin"
+      ]
+    },
+    {
+      "fingerprint": "4921fc68",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 3,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "PowerPC (1)/8W0907559H S0009/Original/8W0907559H S0009, [Flash Container Extract].bin",
+        "PowerPC/80A907559B S0006/Original/80A907559B S0006, [Flash Container Extract].bin",
+        "PowerPC/8W0907559G S0011/Original/8W0907559G S0011, [Flash Container Extract].bin"
+      ]
+    },
+    {
+      "fingerprint": "dd4df693",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "2.9TT B9 MG1/GPF/8W0907551F S0002/Original/DMG1002AH2C1793_MA20A31.bin",
+        "2.9TT B9 MG1/GPF/8W0907551F S0002/Original/DMG1002AH2C1793_MA20A31/DMG1002AH2C1793_MA20A31.bin"
+      ]
+    },
+    {
+      "fingerprint": "a21af673",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "tcu",
+      "family_breakdown": {
+        "tcu": 1
+      },
+      "sample_paths": [
+        "Bosch TCU/AL551/0014C44_ZX8L4400/8R0927158AB 1003.bin",
+        "Unzipped/Bosch TCM/AL551/0014C44_ZX8L4400/8R0927158AB 1003.bin"
+      ]
+    },
+    {
+      "fingerprint": "723daec0",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "tcu",
+      "family_breakdown": {
+        "tcu": 1
+      },
+      "sample_paths": [
+        "Bosch TCU/AL552/AL552 Mod Cal Flash - 19-05-21_12-54-35_CANlog_parsed/1 - Flashed to Sector-0x4_RAW.bin",
+        "Unzipped/Bosch TCM/AL552/AL552 Mod Cal Flash - 19-05-21_12-54-35_CANlog_parsed/1 - Flashed to Sector-0x4_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "1582b98a",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "mex17",
+      "family_breakdown": {
+        "mex17": 2
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MEx17/UDS/EDC 17 C64/04L906021CK S8350/04L906021CK S8350, Original.bin",
+        "Unzipped/Bosch ECM/Motronic/MEx17/UDS/EDC 17 C64/04L906021CK S8350/04L906021CK S8350, Original.bin"
+      ]
+    },
+    {
+      "fingerprint": "51866eb2",
+      "offset": "0x600200",
+      "known_key": "MD1CP004 T2",
+      "is_new": false,
+      "bin_count": 2,
+      "inferred_family": "md1 cp004",
+      "family_breakdown": {
+        "md1 cp004": 2
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MG1/MD1 CP004IFX/4K0907401 0004 MD1CP004 bench.bin",
+        "Unzipped/Bosch ECM/Motronic/MG1/MD1 CP004IFX/4K0907401 0004 MD1CP004 bench.bin"
+      ]
+    },
+    {
+      "fingerprint": "51ffa96a",
+      "offset": "0x600200",
+      "known_key": "MD1CP014",
+      "is_new": false,
+      "bin_count": 2,
+      "inferred_family": "md1 cp014",
+      "family_breakdown": {
+        "md1 cp014": 2
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MG1/MD1 CP014IFX/FL_4M0997409_1005__V001.odx.bin",
+        "Unzipped/Bosch ECM/Motronic/MG1/MD1 CP014IFX/FL_4M0997409_1005__V001.odx.bin"
+      ]
+    },
+    {
+      "fingerprint": "7fa117fa",
+      "offset": "0x600200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "mg1 cs008",
+      "family_breakdown": {
+        "mg1 cs008": 2
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MG1/MG1 CS008IFX/4M0906014B S0003, stage 1-SQ7_93oct_Rev1.4.bin",
+        "Unzipped/Bosch ECM/Motronic/MG1/MG1 CS008IFX/4M0906014B S0003, stage 1-SQ7_93oct_Rev1.4.bin"
+      ]
+    },
+    {
+      "fingerprint": "29fd0bf7",
+      "offset": "0x18200",
+      "known_key": "MG1CS011",
+      "is_new": false,
+      "bin_count": 2,
+      "inferred_family": "mg1 cs011",
+      "family_breakdown": {
+        "mg1 cs011": 2
+      },
+      "sample_paths": [
+        "Bosch/Motronic/MG1/MG1 CS011/FL_05E906018AK_9602__V001[05E906018AK S9602].bin",
+        "Unzipped/Bosch ECM/Motronic/MG1/MG1 CS011/FL_05E906018AK_9602__V001[05E906018AK S9602].bin"
+      ]
+    },
+    {
+      "fingerprint": "0c1d3f66",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/Bosch ME7.5/8N0018B/FKTTEMP.BIN",
+        "Damos and Defs/Bosch ME7.5/8N0018B/O19U204T.BIN"
+      ]
+    },
+    {
+      "fingerprint": "f9a4c600",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/Bosch ME7.5/TT225_0261206228.bin",
+        "Damos and Defs/VAG ME7.5 AUDI TT 225/TT225_0261206228.bin"
+      ]
+    },
+    {
+      "fingerprint": "342e028b",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/MG1 B9RS5/4K0907551 SX717/E9B00s3m4_X717.80060100.bin",
+        "MG1 (2)/MG1 B9RS5/4K0907551 SX717/E9B00s3m4_X717.80060100.bin"
+      ]
+    },
+    {
+      "fingerprint": "f0ce50e3",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/MG1 B9RS5/4K0907551 SX717/E9B00s3m4_X717.805FFAE0.bin",
+        "MG1 (2)/MG1 B9RS5/4K0907551 SX717/E9B00s3m4_X717.805FFAE0.bin"
+      ]
+    },
+    {
+      "fingerprint": "bda28ff3",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Dokumentation/Fresh dumps/03-10-25_04-51-28_CANlog_t7toMod/6-0x80180100-_RAW.bin",
+        "Unzipped/Fresh dumps/03-10-25_04-51-28_CANlog_t7toMod/6-0x80180100-_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "2d5c470e",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Dokumentation/Fresh dumps/03-10-25_04-51-28_CANlog_t7toStock/6-0x80180100-_RAW.bin",
+        "Unzipped/Fresh dumps/03-10-25_04-51-28_CANlog_t7toStock/6-0x80180100-_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "070d8826",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/5 - Flashed to Sector-0x2_RAW.bin",
+        "MG1 (2)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/5 - Flashed to Sector-0x2_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "43b5209b",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/6 - Flashed to Sector-0x3_DECODED.bin",
+        "MG1 (2)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/6 - Flashed to Sector-0x3_DECODED.bin"
+      ]
+    },
+    {
+      "fingerprint": "555b9a08",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/6 - Flashed to Sector-0x3_RAW.bin",
+        "MG1 (2)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/6 - Flashed to Sector-0x3_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "184f18ce",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/7 - Flashed to Sector-0x4_DECODED.bin",
+        "MG1 (2)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/7 - Flashed to Sector-0x4_DECODED.bin"
+      ]
+    },
+    {
+      "fingerprint": "d0a6801b",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/7 - Flashed to Sector-0x4_RAW.bin",
+        "MG1 (2)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/7 - Flashed to Sector-0x4_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "2ce681e5",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/9 - Flashed to Sector-0x6_RAW.bin",
+        "MG1 (2)/2.9T MG1 - 02-07-21_03-22-38_CANlog_parsed/9 - Flashed to Sector-0x6_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "ea7554ee",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/B9_3.0T_OBD_parsed_________/0x2_RAW.bin",
+        "MG1 (2)/B9_3.0T_OBD_parsed_________/0x2_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "fc674e00",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 2,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (1)/B9_3.0T_OBD_parsed_________/0x3_RAW.bin",
+        "MG1 (2)/B9_3.0T_OBD_parsed_________/0x3_RAW.bin"
+      ]
+    },
+    {
+      "fingerprint": "4be2d426",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 1,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/Bosch ME7.5/M1E0624e.BIN"
+      ]
+    },
+    {
+      "fingerprint": "56bc464c",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 1,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/OPEL ME7.6.2 ASTRA 1.4 Z14XEP06/32120301.BIN"
+      ]
+    },
+    {
+      "fingerprint": "cae58820",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 1,
+      "inferred_family": "edc17",
+      "family_breakdown": {
+        "edc17": 1
+      },
+      "sample_paths": [
+        "Damos and Defs/VAG EDC17CP14 VW TIGUAN 2.0TDI/Original_VW_Tiguan03L906022B____[customized].bin"
+      ]
+    },
+    {
+      "fingerprint": "fad1233d",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 1,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/VAG ME7.5 AUDI A6 1.8T 180HP/0261206917.bin"
+      ]
+    },
+    {
+      "fingerprint": "4eebe1a3",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 1,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "Damos and Defs/VOLVO M4.4 V70 2.5 SUG/0261204570_1037358289.bin"
+      ]
+    },
+    {
+      "fingerprint": "b6eb6589",
+      "offset": "0x18200",
+      "known_key": "",
+      "is_new": true,
+      "bin_count": 1,
+      "inferred_family": "unknown",
+      "family_breakdown": {},
+      "sample_paths": [
+        "MG1 (2)/MG1CS002 2,9l V6 TFSI, EA839, AU49x RS4_5, 331kW, EU6, AL552-8Q_8W0907551_0003/EMEM_8W0907551_0003__V001.FD_03FLASHDATA.bin"
+      ]
+    }
+  ]
+}

@@ -22,3 +22,6 @@ ui/test/*.pyc
 # can_sniff.py / bench_push.py).
 tools/__pycache__/
 tools/*.pyc
+
+# Agent-task worktrees — transient runtime state, not portable.
+.claude/worktrees/

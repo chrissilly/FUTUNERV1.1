@@ -1,6 +1,8 @@
 # AES-128 Encryption Keys — MASTER REFERENCE
 
 > **DO NOT COMMIT.** This folder is gitignored.
+>
+> 🛑 **PUSH FREEZE (active 2026-05-12 → until owner lifts):** even non-secret files in this repo are frozen from `git push`. Local commits are OK; nothing leaves the machine until the owner says so. See Hard Rule 7 in `../CLAUDE.md`.
 
 ## Per-ECU Keys
 
