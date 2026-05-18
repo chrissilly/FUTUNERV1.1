@@ -213,3 +213,27 @@ The orchestrator host harness now reports 6 failures from the new
 scenario (see `status-2026-05-18.md [MAC]` for the chip report).
 Per prompt: HALT, surface the divergence, do not paper over. No
 commits; no pushes.
+
+## [MAC] First push to remote in this session (close-out)
+
+- First push since the 2026-05-12 freeze: 4 commits to `origin/main`
+  (`4273f7b` → `ba21532`).
+- Logical split applied so green-stable lands together while WIP is
+  segregated:
+  - Commit 1: Phase 2 orchestrator hardening (1283 + / 100 −)
+  - Commit 2: hw_reference docs (1611 + / 0 −)
+  - Commit 3: PC handoff + Mac/PC split + session status logs
+  - Commit 4: cross-cutting infra + `.gitignore` additions
+- WIP MM-recorded ECU replay validator preserved on local
+  `wip/mm-ecu-replay-validator`. Contains:
+  - `tools/extract_mm_ecu_responses.py` (paired TX/RX format extractor)
+  - `firmware/test/mdg1_flash_orchestrator/fixtures/mm_ecu_responses.json`
+    (1015 entries, 61 with multi-frame pending bursts)
+  - Mid-refactor of REPLAY mode in `mdg1_transport_shadow.{c,h}` —
+    request-keyed lookup partially wired; uncompilable mid-state intentional.
+  - The new orchestrator test scenario + eval.sh REQUIRED_SCENARIOS line.
+- `phase1` merge from PC deferred: `origin/phase1` does not exist on
+  `github.com/chrissilly/FUTUNERV1.1` at this time. PC may have pushed
+  to a different remote/fork; Sean verifying.
+
+[MAC]
