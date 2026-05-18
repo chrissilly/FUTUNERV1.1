@@ -249,7 +249,8 @@ if [ -f "$HOST_TEST_DIR/Makefile" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Required test scenarios (15 literal names)
+# 8. Required test scenarios (17 literal names — 15 prior + 2 added 2026-05-17
+#    for Bug 1/2/3 fix: pre-SA preflight + NRC handling + shadow session model)
 # ---------------------------------------------------------------------------
 section "8. Required test scenarios"
 
@@ -269,6 +270,8 @@ declare -a REQUIRED_SCENARIOS=(
     "test_orchestrator_propagates_progress_callbacks"
     "test_hil_preflight_halt_before_erase_no_erase_emitted"
     "test_hil_defensive_secondary_engages_when_primary_bypassed"
+    "test_sa_rejected_in_default_session_returns_nrc_12"
+    "test_sa_succeeds_after_programming_session_10_02"
 )
 for pat in "${REQUIRED_SCENARIOS[@]}"; do
     if grep -q "$pat" "$TEST_FILE"; then

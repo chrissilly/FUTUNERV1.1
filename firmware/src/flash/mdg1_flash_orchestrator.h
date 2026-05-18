@@ -61,6 +61,10 @@ typedef enum {
     MDG1_FLASH_PHASE_DONE,
     MDG1_FLASH_PHASE_FAILED,
     MDG1_FLASH_PHASE_HIL_HALT_BEFORE_ERASE,
+    MDG1_FLASH_PHASE_PREFLIGHT_CYCLE,         /* starting cycle N of FULL unlock; bytes_done = cycle index */
+    MDG1_FLASH_PHASE_PREFLIGHT_ECURESET,      /* about to send 11 01 between cycles */
+    MDG1_FLASH_PHASE_ELIGIBILITY_DETECTED,    /* F1 5B read, cal_only_allowed surfaced via bytes_done (0/1) */
+    MDG1_FLASH_PHASE_NRC_RECEIVED,            /* non-pending NRC; bytes_done=SID, bytes_total=NRC code */
 } mdg1_flash_phase_t;
 
 typedef struct {
@@ -101,7 +105,22 @@ typedef struct {
      * is defined. Setting it without hil_halt_before_erase has no
      * effect — the secondary only fires when the HIL flag is on. */
     bool                  _force_skip_primary_halt_for_test_only;
+    /* TEST-ONLY (host build): when true, the orchestrator skips the
+     * FULL unlock preflight (the 3-cycle 10 03 / DIDs / 31 01 02 03 /
+     * 10 02 / 11 01 sequence MM runs before SA). Used by Bug 3's
+     * Layer 1 scenario test_sa_rejected_in_default_session_returns_nrc_12,
+     * which proves the shadow correctly NRC-rejects SA when no
+     * programming session has been entered. Production firmware never
+     * sees this field. */
+    bool                  _force_skip_pre_sa_preflight_for_test_only;
 #endif
+    /* Set by mdg1_flash_orchestrator_run() during cycle-1 preflight
+     * after reading F1 5B. Caller may inspect after a successful
+     * preflight run to decide whether to offer cal-only or force FULL.
+     * Also surfaced via MDG1_FLASH_PHASE_ELIGIBILITY_DETECTED progress
+     * event so a streaming UI can read it without waiting for the run
+     * to finish. */
+    bool                  cal_only_allowed_out;
 } mdg1_flash_plan_t;
 
 /*
@@ -114,7 +133,12 @@ typedef struct {
  * iface before `mdg1_flash_orchestrator_run` is invoked — otherwise
  * the first per-section TransferData fails ESP_ERR_INVALID_STATE.
  */
-esp_err_t mdg1_flash_orchestrator_run(const mdg1_flash_plan_t *plan,
+/*
+ * plan is non-const because the orchestrator writes back the F1 5B
+ * detection outcome via plan->cal_only_allowed_out. All other fields
+ * are read-only inputs.
+ */
+esp_err_t mdg1_flash_orchestrator_run(mdg1_flash_plan_t       *plan,
                                       mdg1_uds_transport_t    *transport,
                                       mdg1_flash_progress_cb_t progress,
                                       void                    *progress_user_ctx);

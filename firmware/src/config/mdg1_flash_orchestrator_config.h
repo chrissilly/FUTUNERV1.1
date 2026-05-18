@@ -211,6 +211,18 @@
  */
 #define MDG1_MAX_UDS_MESSAGE_BYTES          4100u
 
+/*
+ * Small-frame stack-allocated rx buffer used by uds_exchange_strict()
+ * for control-message exchanges (sessions, SA-key ack, fingerprint,
+ * single-byte routine acks, ECUReset). All positive responses for these
+ * services are well under this size; callers that need to parse a longer
+ * response (F1 5B 91-byte history, RequestDownload 4-byte maxBlockLen,
+ * SA seed reply) pass their own out_rx buffer instead.
+ *
+ * Proposed default — needs approval from Sean before lock.
+ */
+#define MDG1_UDS_RX_STACK_SMALL_BYTES       32u
+
 /* ------------------------------------------------------------------ */
 /* Shadow-mode placeholder values (zeroed by the diff tool's masking) */
 /* ------------------------------------------------------------------ */
@@ -224,6 +236,17 @@
  * Proposed default — needs approval from Sean before lock.
  */
 #define MDG1_SHADOW_SECURITY_SEED_PLACEHOLDER  0xDEADBEEFu
+
+/*
+ * Number of independent SID slots the shadow transport tracks for
+ * pre-positive pending-NRC injection (mdg1_transport_shadow_inject_pending).
+ * 8 is enough to arm pending bursts for every flash-critical SID
+ * (10, 11, 22, 27, 2E, 31, 34, 36, 37) simultaneously if a single
+ * test wants to model worst-case bus contention.
+ *
+ * Proposed default — needs approval from Sean before lock.
+ */
+#define MDG1_SHADOW_PENDING_INJECT_SLOTS    8u
 
 /* ------------------------------------------------------------------ */
 /* HIL preflight halt-before-erase compile-time gate                  */
@@ -338,5 +361,100 @@
  * Proposed default — needs approval from Sean before lock.
  */
 #define MDG1_TRANSPORT_CAN_TEE_LOG_HEX_BYTES        32u
+
+/* ------------------------------------------------------------------ */
+/* Pre-SA preflight (FULL unlock procedure)                           */
+/* ------------------------------------------------------------------ */
+
+/*
+ * MM's FULL flash captures (mm_FULL_Flash.log) show the tester running
+ * a three-cycle preflight before SecurityAccess, with two ECUReset
+ * (11 01) hard-resets between cycles. After the second reset, the ECU
+ * is in a state that accepts 10 02 programming session + 27 11 SA.
+ *
+ * The cal-only flash (mm_MAPS_upload.log) skips the ECUResets and
+ * succeeds — but only because the ECU is still session-warm from a
+ * prior FULL flash performed in the same key-on. A fresh ECU needs
+ * the ECUResets.
+ *
+ * Per Sean (2026-05-17): always run the FULL unlock on every flash.
+ * F1 5B detection (further down) decides whether the user gets a
+ * cal-only OR a full-flash OPTION; the unlock procedure itself is
+ * always FULL.
+ *
+ * NRC values MM ignores during preflight (gateway/scope rejections):
+ *   - ClearDTC 14 FF FF FF  →  7F 14 11 serviceNotSupportedInActiveSession
+ *   - ReadDID 22 04 05      →  7F 22 31 requestOutOfRange
+ *
+ * Proposed defaults — need approval from Sean before lock.
+ */
+#define MDG1_UDS_NRC_RESPONSE_PENDING               0x78u
+#define MDG1_UDS_NRC_SERVICE_NOT_SUPPORTED          0x11u
+#define MDG1_UDS_NRC_SUBFUNCTION_NOT_SUPPORTED_IN_SESSION 0x12u
+#define MDG1_UDS_NRC_CONDITIONS_NOT_CORRECT         0x22u
+#define MDG1_UDS_NRC_REQUEST_OUT_OF_RANGE           0x31u
+#define MDG1_UDS_NRC_SECURITY_ACCESS_DENIED         0x33u
+
+/* DIDs the preflight reads. MM reads ~30; we read the minimum-viable
+ * set: the four that feed the F1 5B detection plus VIN/SW for sanity.
+ * Numeric values are UDS DataIdentifier 16-bit codes (ISO 14229-1).
+ *
+ * Proposed defaults — need approval from Sean before lock. */
+#define MDG1_DID_VIN                            0xF190u
+#define MDG1_DID_ECU_SW_NUMBER                  0xF19Eu
+#define MDG1_DID_PROGRAMMING_HISTORY_NUMBER     0xF1A2u  /* short prog # */
+#define MDG1_DID_PROGRAMMING_HISTORY_LOG        0xF15Bu  /* rolling 9-entry log */
+#define MDG1_DID_PROBE_NRC_TOLERATED            0x0405u  /* MM probes; ignores NRC 0x31 */
+
+/* Number of programming-history entries the ECU's F1 5B response
+ * carries. MM_Flash_Capture_Analysis.md §2.3 + the cal-only F1 5B
+ * dump show a 9-entry rolling log, each entry MDG1_PROG_FINGERPRINT_LEN
+ * bytes long. Detection logic inspects entry[0] (most-recent).
+ *
+ * Proposed default — needs approval from Sean before lock. */
+#define MDG1_PROG_HISTORY_ENTRIES               9u
+#define MDG1_PROG_HISTORY_PAYLOAD_LEN  (MDG1_PROG_HISTORY_ENTRIES * MDG1_PROG_FINGERPRINT_LEN)
+
+/* Wall-time the ECU spends in reset enumeration after we send 11 01
+ * and receive 51 01 ack. MM_Flash_Capture_Analysis.md §2.7 reports
+ * ~0.7 s; we allow 1500 ms for slow gateways before the next request.
+ *
+ * Proposed default — needs approval from Sean before lock. */
+#define MDG1_UDS_ECURESET_REENUMERATION_DELAY_MS   1500u
+
+/* Number of full preflight cycles to run before SA. MM runs three
+ * (with 2 ECUResets between them). After the second reset, the ECU
+ * accepts SA. The third cycle reads informational DIDs and enters
+ * programming session for the SA exchange.
+ *
+ * Proposed default — needs approval from Sean before lock. */
+#define MDG1_PREFLIGHT_CYCLES_BEFORE_SA            3u
+
+/* Inserts 11 01 ECUReset at the end of cycles before this index.
+ * With 3 total cycles and ECUResets at the end of cycles 0 and 1,
+ * after-cycle-2 we skip the reset and proceed to SA.
+ *
+ * Proposed default — needs approval from Sean before lock. */
+#define MDG1_PREFLIGHT_ECURESET_BEFORE_CYCLE       2u
+
+/* ------------------------------------------------------------------ */
+/* Flash-eligibility detection (F1 5B fingerprint check)              */
+/* ------------------------------------------------------------------ */
+
+/*
+ * After the first preflight cycle reads F1 5B, the orchestrator compares
+ * entry[0] (most-recent fingerprint) to MDG1_PROG_FINGERPRINT_BYTES (our
+ * tool's fingerprint). The result is surfaced via a new progress event:
+ *   - cal_only_allowed = true   →  our tool wrote the most recent ASW;
+ *                                  user may choose cal-only OR FULL
+ *   - cal_only_allowed = false  →  another tool wrote ASW (or no history);
+ *                                  user MUST do FULL flash before cal-only
+ *
+ * The unlock procedure itself doesn't change based on this — always FULL.
+ * Detection is for UI-side flash-option gating only.
+ *
+ * Proposed default — needs approval from Sean before lock.
+ */
+#define MDG1_FLASH_ELIGIBILITY_DETECTION_ENABLED   1
 
 #endif /* MDG1_FLASH_ORCHESTRATOR_CONFIG_H */
