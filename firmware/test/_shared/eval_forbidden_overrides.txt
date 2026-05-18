@@ -134,3 +134,26 @@ firmware/test/can_capture/fixtures/magicmotorsport/flash_run_1_4K0907557G_0003.c
 firmware/test/can_capture/fixtures/magicmotorsport/flash_run_1_4K0907557G_0003.candump.stale.142951
 firmware/test/can_capture/fixtures/magicmotorsport/flash_run_1_4K0907557G_0003.candump.stale.151221
 firmware/test/can_capture/fixtures/magicmotorsport/flash_run_1_4K0907557G_0003.log
+
+# ---------------------------------------------------------------------
+# 2026-05-17 — Phase 2 bug fixes (Bugs 1/2/3 caught at HIL Phase 3 attempt)
+# ---------------------------------------------------------------------
+# Cross-cutting prompt: FULL MM-pattern pre-SA preflight (3 cycles, 2
+# ECUResets) + NRC immediate-bail (Bug 2 surface) + shadow session
+# state model with SA-in-DEFAULT NRC (Bug 3) + F1 5B fingerprint
+# detection logic. Same scope of files as the May-12 orchestrator
+# landing, so all entries above already cover the modifications.
+# Only new path: lzrb_cli.c (rebuilt because /tmp was wiped during
+# the May-12 → May-17 machine migration). Plus the can_capture
+# eval-script edit that brings it in line with the overrides
+# mechanism the other 7 gates already use.
+firmware/test/lzrb/lzrb_cli.c
+firmware/test/can_capture/eval.sh
+
+# Hermes corpus extraction sweep artifacts (May-12 work — log + stdout
+# + summary files left in tools/). Not from this prompt; surfaced
+# because can_capture's tools-wide FORBIDDEN check now reads overrides.
+tools/hermes_corpus_catalog.log
+tools/hermes_corpus_catalog.stdout
+tools/hermes_corpus_summary_20260512_124816.md
+tools/hermes_corpus_summary_20260512_125139.md
