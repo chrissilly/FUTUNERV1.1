@@ -1,10 +1,13 @@
 #include "wifi_ap.h"
+#include "config/wifi_config.h"
 #include "nvs/nvs_manager.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_mac.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "lwip/inet.h"
 #include "websocket/ws_server.h"
 #include <string.h>
@@ -14,6 +17,14 @@ static const char *TAG = "WIFI_AP";
 
 static bool wifi_initialized = false;
 static bool wifi_running = false;
+
+#ifdef WIFI_AP_HOST_TEST
+/* Host-test-only hatch. wifi_ap_init/_start never run host-side, so
+ * `wifi_running` stays false and wifi_client_connect short-circuits the
+ * test setup before reaching the esp_wifi spy layer. Production builds
+ * never define WIFI_AP_HOST_TEST. */
+void wifi_ap_test_force_running(bool v) { wifi_running = v; }
+#endif
 static uint8_t connected_clients = 0;
 static esp_netif_t *ap_netif = NULL;
 static esp_netif_t *sta_netif = NULL;
@@ -22,7 +33,7 @@ static char device_ssid[32] = {0};
 static bool sta_connected = false;
 static char sta_ip_str[16] = {0};
 static uint8_t sta_retry_count = 0;
-#define STA_MAX_RETRIES 5
+/* STA_MAX_RETRIES relocated to config/wifi_config.h */
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data) {
@@ -52,11 +63,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
             case WIFI_EVENT_AP_STACONNECTED:
                 connected_clients++;
                 ESP_LOGI(TAG, "Client connected (total: %d)", connected_clients);
-                /* First client: spin up the HTTP + WebSocket server */
-                if (connected_clients == 1 && !ws_server_is_running()) {
-                    ESP_LOGI(TAG, "First client - starting web server");
-                    ws_server_start();
-                }
+                /* WS server is started unconditionally by wifi_ap_start()
+                 * since the 2026-05-17 smoke-test prompt — first-AP-client
+                 * gating was a designed optimization that blocked
+                 * over-LAN headless reach (STA-side or first-time setup
+                 * via cable). Server start is idempotent (ws_server_start
+                 * returns ESP_OK if `server != NULL`). */
                 break;
             case WIFI_EVENT_AP_STADISCONNECTED:
                 if (connected_clients > 0) {
@@ -77,10 +89,10 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                 ESP_LOGI(TAG, "Access Point stopped");
                 wifi_running = false;
                 connected_clients = 0;
-                /* AP down - make sure web server is off too */
-                if (ws_server_is_running()) {
-                    ws_server_stop();
-                }
+                /* WS server stays up across AP-stop — the operator may be
+                 * driving over STA-side LAN. Stopping it would tear down
+                 * the only remaining management surface. The server gets
+                 * torn down only on wifi_ap_stop() (full shutdown). */
                 break;
             default:
                 break;
@@ -250,21 +262,60 @@ esp_err_t wifi_ap_start(void) {
 
     ESP_LOGI(TAG, "WiFi AP started - SSID: %s, IP: %s, TX: %d dBm", device_ssid, WIFI_AP_IP, tx_power / 4);
 
-    /* Auto-connect STA if NVS has saved credentials */
-    char sta_ssid[33] = {0};
-    char sta_pass[65] = {0};
-    if (nvs_manager_load_string(WIFI_STA_SSID_NVS_KEY, sta_ssid, sizeof(sta_ssid)) == ESP_OK
-        && sta_ssid[0] != '\0') {
-        nvs_manager_load_string(WIFI_STA_PASS_NVS_KEY, sta_pass, sizeof(sta_pass));
-        ESP_LOGI(TAG, "Auto-connecting STA to: %s", sta_ssid);
-        wifi_config_t sta_cfg = {0};
-        strncpy((char *)sta_cfg.sta.ssid, sta_ssid, sizeof(sta_cfg.sta.ssid) - 1);
-        strncpy((char *)sta_cfg.sta.password, sta_pass, sizeof(sta_cfg.sta.password) - 1);
-        esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
-        esp_wifi_connect();
+    /* Apply the persisted mode intent (delegate to a small helper so the
+     * host eval gate can exercise the boot-time gating contract without
+     * going through esp_wifi_init/start). */
+    wifi_ap_boot_apply_sta_intent();
+
+    /* Start the WS server unconditionally so the dongle is reachable over
+     * either netif as soon as the AP banner is up. Idempotent — see
+     * ws_server.c's `server != NULL` guard. Pre-2026-05-17 the server
+     * gated on first AP client; that prevented over-LAN tooling and
+     * headless setup. P-25 (security review of always-listening posture)
+     * filed in docs/PHASE_2_PREREQUISITES.md. */
+    if (!ws_server_is_running()) {
+        esp_err_t ws_rc = ws_server_start();
+        if (ws_rc != ESP_OK) {
+            ESP_LOGW(TAG, "WS server start at boot returned %s",
+                     esp_err_to_name(ws_rc));
+        }
+    } else {
+        ESP_LOGD(TAG, "WS server already running (boot idempotency path)");
     }
 
     return ESP_OK;
+}
+
+/*
+ * Honor the persisted `wifi_mode` intent at boot. If the operator's last
+ * set was AP_ONLY (NVS `wifi_mode` = "ap"), keep STA down even when creds
+ * remain stored for a later toggle. If APSTA (default-when-missing, or
+ * explicit "sta"), load stored creds and call into the existing
+ * esp_wifi_set_config + esp_wifi_connect path.
+ *
+ * Closes the contract gap caught at Tier 1 of the 2026-05-17 smoke test.
+ * Default-when-missing is APSTA so a firmware upgrade onto a customer
+ * dongle with stored creds preserves the legacy auto-reconnect.
+ */
+void wifi_ap_boot_apply_sta_intent(void) {
+    if (wifi_get_mode_intent() == WIFI_MODE_INTENT_AP_ONLY) {
+        ESP_LOGI(TAG, "Skipping STA auto-connect: intent=AP_ONLY");
+        return;
+    }
+
+    char sta_ssid[33] = {0};
+    char sta_pass[65] = {0};
+    if (nvs_manager_load_string(WIFI_STA_SSID_NVS_KEY, sta_ssid, sizeof(sta_ssid)) != ESP_OK
+        || sta_ssid[0] == '\0') {
+        return;  /* no stored creds — nothing to auto-connect */
+    }
+    nvs_manager_load_string(WIFI_STA_PASS_NVS_KEY, sta_pass, sizeof(sta_pass));
+    ESP_LOGI(TAG, "Auto-connecting STA to: %s", sta_ssid);
+    wifi_config_t sta_cfg = {0};
+    strncpy((char *)sta_cfg.sta.ssid, sta_ssid, sizeof(sta_cfg.sta.ssid) - 1);
+    strncpy((char *)sta_cfg.sta.password, sta_pass, sizeof(sta_cfg.sta.password) - 1);
+    esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
+    esp_wifi_connect();
 }
 
 esp_err_t wifi_client_connect(const char *ssid, const char *password) {
@@ -332,5 +383,157 @@ bool wifi_ap_is_running(void) {
 
 uint8_t wifi_ap_get_client_count(void) {
     return connected_clients;
+}
+
+/* ====================================================================== */
+/* STA-credential family (NVS-only — no radio side effects)               */
+/* ====================================================================== */
+
+esp_err_t wifi_client_set_creds(const char *ssid, const char *password) {
+    if (ssid == NULL || ssid[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (strlen(ssid) > 32) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (password != NULL && password[0] != '\0'
+        && strlen(password) < WIFI_STA_PASSWORD_MIN_LEN) {
+        /* WPA2 floor: either empty (open net) or ≥ WIFI_STA_PASSWORD_MIN_LEN. */
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t r = nvs_manager_save_string(WIFI_STA_SSID_NVS_KEY, ssid);
+    if (r != ESP_OK) {
+        ESP_LOGE(TAG, "failed to save STA SSID: %s", esp_err_to_name(r));
+        return r;
+    }
+    r = nvs_manager_save_string(WIFI_STA_PASS_NVS_KEY, password ? password : "");
+    if (r != ESP_OK) {
+        ESP_LOGE(TAG, "failed to save STA pass: %s", esp_err_to_name(r));
+        return r;
+    }
+    ESP_LOGI(TAG, "STA creds stored for SSID '%s'", ssid);
+    return ESP_OK;
+}
+
+esp_err_t wifi_client_clear_creds(void) {
+    esp_err_t r = nvs_manager_save_string(WIFI_STA_SSID_NVS_KEY, "");
+    if (r != ESP_OK) return r;
+    return nvs_manager_save_string(WIFI_STA_PASS_NVS_KEY, "");
+}
+
+bool wifi_client_creds_stored(void) {
+    char ssid[33] = {0};
+    esp_err_t r = nvs_manager_load_string(WIFI_STA_SSID_NVS_KEY, ssid, sizeof(ssid));
+    if (r != ESP_OK) return false;
+    return ssid[0] != '\0';
+}
+
+/* ====================================================================== */
+/* WiFi mode intent                                                       */
+/* ====================================================================== */
+
+/* Internal helper: drop the STA association without touching NVS. Used
+ * by wifi_set_mode_intent(AP_ONLY); preserves stored creds so a later
+ * wifi_set_mode_intent(APSTA) can rejoin without re-running wifi_sta_set. */
+static esp_err_t sta_radio_stop_preserving_creds(void) {
+    sta_connected = false;
+    sta_ip_str[0] = '\0';
+    sta_retry_count = STA_MAX_RETRIES + 1;  /* suppress auto-reconnect */
+    esp_err_t r = esp_wifi_disconnect();
+    if (r == ESP_ERR_WIFI_NOT_STARTED || r == ESP_ERR_WIFI_NOT_INIT) {
+        /* Radio not running yet — disconnect is a no-op, not an error,
+         * the operator just set intent early. */
+        return ESP_OK;
+    }
+    return r;
+}
+
+esp_err_t wifi_set_mode_intent(wifi_mode_intent_t intent) {
+    if (intent != WIFI_MODE_INTENT_AP_ONLY && intent != WIFI_MODE_INTENT_APSTA) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (intent == WIFI_MODE_INTENT_APSTA) {
+        char ssid[33] = {0};
+        char pass[65] = {0};
+        esp_err_t r = nvs_manager_load_string(WIFI_STA_SSID_NVS_KEY, ssid, sizeof(ssid));
+        if (r != ESP_OK || ssid[0] == '\0') {
+            ESP_LOGW(TAG, "wifi_set_mode_intent(APSTA): no stored STA creds");
+            return ESP_ERR_NOT_FOUND;
+        }
+        /* pass may legitimately be empty (open network) — ignore load error. */
+        nvs_manager_load_string(WIFI_STA_PASS_NVS_KEY, pass, sizeof(pass));
+
+        /* Delegate to existing connect path. wifi_client_connect's NVS
+         * re-save is idempotent. Eval scenario #6 pins this delegation. */
+        r = wifi_client_connect(ssid, pass);
+        if (r != ESP_OK) {
+            ESP_LOGE(TAG, "wifi_set_mode_intent(APSTA): connect failed: %s",
+                     esp_err_to_name(r));
+            return r;
+        }
+
+        esp_err_t save_rc = nvs_manager_save_string(
+            WIFI_MODE_INTENT_NVS_KEY, WIFI_MODE_INTENT_NVS_VAL_STA);
+        if (save_rc != ESP_OK) {
+            ESP_LOGW(TAG, "wifi_set_mode_intent: NVS write failed: %s",
+                     esp_err_to_name(save_rc));
+            /* Connection is up; persistence failed. Surface but don't roll back. */
+        }
+        return ESP_OK;
+    }
+
+    /* AP_ONLY: drop STA without wiping creds. */
+    esp_err_t stop_rc = sta_radio_stop_preserving_creds();
+    esp_err_t save_rc = nvs_manager_save_string(
+        WIFI_MODE_INTENT_NVS_KEY, WIFI_MODE_INTENT_NVS_VAL_AP);
+    if (save_rc != ESP_OK) {
+        ESP_LOGW(TAG, "wifi_set_mode_intent(AP_ONLY): NVS write failed: %s",
+                 esp_err_to_name(save_rc));
+    }
+    return stop_rc;
+}
+
+wifi_mode_intent_t wifi_get_mode_intent(void) {
+    char val[8] = {0};
+    esp_err_t r = nvs_manager_load_string(WIFI_MODE_INTENT_NVS_KEY, val, sizeof(val));
+    if (r != ESP_OK) {
+        /* Default-when-missing is APSTA so a firmware upgrade onto a
+         * customer dongle that has stored creds but no mode_intent key
+         * preserves the legacy auto-reconnect behavior. Explicit
+         * `wifi_mode ap` writes the "ap" value and turns the boot-time
+         * STA gate on permanently. Caught at Tier 1 of the
+         * 2026-05-17 smoke test. */
+        return WIFI_MODE_INTENT_APSTA;
+    }
+    if (strcmp(val, WIFI_MODE_INTENT_NVS_VAL_AP) == 0) {
+        return WIFI_MODE_INTENT_AP_ONLY;
+    }
+    /* Any other value (including the explicit "sta" string) → APSTA. */
+    return WIFI_MODE_INTENT_APSTA;
+}
+
+bool wifi_feature_uses_cloud_network(int feature_id) {
+    /* Keep in sync with feature_manager.h's feature_id_t enum. The
+     * predicate is "active feature touches the cloud network at all" —
+     * cmd_wifi_mode uses this to refuse a radio swap mid-upload. The
+     * int parameter avoids pulling feature_manager.h into wifi_ap.h. */
+    enum {
+        FM_NONE = 0,
+        FM_WOT_LOGGING,
+        FM_LIVE_TUNE,
+        FM_PHASE2_FLASH,
+        FM_DTC,
+        FM_BLE_PAIRING,
+        FM_VIN_PAIRING,
+    };
+    switch (feature_id) {
+        case FM_VIN_PAIRING:   /* /register + /license */
+        case FM_WOT_LOGGING:   /* WOT log upload to cloud */
+            return true;
+        default:
+            return false;
+    }
 }
 

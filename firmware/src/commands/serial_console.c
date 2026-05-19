@@ -21,6 +21,7 @@
 #include "wifi/wifi_ap.h"
 #include "state_machine/connection_manager.h"
 #include "phase2_hil_preflight_commands.h"
+#include "wifi_commands.h"
 #include "sdkconfig.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -67,11 +68,14 @@ static void cmd_help(void) {
     printf("\n[FUTUNER serial console]\n");
     printf("  help\n");
     printf("  status\n");
-    printf("  wifi_connect <ssid> <password>\n");
-    printf("  wifi_disconnect\n");
-    printf("  wifi_status\n");
-    printf("  logger_start                — begin polling ECU vars\n");
-    printf("  logger_stop                 — pause polling\n");
+    printf("  wifi_connect <ssid> <password>   — LEGACY: saves + joins external WiFi\n");
+    printf("  wifi_disconnect                  — LEGACY: drops STA + wipes saved creds\n");
+    printf("  wifi_sta_set <ssid> <password>   — store STA creds without changing radio\n");
+    printf("  wifi_mode ap|sta                 — toggle WiFi mode intent (AP always up)\n");
+    printf("  wifi_clear                       — forget STA creds + force AP intent\n");
+    printf("  wifi_status                      — WiFi mode + STA association snapshot\n");
+    printf("  logger_start                     — begin polling ECU vars\n");
+    printf("  logger_stop                      — pause polling\n");
     printf("  reboot\n\n");
 }
 
@@ -95,12 +99,12 @@ static void cmd_status(void) {
 }
 
 static void cmd_wifi_status(void) {
-    bool up = wifi_client_is_connected();
-    const char *ip = wifi_client_get_ip();
-    printf("STA: %s%s%s\n",
-           up ? "connected" : "disconnected",
-           (up && ip && ip[0]) ? "  IP=" : "",
-           (up && ip && ip[0]) ? ip : "");
+    /* Delegate to the WS command's handler so serial sees the same
+     * spec response shape (mode/ssid/ip/sta_connected/sta_creds_stored). */
+    static char resp[256];
+    resp[0] = '\0';
+    cmd_wifi_status2(0, NULL, resp, sizeof(resp));
+    printf("%s\n", resp);
 }
 
 static void cmd_wifi_connect(char *args) {
@@ -145,6 +149,21 @@ static void handle_line(char *line) {
     else if (strcmp(line, "wifi_status") == 0)      cmd_wifi_status();
     else if (strcmp(line, "wifi_connect") == 0)     cmd_wifi_connect(args);
     else if (strcmp(line, "wifi_disconnect") == 0)  cmd_wifi_disconnect();
+    else if (strcmp(line, "wifi_sta_set") == 0) {
+        static char r[256]; r[0] = '\0';
+        cmd_wifi_sta_set(0, args, r, sizeof(r));
+        printf("%s\n", r);
+    }
+    else if (strcmp(line, "wifi_mode") == 0) {
+        static char r[256]; r[0] = '\0';
+        cmd_wifi_mode(0, args, r, sizeof(r));
+        printf("%s\n", r);
+    }
+    else if (strcmp(line, "wifi_clear") == 0) {
+        static char r[256]; r[0] = '\0';
+        cmd_wifi_clear(0, args, r, sizeof(r));
+        printf("%s\n", r);
+    }
     else if (strcmp(line, "logger_start") == 0) {
         connection_manager_logger_start();
         printf("logger started\n");

@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "cJSON.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

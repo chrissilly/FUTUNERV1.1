@@ -13,6 +13,7 @@
 #include "vin_pair_commands.h"
 #include "sbf_commands.h"
 #include "phase2_hil_preflight_commands.h"
+#include "wifi_commands.h"
 
 const command_def_t COMMAND_REGISTRY[] = {
     {"pair_ecu", "Pair with current ECU", CMD_SECURITY_UNSECURED, cmd_pair_ecu},
@@ -25,9 +26,16 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"list_commands", "List all available commands", CMD_SECURITY_UNSECURED, cmd_list_commands},
     {"get_errors", "Get error log history", CMD_SECURITY_UNSECURED, cmd_get_errors},
     {"clear_errors", "Clear error log", CMD_SECURITY_SECURED, cmd_clear_errors},
-    {"wifi_connect", "Join external WiFi (saves to NVS)", CMD_SECURITY_UNSECURED, cmd_wifi_connect},
-    {"wifi_disconnect", "Drop STA, clear saved creds", CMD_SECURITY_SECURED, cmd_wifi_disconnect},
-    {"wifi_status", "STA connection state + IP", CMD_SECURITY_UNSECURED, cmd_wifi_status},
+    /* Legacy WiFi commands — kept intact pending P-24 (UI/cloud migrate
+     * to the new wifi_sta_set / wifi_mode / wifi_clear surface). */
+    {"wifi_connect", "Join external WiFi (saves to NVS) — LEGACY, see wifi_sta_set/wifi_mode", CMD_SECURITY_UNSECURED, cmd_wifi_connect},
+    {"wifi_disconnect", "Drop STA, clear saved creds — LEGACY, see wifi_clear", CMD_SECURITY_SECURED, cmd_wifi_disconnect},
+    /* New WiFi mode-intent surface (2026-05-17). wifi_status replaced
+     * with cmd_wifi_status2's richer response shape; auth tier unchanged. */
+    {"wifi_status", "WiFi mode + STA association snapshot", CMD_SECURITY_UNSECURED, cmd_wifi_status2},
+    {"wifi_sta_set", "Store STA SSID + password (no radio change)", CMD_SECURITY_SECURED, cmd_wifi_sta_set},
+    {"wifi_mode", "Set WiFi mode intent (ap|sta); AP always stays up", CMD_SECURITY_SECURED, cmd_wifi_mode},
+    {"wifi_clear", "Forget STA creds and force AP-only intent", CMD_SECURITY_SECURED, cmd_wifi_clear},
     {"logger_start", "Begin logger polling", CMD_SECURITY_UNSECURED, cmd_logger_start},
     {"logger_stop", "Pause logger polling", CMD_SECURITY_UNSECURED, cmd_logger_stop},
     {"fs_info", "Get filesystem information", CMD_SECURITY_SECURED, cmd_fs_info},

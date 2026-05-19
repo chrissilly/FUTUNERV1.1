@@ -107,7 +107,7 @@ esp_err_t can_driver_start(void) {
             (status.state == TWAI_STATE_RECOVERING) ? "RECOVERING" :
             (status.state == TWAI_STATE_STOPPED) ? "STOPPED" : "?";
         ESP_LOGI(TAG, "CAN driver started: TWAI state=%s (%lu)",
-                 state_name, status.state);
+                 state_name, (unsigned long)status.state);
     } else {
         ESP_LOGI(TAG, "CAN driver started (twai_get_status_info unavailable)");
     }
@@ -170,16 +170,20 @@ esp_err_t can_driver_send(uint32_t id, const uint8_t *data, uint8_t len) {
         twai_status_info_t status;
         if (twai_get_status_info(&status) == ESP_OK) {
             ESP_LOGE(TAG, "CAN TX fail: %s | state=%lu tx_err=%lu rx_err=%lu tx_fail=%lu arb_lost=%lu bus_err=%lu",
-                     esp_err_to_name(err), status.state, status.tx_error_counter,
-                     status.rx_error_counter, status.tx_failed_count,
-                     status.arb_lost_count, status.bus_error_count);
+                     esp_err_to_name(err),
+                     (unsigned long)status.state,
+                     (unsigned long)status.tx_error_counter,
+                     (unsigned long)status.rx_error_counter,
+                     (unsigned long)status.tx_failed_count,
+                     (unsigned long)status.arb_lost_count,
+                     (unsigned long)status.bus_error_count);
         } else {
             ESP_LOGE(TAG, "Failed to transmit CAN message: %s", esp_err_to_name(err));
         }
         return err;
     }
 
-    ESP_LOGD(TAG, "Transmitted CAN ID: 0x%03lX, len: %d", id, len);
+    ESP_LOGD(TAG, "Transmitted CAN ID: 0x%03lX, len: %d", (unsigned long)id, len);
     return ESP_OK;
 }
 
