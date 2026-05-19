@@ -71,6 +71,8 @@ set(app_sources
     "flash/mdg1_aes_mbedtls.c"
     "flash/mdg1_flash_orchestrator.c"
     "flash/mdg1_flash.c"
+    "flash/mdg1_crc.c"
+    "flash/sa2_vm.c"
     "flash/phase2_hil_autostart.c"
 )
 
