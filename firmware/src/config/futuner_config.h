@@ -28,10 +28,11 @@
  * Proposed default — needs approval from Sean before lock.
  */
 #ifndef FUTUNER_PHASE2_ENABLED
-/* HIL preflight bench build — flipped to 1 to compile in the Phase 2
- * flash path + phase2_hil_preflight serial command. Revert to 0 before
- * any customer firmware build. */
-#define FUTUNER_PHASE2_ENABLED 1
+/* Phase 1 customer-firmware build — default 0 per the file's own comment
+ * above. Phase 2 bench builds should pass `idf.py build
+ * -DFUTUNER_PHASE2_ENABLED=1` explicitly rather than relying on this
+ * default. Restored 2026-05-17 (PC). */
+#define FUTUNER_PHASE2_ENABLED 0
 #endif
 
 #endif // FUTUNER_CONFIG_H

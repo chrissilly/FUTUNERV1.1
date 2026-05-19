@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""CAN sniffer for candleLight on macOS - patches gs_usb to skip kernel driver detach."""
+"""CAN sniffer for candleLight (Canable v1.1, gs_usb firmware). Works on macOS and Linux/WSL2.
+
+On Linux, the kernel's gs_usb module will claim the device by default. This script
+detaches the kernel driver in find_candlelight() so pyusb can open the device directly.
+
+If `lsusb` shows the device but the script can't open it, you have a permissions
+problem. Fastest fix: run with `sudo`. Permanent fix: install a udev rule giving
+your user (or the `plugdev` group) write access to 1d50:606f. Example udev rule
+in /etc/udev/rules.d/99-candlelight.rules:
+
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", MODE="0666"
+
+Then `sudo udevadm control --reload-rules && sudo udevadm trigger`.
+"""
 import sys
 import time
 import struct
@@ -29,9 +42,24 @@ PID = 0x606F
 def find_candlelight():
     dev = usb.core.find(idVendor=VID, idProduct=PID)
     if not dev:
-        print("ERROR: candleLight not found")
+        print("ERROR: candleLight not found (VID:PID 1d50:606f)")
+        print("Check: lsusb | grep 1d50  -- device must be visible")
+        print("If you see it but find() returns None, you likely need sudo or a udev rule")
         sys.exit(1)
-    dev.set_configuration()
+    # On Linux/WSL2 the gs_usb kernel module may have claimed the device.
+    # Detach it so pyusb can open the interface directly. No-op on macOS.
+    try:
+        if dev.is_kernel_driver_active(0):
+            dev.detach_kernel_driver(0)
+    except (NotImplementedError, usb.core.USBError) as e:
+        print(f"Note: kernel-driver detach skipped: {e}", file=sys.stderr)
+    try:
+        dev.set_configuration()
+    except usb.core.USBError as e:
+        print(f"ERROR: set_configuration failed: {e}", file=sys.stderr)
+        print("Likely a permissions problem. Try `sudo python3 tools/can_sniff.py ...`", file=sys.stderr)
+        print("Or install the udev rule (see comment block at top of file).", file=sys.stderr)
+        sys.exit(1)
     return dev
 
 def set_bittiming(dev, channel=0):

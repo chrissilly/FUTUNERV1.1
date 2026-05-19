@@ -726,6 +726,101 @@ flag without needing AP-client interaction.
 
 ---
 
+## P-28 🔴 WOT logger recorder init returns rc=258 — feature 1 never registers (NEW 2026-05-17)
+
+Filed during Phase 1 smoke test on PC (2026-05-17). Surfaced by Tier 2 `wot_log_start` returning `{"error":"feature id 1 is not registered","active_feature":"none"}`.
+
+Boot log shows:
+```
+E (898) WOT_LOG: recorder init rc=258
+W (898) MAIN: WOT logger init failed (non-fatal): rc=258
+```
+
+`MAIN` flags this non-fatal, so the dongle boots fine, but the consequence is that `FEATURE_WOT_LOGGING` (id 1) never registers with `feature_manager`. Every `wot_log_start` request fails. This blocks:
+
+- Tier 2c (WOT log capture + cloud upload)
+- Tier 2h (cloud-network-feature-blocks-wifi-mode-swap safety net) — the only registered cloud feature left is `FEATURE_VIN_PAIRING`, but vin_pair_now exits too quickly to exercise the 2h interlock
+- Any field-customer use of WOT log capture on this firmware build
+
+The numeric rc=258 is decimal 0x102 = `ESP_ERR_INVALID_ARG` in IDF's error space (after mapping). Real root cause likely lives in `firmware/src/logger/wot_recorder.c::wot_recorder_init` — failing on a precondition check (NVS namespace? PSRAM allocation? Filesystem partition? Already-init?). Pre-existing from before this session — this prompt didn't touch the logger.
+
+**Closes when:** boot log shows `WOT_LOG: recorder init OK` and `wot_log_start` over WS returns `{"ok":true,"feature":"wot_logger"}` with `wifi_mode ap` mid-active returning `{"ok":false,"error":"feature_active"}`.
+
+Owner reviews. Don't act on this prompt — beyond scope (Phase 1 smoke test).
+
+---
+
+## P-27 🟡 Replace pyusb-direct `tools/can_sniff.py` with python-can / SocketCAN backend (NEW 2026-05-17)
+
+Filed during Phase 1 smoke test on PC (2026-05-17).
+
+`tools/can_sniff.py` talks to the Candlelight via raw pyusb control transfers, which means we have to detach the kernel `gs_usb` module on Linux/WSL2 before the script can open the device (or run the script with `sudo`). This is fragile and duplicates what the kernel already does well.
+
+The right architecture is `python-can` against the SocketCAN interface (`can0`):
+- Leverage the kernel's gs_usb driver (already loaded on WSL2 / native Linux)
+- One-liner Python API: `can.interface.Bus(channel='can0', bustype='socketcan')`
+- Works alongside `candump`, `cansend`, and the rest of can-utils without contention
+- No more `sudo rmmod gs_usb` / `sudo python3 ...` gymnastics
+- macOS doesn't have SocketCAN; we'd keep the pyusb path as a fallback (or rely on `can.interface.Bus(channel='gs_usb', bustype='gs_usb')` if that backend lands cross-platform)
+
+Don't act on this prompt — track for a future tooling-cleanup pass.
+
+**Closes when:** `tools/can_sniff.py` (or its successor) uses python-can / SocketCAN on Linux and the pyusb-direct path is removed or marked macOS-only.
+
+---
+
+## P-26 🔴 Boot-time auto-connect: post-launch UX review for upgrade scenario (NEW 2026-05-17)
+
+Filed during Phase 1 smoke test on PC (2026-05-17). Surfaced by the boot-gate fix landed this session.
+
+The boot-time STA auto-connect now consults `wifi_get_mode_intent()`. Default-when-NVS-missing is `APSTA` so a firmware upgrade onto a customer dongle with existing stored creds preserves the legacy auto-reconnect behavior. That's correct for upgrades.
+
+Open UX question: when a fresh-out-of-box dongle (no creds, no intent) boots, the default intent is APSTA but with no creds nothing happens — fine. But if the operator sets creds via `wifi_sta_set` (which doesn't change intent) and reboots, the dongle auto-connects on the default-APSTA intent. That might or might not be what the customer wants. Worth a doc + spec review before the next customer firmware rev.
+
+Owner reviews. Don't act on this prompt.
+
+---
+
+## P-25 🟡 Review WS auth posture now that server is always-listening on STA netif (NEW 2026-05-17)
+
+Filed during Phase 1 smoke test on PC (2026-05-17). Surfaced by the WS-always-on patch landed this session.
+
+Pre-2026-05-17, the WS server started only on first AP client. STA-side exposure was effectively gated by that interaction. This session lifted the gate: `wifi_ap_start()` now starts the WS server unconditionally so over-LAN tooling (this smoke test's Tier 2) and headless setup work.
+
+The existing `unlock` command + per-fd `authenticated_clients[]` table from `command_handler.c` was designed against an LAN-trusted AP-side surface. With STA-side reach now opened on every boot, the auth posture should be re-reviewed:
+
+- Is `unlock <password>` rate-limited tightly enough? Current limit: 5 attempts then 30 s lockout. STA-side attackers have unlimited retry windows from outside the dongle's AP.
+- Should SECURED commands require an additional layer (cert pinning, IP allowlist, signed nonce)?
+- Should the WS server bind only to specific interfaces if a "lockdown" NVS flag is set?
+- P-20 (admin password hardcoded `"futuner_admin_2024"`) was acceptable when only AP-side clients could reach the WS. Moves up in priority now.
+
+Don't act on this prompt — track for a security-pass that touches first-boot UX (alongside P-19, P-20).
+
+**Closes when:** owner has signed off on the STA-exposed auth posture or landed mitigations.
+
+---
+
+## P-24 🟡 Deprecate `wifi_connect` / `wifi_disconnect` after UI + cloud migrate (NEW 2026-05-17)
+
+**Filed during the WiFi mode-control prompt (PC, 2026-05-17).**
+
+The new WiFi command surface (`wifi_sta_set` + `wifi_mode {ap|sta}` + `wifi_clear`) makes the legacy `wifi_connect` / `wifi_disconnect` commands redundant. Per owner direction this prompt leaves both legacy commands intact and registered, because:
+
+- `ui/control_panel.js::wifiStaConnect` / `wifiStaDisconnect` call them directly.
+- First-boot pairing relies on `wifi_connect` being `CMD_SECURITY_UNSECURED` (the customer has no admin password yet).
+
+**Closes when:**
+
+1. The UI is updated to call `wifi_sta_set` + `wifi_mode sta` in place of `wifi_connect`, and `wifi_clear` in place of `wifi_disconnect`.
+2. The cloud-side first-boot flow is reviewed for any direct callers (search the cloud repo for `"command":"wifi_connect"` and `"command":"wifi_disconnect"`).
+3. After both 1 and 2 are green for at least one full firmware release in customer hands, the `wifi_connect` / `wifi_disconnect` registry entries and their handlers in `commands/system_commands.c` are removed.
+
+**Do not act on this item in the current prompt.** Filed for visibility only.
+
+P-24 numbering avoids collision with P-18..P-23 referenced informally in `HANDOFF_TO_PC.md` (the next sequential number in this file is P-18, but those slots are conceptually used elsewhere — owner to renumber if desired).
+
+---
+
 ## P-17 🔴 Doc-cleanup: CAN pin assignments in HIL preflight + HW reference docs (NEW 2026-05-12)
 
 **Two doc inconsistencies surfaced during Step A wiring of `mdg1_transport_can.c`.**
