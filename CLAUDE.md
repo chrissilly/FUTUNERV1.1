@@ -62,6 +62,19 @@ All data here is SRM proprietary intellectual property. Do not exfiltrate, do no
 
 Keep individual files focused on a single responsibility. If a file exceeds ~500 lines, that's a smell — propose a split before continuing.
 
+### 7. CLI references in docs must be `--help`-verified
+
+Any document (handoff, runbook, README, etc.) that invokes a CLI tool MUST be verified against the tool's actual `--help` output before commit. Two production-blocking incidents (`tools/srm` and `tools/can_sniff.py` flag vapor, both 2026-05-19) traced to docs that referenced surfaces that didn't exist.
+
+Mechanical check (do this in your head before any doc commit that adds a CLI invocation):
+
+1. Run `<cli> --help` and read the output.
+2. Every flag your doc uses must appear in `--help` with matching semantics.
+3. If the doc requires a flag that doesn't exist, you have two choices:
+   (a) add the flag to the CLI and verify, or
+   (b) rewrite the doc to use flags that exist.
+   NEVER commit a doc that references vapor.
+
 ---
 
 ## Repository layout
