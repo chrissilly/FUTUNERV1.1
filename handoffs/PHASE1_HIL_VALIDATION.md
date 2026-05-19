@@ -315,7 +315,7 @@ PHASE 1 — Two-phase baseline (passive 0-frame + active >=2-frame)
   visible traffic would NO-GO a perfectly healthy car. The prior
   single-phase ">100 frames in 5s passive" assumption was empirically
   invalidated on 2026-05-19: 0 frames in a 5s strict sniff, but 64
-  frames over the next 15s after a single TesterPresent provocation.
+  frames over the next 15s after a single session-provoking command.
   The new contract verifies BOTH conditions: bus is quiet on its
   own (catches renegade broadcasters / leftover sessions) AND
   responds when prodded (catches dead bus / wrong bittiming / bad
@@ -334,8 +334,11 @@ PHASE 1 — Two-phase baseline (passive 0-frame + active >=2-frame)
     ghost CAN host on the bus. HALT and surface to owner.
 
   PHASE 1b — Active snapshot (assert keepalive engages)
-    Single TesterPresent provocation, then sniff for 3 seconds:
-      python3 tools/ws_driver.py uds_tester_present   # one shot via WS
+    Single session-provoking WS command, then sniff for 3 seconds.
+    Provoke via dtc_read (TesterPresent isn't in the WS command
+    surface; dtc_read opens a UDS session and yields the same
+    keepalive witness on 0x7E0/0x7E8):
+      python3 tools/ws_driver.py --host <dongle-ip> --script dtc_read
       timeout 3 python3 tools/can_sniff.py \
         --out firmware/test/hil_phase1/captures/baseline_active.candump \
         --timestamp \
@@ -343,8 +346,9 @@ PHASE 1 — Two-phase baseline (passive 0-frame + active >=2-frame)
         --watch-for-anomalies \
         --tee
     (Same macOS `timeout` note as above.)
-    ASSERT: frame count >= 2 (one 3E 00 request + one 7E 00 response
-    minimum; expect 8-12 frames at ~4 Hz keepalive over 3s if the
+    ASSERT: frame count >= 2 (one 19 02 dtc-read request + one 59 02
+    positive response minimum; expect additional 3E 00 / 7E 00 keepalive
+    pairs at ~4 Hz over 3s if the
     dongle holds the session open). Three-stream witness verified:
     WS-driven request reflected in wire capture.
   - Pass: 1a quiet, 1b >=2 frames, no anomaly-watch hits in either.
@@ -368,11 +372,15 @@ authorizes factory-reset)
 PHASE 3 — Feature manager arbitration
   - Host sanity gate:
       SKIP_IDF_BUILD=1 bash firmware/test/feature_manager/eval.sh
-  - Manual layer: start feature A via WS (e.g., sbf_load —
-    wot_log_start would fail per P-28). Verify UI shows A
-    running, attempt to start feature B, verify warning + clean
-    stop of A before B starts, UI reflects each transition, wire
-    shows no overlapping UDS traffic from A and B.
+  - Manual layer: start feature A via WS (e.g., live_tune_start —
+    wot_log_start would fail per P-28). live_tune_start takes
+    params {stage, ethanol_pct} per firmware/src/commands/sbf_commands.c;
+    use a known-safe test SBF stage:
+      python3 tools/ws_driver.py --host <dongle-ip> --script \
+        'live_tune_start {"stage":1,"ethanol_pct":0}'
+    Verify UI shows A running, attempt to start feature B, verify
+    warning + clean stop of A before B starts, UI reflects each
+    transition, wire shows no overlapping UDS traffic from A and B.
   - Pass: WS + UI + wire all agree on state transitions; no
     "both active" state ever appears.
 

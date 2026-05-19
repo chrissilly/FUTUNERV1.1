@@ -87,6 +87,20 @@ Mechanical check (do this in your head before any "the doc is wrong, fix the doc
 
 Today's incident (2026-05-19): the HIL handoff doc was rewritten 3× against thin `ws_driver.py` / `tools/srm` / `tools/can_sniff.py` surfaces before anyone checked git history. The right sequence — check history first, restore-or-rewrite second — costs ~5 minutes; the wrong sequence cost ~3 cycles. The lesson sits next to Rule 7 because the two together form the doc-vs-code-surface discipline: Rule 7 catches new vapor at commit time, Rule 8 prevents regressed surfaces from being papered over with doc rewrites.
 
+### 9. WS command names in docs must match firmware registry
+
+Every WS command name a doc invokes (`handoffs/`, `docs/`, `README.md`) must appear in `firmware/src/commands/commands.c` `COMMAND_REGISTRY[]` before commit. This is the WS-command equivalent of Rule 7's `--help`-verify for CLI flags. Rules 7+8+9 together form the doc-vs-code-surface discipline: Rule 7 catches new CLI-flag vapor, Rule 8 prevents regressed surfaces from being papered over, Rule 9 catches WS-command vapor.
+
+Mechanical check:
+
+```
+grep -oE '"[a-z_]+",' firmware/src/commands/commands.c | tr -d '",' | sort -u
+```
+
+Cross-reference with every command name the doc invokes via `ws_driver.py --script <name>` or equivalent. Doc author writes against the actual registry, not an imagined one.
+
+Today's incident (2026-05-19): pre-HIL gate caught `uds_tester_present` in Phase 1b and `sbf_load` in Phase 3 of `handoffs/PHASE1_HIL_VALIDATION.md` — both vapor. Same class as REG-1..7 but on the WS-command surface instead of CLI flags. Fixes: `uds_tester_present` → `dtc_read` (provokes session, wire-witnesses identically); `sbf_load` → `live_tune_start` (the actual registered command name).
+
 ---
 
 ## Repository layout
