@@ -49,7 +49,7 @@ The host running Claude Code needs:
 
 ## What "pass" means
 
-All three streams agree per phase: WS log + UI display + Candlelight wire capture all consistent. No frames on disallowed CAN IDs throughout. No gateway lockout. Battery above 13 V at start and end. 9 prior eval gates green before AND after.
+All three streams agree per phase: WS log + UI display + Candlelight wire capture all consistent. No frames on disallowed CAN IDs throughout. No gateway lockout. Battery above 13 V at start and end. 10 host eval checks green before AND after (9 eval.sh gates + wifi_manager host_test_runner binary).
 
 Three-stream agreement is the actual contract. The dongle's own claims via WS are not enough — Candlelight is the independent wire witness, the UI is the independent display witness, and the WS log is the control-plane evidence. If any one disagrees with the other two, that phase fails.
 
@@ -109,7 +109,7 @@ Handoff state:
   vin_pairing, sbf live tune, ui, ethanol BLE bridge, ethanol
   live-update constraints + rev limiter safety, wifi_manager (mode
   intent control).
-- All 9 prior eval gates green at HEAD; Phase 2 orchestrator built
+- All 10 host eval checks green at HEAD (9 eval.sh + wifi_manager binary); Phase 2 orchestrator built
   but OFF by default (FUTUNER_PHASE2_ENABLED=0).
 - Dongle MAC, ECU box code (4K0907557G__0003), VIN on file in
   secrets/ + variant manifest.
@@ -150,9 +150,14 @@ You are responsible for flashing the dongle.
 
   2. Flash the dongle:
        bash firmware/flash.sh
-     (firmware/flash.sh defaults to FUTUNER_PHASE2_ENABLED=0 via
-      the config header default. If you have any doubt, pass
-      `-DFUTUNER_PHASE2_ENABLED=0` explicitly.)
+     (FUTUNER_PHASE2_ENABLED defaults to 0 in
+      firmware/src/config/futuner_config.h. If you have any doubt,
+      verify with:
+        grep -nE '^#define FUTUNER_PHASE2_ENABLED' \
+            firmware/src/config/futuner_config.h
+      Expect: `#define FUTUNER_PHASE2_ENABLED 0`. Overriding requires
+      `idf.py build -DFUTUNER_PHASE2_ENABLED=1` — flash.sh does NOT
+      take a -D flag.)
      - Print the git rev hash before flashing:
          git rev-parse HEAD > /tmp/flash_rev.txt
        and append to today's status log.
@@ -165,11 +170,17 @@ You are responsible for flashing the dongle.
        If you see a Phase 2 banner, abort the validation —
        wrong build flashed.
 
-  3. Verify dongle is reachable post-flash:
-       python3 tools/ws_driver.py status
-       — should print firmware build info, VIN pairing state,
-         currently registered features.
-       — If WOT_LOGGING is NOT in the feature list, that's P-28
+  3. Verify dongle is reachable post-flash (dongle is in AP mode at
+     192.168.10.1 — join its AP SSID first if you haven't paired it
+     to STA yet):
+       python3 tools/ws_driver.py --host 192.168.10.1 \
+           --script get_status --script list_commands
+       — `get_status` should print firmware build info, VIN pairing
+         state, and currently registered features.
+       — `list_commands` enumerates the WS command surface so you can
+         confirm the build matches expectations.
+       — If `wot_log_start` does NOT appear in `list_commands` output
+         (or `get_status` lists no WOT_LOGGING feature), that's P-28
          showing itself. Note it; Phase 5 will be marked
          expected-fail.
 
@@ -178,7 +189,7 @@ STEP 2 — Pre-validation regression baseline
 ==========================================================
 
   Before touching the car, prove no regressions by running all
-  9 host eval gates:
+  10 host eval checks (9 eval.sh gates + wifi_manager binary):
 
     cd ~/esp/obd/FUTV1.1
     for g in firmware/test/feature_manager/eval.sh \
@@ -194,14 +205,15 @@ STEP 2 — Pre-validation regression baseline
       SKIP_IDF_BUILD=1 bash "$g" || echo "FAIL: $g"
     done
 
-  Note: the wifi_manager eval.sh requires bash 4+ (P-33). To run
-  it on stock macOS:
-    ./firmware/test/wifi_manager/host_test_runner
-  (Bypasses the wrapper; the test binary itself runs clean.)
+    # wifi_manager eval.sh requires bash 4+ (P-33). On stock macOS
+    # bash 3.2, bypass the wrapper and run the host_test_runner binary
+    # directly — it is the authoritative check.
+    echo "=== firmware/test/wifi_manager/host_test_runner ==="
+    ./firmware/test/wifi_manager/host_test_runner \
+        || echo "FAIL: wifi_manager/host_test_runner"
 
-  Must print all 9 gates as PASS plus wifi_manager binary PASS.
-  Any FAIL → halt, surface. Don't proceed to hardware until the
-  codebase regression-baseline is clean.
+  Must print all 10 checks as PASS. Any FAIL → halt, surface. Don't
+  proceed to hardware until the codebase regression-baseline is clean.
 
 ==========================================================
 STEP 3 — Hardware preconditions
@@ -250,13 +262,19 @@ STREAM A — Candlelight continuous sniff:
 
 STREAM B — UI browser observation:
   - UI must be open in a browser tab on the same network device
-  - For each phase, capture the UI state as evidence:
-      * Via WS state-stream subscription (preferred — structured
-        JSON, easy to diff against expected). Use
-        python3 tools/ws_driver.py subscribe --state-stream
-        to mirror UI state to disk.
-      * Or via screenshot if the WS state isn't capturable
-        (fallback)
+  - For each phase, capture the UI state as evidence by polling
+    the dongle's status snapshot commands and tee'ing them to disk:
+      python3 tools/ws_driver.py --host <dongle-ip> \
+          --script get_status \
+          --script license_status \
+          --script wifi_status \
+          --script live_tune_status \
+          > firmware/test/hil_phase1/ui_state/phase_${N}_${FEATURE}_${WHEN}.json
+    Repeat the snapshot before-phase / during-phase / after-phase.
+    ws_driver.py has no built-in subscription mode; it streams sends
+    + responses to stdout per-command, which is what you redirect.
+    Fallback: browser screenshot if a snapshot command isn't covering
+    the UI surface you need.
   - Per-phase: snapshot before phase starts, snapshot during,
     snapshot after. Save to
     firmware/test/hil_phase1/ui_state/phase_<N>_<feature>_<when>.json
@@ -267,8 +285,13 @@ STREAM B — UI browser observation:
 STREAM C — Dongle WS command/response log:
   - All WS commands you send + all responses received get logged to
     firmware/test/hil_phase1/logs/ws_session_${TS}.jsonl
-  - Use tools/ws_driver.py with its --log flag (or pipe its output
-    into the file).
+  - ws_driver.py streams every send + response to stdout in the
+    format `# WS send: ...` / `< <reply>`. Redirect stdout to the
+    session log:
+      python3 tools/ws_driver.py --host <dongle-ip> --script <cmd> \
+          >> firmware/test/hil_phase1/logs/ws_session_${TS}.jsonl 2>&1
+    (ws_driver.py has no --log flag; redirection is the supported
+    pattern. Use `tee -a` if you want stdout + file simultaneously.)
   - This is your control-plane evidence: what you asked the dongle
     to do, what it said back.
 
@@ -284,11 +307,47 @@ analyzer slice the continuous capture per-phase.
 Each per-phase eval-gate invocation uses the corresponding host
 test as a sanity layer before exercising the wire:
 
-PHASE 1 — Passive baseline
-  - Already running (continuous sniff started in Step 4).
-  - Just verify: at least 1 frame seen in continuous capture
-    in the first 5 seconds. Confirms wiring + key state.
-  - Pass: frames seen, no anomaly-watch hits.
+PHASE 1 — Two-phase baseline (passive 0-frame + active >=2-frame)
+
+  Two-phase because the VAG MLB/MQB diagnostic CAN trunk is SILENT
+  until provoked — the C8 J533 gateway does NOT broadcast on the
+  diagnostic bus unprovoked, so a "passive baseline" that requires
+  visible traffic would NO-GO a perfectly healthy car. The prior
+  single-phase ">100 frames in 5s passive" assumption was empirically
+  invalidated on 2026-05-19: 0 frames in a 5s strict sniff, but 64
+  frames over the next 15s after a single TesterPresent provocation.
+  The new contract verifies BOTH conditions: bus is quiet on its
+  own (catches renegade broadcasters / leftover sessions) AND
+  responds when prodded (catches dead bus / wrong bittiming / bad
+  splitter leg).
+
+  PHASE 1a — Passive snapshot (assert quiet bus)
+    timeout 2 python3 tools/can_sniff.py \
+      --out firmware/test/hil_phase1/captures/baseline_passive.candump \
+      --timestamp \
+      --allow 7E0,7E8 \
+      --watch-for-anomalies
+    (macOS note: `timeout` is GNU; substitute `--duration 2` and drop
+     the timeout wrapper, OR `brew install coreutils` for gtimeout.)
+    ASSERT: frame count == 0. Any frames here indicate a renegade
+    broadcaster, leftover diagnostic session from a prior tool, or
+    ghost CAN host on the bus. HALT and surface to owner.
+
+  PHASE 1b — Active snapshot (assert keepalive engages)
+    Single TesterPresent provocation, then sniff for 3 seconds:
+      python3 tools/ws_driver.py uds_tester_present   # one shot via WS
+      timeout 3 python3 tools/can_sniff.py \
+        --out firmware/test/hil_phase1/captures/baseline_active.candump \
+        --timestamp \
+        --allow 7E0,7E8 \
+        --watch-for-anomalies \
+        --tee
+    (Same macOS `timeout` note as above.)
+    ASSERT: frame count >= 2 (one 3E 00 request + one 7E 00 response
+    minimum; expect 8-12 frames at ~4 Hz keepalive over 3s if the
+    dongle holds the session open). Three-stream witness verified:
+    WS-driven request reflected in wire capture.
+  - Pass: 1a quiet, 1b >=2 frames, no anomaly-watch hits in either.
 
 PHASE 2 — VIN pairing (only if dongle is unpaired or owner
 authorizes factory-reset)
@@ -393,7 +452,7 @@ STEP 6 — Session teardown and analysis
      T=X±100ms)
   4. Verify per-phase UI snapshots agree with WS responses
   5. Verify battery voltage at end > 13.0 V
-  6. Re-run the 9 host eval gates from Step 2 to confirm no
+  6. Re-run the 10 host eval checks from Step 2 to confirm no
      regression after the on-car session.
 
 ==========================================================
@@ -401,7 +460,7 @@ Acceptance criteria
 ==========================================================
 
 - Correct firmware flashed: HEAD git rev, Phase 2 disabled
-- All 9 prior eval gates PASS pre-hardware AND post-hardware
+- All 10 host eval checks PASS pre-hardware AND post-hardware (9 eval.sh + wifi_manager binary)
 - Phases 1–8: each PASS, or N/A (with reason). Phase 5 is
   expected N/A per P-28.
 - Three-stream agreement at every phase that runs: WS log + UI
@@ -437,7 +496,7 @@ Print:
   Phase 1 HIL validation — YYYY-MM-DD HH:MM
   ==========================================
   Firmware flashed:                  HEAD <git-rev>, Phase 2 OFF
-  Pre-flight (env + 9 gates):        PASS/FAIL
+  Pre-flight (env + 10 checks):      PASS/FAIL
   Continuous sniff started:          PASS/FAIL
   Anomaly watch hits:                <count> (zero is the goal)
   Phase 1 — passive baseline:        PASS/FAIL
