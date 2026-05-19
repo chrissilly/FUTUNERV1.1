@@ -763,6 +763,21 @@ W (898) MAIN: WOT logger init failed (non-fatal): rc=258
 
 The numeric rc=258 is decimal 0x102 = `ESP_ERR_INVALID_ARG` in IDF's error space (after mapping). Real root cause likely lives in `firmware/src/logger/wot_recorder.c::wot_recorder_init` — failing on a precondition check (NVS namespace? PSRAM allocation? Filesystem partition? Already-init?). Pre-existing from before this session — this prompt didn't touch the logger.
 
+**Root cause confirmed 2026-05-19 (Mac):** Init order in `firmware/src/main.c::app_main()` calls `wot_logger_init()` (line ~161) **before** any logger profile is loaded.
+
+1. `wot_logger_init()` → `snapshot_logger_profile()` (wot_logger.c:252)
+2. `snapshot_logger_profile()` → `logger_manager_get_variable_count()` (wot_logger.c:177)
+3. At boot, no profile loaded → returns 0
+4. `wot_recorder_init(cfg.variables_per_sample = 0)` → guard at `wot_recorder.c:291-293` fails → ESP_ERR_INVALID_ARG = 258
+5. Error propagates → `s_initialized` stays false → feature never registers with feature_manager
+
+**Fix options** (all > 20 lines or API-contract changes — not inline-fixable):
+- Defer `wot_logger_register_with_feature_manager()` to a callback fired after profile load (lifecycle change, ~50 lines + new hook in logger_profile.c)
+- Relax `wot_recorder_init`'s zero-vars guard, add reconfigure path on first start (API contract change)
+- Pre-load a default profile at boot before `wot_logger_init` (hacky — leaks UX coupling into init)
+
+Owner reviews. **Phase 5 of HIL validation is expected-fail until P-28 closes.**
+
 **Closes when:** boot log shows `WOT_LOG: recorder init OK` and `wot_log_start` over WS returns `{"ok":true,"feature":"wot_logger"}` with `wifi_mode ap` mid-active returning `{"ok":false,"error":"feature_active"}`.
 
 Owner reviews. Don't act on this prompt — beyond scope (Phase 1 smoke test).

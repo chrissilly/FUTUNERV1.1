@@ -1,14 +1,14 @@
 # FUTUNER Phase 1 — HIL Validation Handoff
 
-> Pickup doc for `rabbit@sillyrabbitmotorsport`'s Claude account. No prior session context required. This file is self-contained: it explains the validation scope, the setup the host machine needs, and the paste-ready prompt the Claude agent should execute.
+> Paste-ready prompt for executing Phase 1 hardware-in-loop validation against a real keyed-on MDG1 vehicle (dev RS7 or another paired car). Self-contained — no prior session context needed.
 
 ---
 
 ## Context
 
-You are picking up Phase 1 hardware-loop validation of the FUTUNER aftermarket ECU tuning dongle against a dev RS7 (or any keyed-on MDG1 vehicle the dongle has been paired with). Phase 1 features have already been built, eval-gated, and shadow-validated by the primary development session. Your job is to exercise the dongle's Phase 1 surfaces against real silicon, triangulating WebSocket commands, real-time Candlelight wire capture, and live UI observation to prove the three streams agree.
+You are picking up Phase 1 hardware-loop validation of the FUTUNER aftermarket ECU tuning dongle. Phase 1 features have already been built, eval-gated, and shadow-validated. Your job is to exercise the dongle's Phase 1 surfaces against real silicon, triangulating WebSocket commands, real-time Candlelight wire capture, and live UI observation to prove the three streams agree.
 
-This is **read-only validation**. You do not modify any firmware C code, you do not enable Phase 2, and you do not commit anything to git. The push freeze is active workspace-wide.
+This is **read-only validation against the ECU**. You do not modify any firmware C code, you do not enable Phase 2, and you do not commit anything as part of the validation run itself.
 
 ---
 
@@ -16,14 +16,12 @@ This is **read-only validation**. You do not modify any firmware C code, you do 
 
 The host running Claude Code needs:
 
-- **OS**: macOS, Linux, or Windows-with-WSL2-Ubuntu. Avoid native Windows — the project's path conventions and tooling assume Unix.
+- **OS**: macOS or Linux. Avoid native Windows — the project's path conventions and tooling assume Unix.
 - **ESP-IDF**: version matching `firmware/sdkconfig` or `CMakeLists.txt` pin.
-- **Python 3** with: `gs_usb`, `pyserial`, `sshpass`, `requests`, `websockets`.
-- **Candlelight USB-CAN** with appropriate driver/udev rules. On WSL2, attach via `usbipd-win`.
+- **Python 3** with: `gs_usb`, `pyserial`, `requests`, `websockets`.
+- **Candlelight USB-CAN** with appropriate driver/udev rules. On Linux, gs_usb kernel module + SocketCAN preferred.
 - **Browser** (Chrome or Firefox) for the UI observation stream.
 - **Network access** to the FUTUNER cloud server (for dashboard verification) and to the dongle's local subnet (after STA pairing).
-
-Run `tools/srm doctor` first — it catches missing deps before any car-side work.
 
 ---
 
@@ -41,19 +39,38 @@ Run `tools/srm doctor` first — it catches missing deps before any car-side wor
 
 ## Files this validation will produce
 
-- `firmware/test/hil_phase1/continuous_<ts>.candump` — full-session wire capture
-- `firmware/test/hil_phase1/anomaly_watch_<ts>.log` — any frames on non-allow-listed CAN IDs
+- `firmware/test/hil_phase1/captures/continuous_<ts>.candump` — full-session wire capture
+- `firmware/test/hil_phase1/captures/anomaly_watch_<ts>.log` — any frames on non-allow-listed CAN IDs
 - `firmware/test/hil_phase1/ui_state/phase_<N>_<feature>_<when>.json` — UI snapshots per phase
-- `firmware/test/hil_phase1/ws_session_<ts>.jsonl` — dongle WebSocket command/response log
+- `firmware/test/hil_phase1/logs/ws_session_<ts>.jsonl` — dongle WebSocket command/response log
 - Today's `status-YYYY-MM-DD.md` and `file-update-YYYY-MM-DD.md` at the workspace root, with the chip report appended
 
 ---
 
 ## What "pass" means
 
-All three streams agree per phase: WS log + UI display + Candlelight wire capture all consistent. No frames on disallowed CAN IDs throughout. No gateway lockout. Battery above 13 V at start and end. 8 prior eval gates green before AND after.
+All three streams agree per phase: WS log + UI display + Candlelight wire capture all consistent. No frames on disallowed CAN IDs throughout. No gateway lockout. Battery above 13 V at start and end. 9 prior eval gates green before AND after.
 
 Three-stream agreement is the actual contract. The dongle's own claims via WS are not enough — Candlelight is the independent wire witness, the UI is the independent display witness, and the WS log is the control-plane evidence. If any one disagrees with the other two, that phase fails.
+
+---
+
+## Prerequisites (one-time, before dispatch)
+
+Run these once on the host machine before starting the validation prompt:
+
+```bash
+cd ~/esp/obd/FUTV1.1
+mkdir -p firmware/test/hil_phase1/{ui_state,captures,logs}
+chmod +x firmware/build.sh firmware/flash.sh firmware/monitor.sh
+```
+
+---
+
+## Known open issues that affect this validation
+
+- **P-28 (open):** WOT logger feature 1 fails to register at boot because no logger profile is loaded before `wot_logger_init()` runs. **Phase 5 of this validation is EXPECTED-FAIL until P-28 closes.** Do not interpret Phase 5 failure as a regression; cross-reference `docs/PHASE_2_PREREQUISITES.md` P-28 root-cause section and skip Phase 5 with `N/A — blocked on P-28` in the chip report.
+- **P-33 (open, low):** `firmware/test/wifi_manager/eval.sh` requires bash 4+ for `declare -A`. macOS stock bash 3.2 fails the wrapper but the underlying `host_test_runner` binary passes all assertions. Either install bash via brew (`brew install bash`) or invoke the test binary directly: `./firmware/test/wifi_manager/host_test_runner`.
 
 ---
 
@@ -72,7 +89,7 @@ to pass.
 Context bootstrap (read in this order)
 ==========================================================
 
-- ~/esp/obd/CLAUDE.md   (workspace router; PUSH FREEZE active)
+- ~/esp/obd/CLAUDE.md   (workspace router)
 - ~/esp/obd/FUTV1.1/CLAUDE.md   (hard rules: CAN ID 0x7E0/0x7E8
                                   only, ON/OFF discipline, no magic
                                   numbers, mandatory status logs)
@@ -80,21 +97,24 @@ Context bootstrap (read in this order)
 - ~/esp/obd/FUTV1.1/docs/CLAUDE_CODE_VALIDATE_DONGLE.md
 - ~/esp/obd/FUTV1.1/docs/CLAUDE_CODE_FLASH_ONLY.md   (dongle flash
                                   procedure)
-- ~/esp/obd/FUTV1.1/docs/CLAUDE_CODE_BUILD_SRM_CLI.md   (the
-                                  tools/srm CLI consolidated all
-                                  validation phases)
-- ~/esp/obd/FUTV1.1/tools/srm/
+- ~/esp/obd/FUTV1.1/docs/PHASE_2_PREREQUISITES.md   (P-items, including
+                                  P-28 which blocks Phase 5 of this
+                                  validation)
 - ~/esp/obd/FUTV1.1/tools/can_sniff.py --help
+- ~/esp/obd/FUTV1.1/tools/ws_driver.py --help
 - ~/esp/obd/FUTV1.1/firmware/src/commands/commands.c
 
 Handoff state:
 - Phase 1 features all shipped: feature_manager, wot_logger, dtc,
   vin_pairing, sbf live tune, ui, ethanol BLE bridge, ethanol
-  live-update constraints + rev limiter safety.
-- All 8 prior Phase 1 eval gates green at HEAD; Phase 2
-  orchestrator built but OFF by default.
+  live-update constraints + rev limiter safety, wifi_manager (mode
+  intent control).
+- All 9 prior eval gates green at HEAD; Phase 2 orchestrator built
+  but OFF by default (FUTUNER_PHASE2_ENABLED=0).
 - Dongle MAC, ECU box code (4K0907557G__0003), VIN on file in
   secrets/ + variant manifest.
+- main is the integration branch. PRs welcome but not required for
+  small fixes; commit directly with a descriptive message.
 
 ==========================================================
 Absolute rules (carry through every step)
@@ -104,13 +124,12 @@ Absolute rules (carry through every step)
   any other ID outside the normal boot-up window — STOP and
   surface. C8 J533 gateway lockout pattern (persistent timeouts,
   NRC 0x10, NRC 0x12) — STOP, key off, wait 10+ minutes, retry.
-- Phase 2 stays OFF. Build with FUTUNER_PHASE2_ENABLED=0.
-  Do NOT invoke tools/srm capture or tools/srm flash with
-  Phase 2 enabled.
+- Phase 2 stays OFF. Build with FUTUNER_PHASE2_ENABLED=0
+  (this is the default).
 - Battery > 13.0 V required before any wire activity. Verify
   before AND after each phase.
-- No firmware C changes. No cloud server changes. No commits.
-  Push freeze is active workspace-wide.
+- No firmware C changes as part of the validation run itself.
+  (The session that closes P-28 is separate from this one.)
 - Mandatory progress logs: append to
   ~/esp/obd/status-YYYY-MM-DD.md and
   ~/esp/obd/file-update-YYYY-MM-DD.md.
@@ -121,50 +140,68 @@ Absolute rules (carry through every step)
 STEP 1 — Build and flash the validation firmware
 ==========================================================
 
-You are responsible for flashing the dongle. Don't ask the owner
-to do it manually — that's why tools/srm flash exists.
+You are responsible for flashing the dongle.
 
-  1. tools/srm doctor
-       - Verify env (ESP-IDF, pyserial, gs_usb, sshpass, network
-         reach to cloud server). Any FAIL → halt, surface.
+  1. Sanity-check the toolchain by doing a clean host build first:
+       cd ~/esp/obd/FUTV1.1
+       bash firmware/build.sh
+     Watch for any compile errors. If anything fails, halt and
+     surface — don't try to push past a broken build.
 
-  2. tools/srm flash
-       - Build args: FUTUNER_PHASE2_ENABLED=0 (Phase 1 only; this
-         is the default but pass it explicitly so the build is
-         deterministic across machines)
-       - Source: HEAD of FUTV1.1/
-       - Target: dongle on the OBD-II port via USB-Serial (or
-         OTA if pre-paired and reachable; tools/srm flash decides)
-       - Print the git rev hash and build hash to status log
-         before flashing
-       - Watch the serial boot log post-flash; expect:
-           "FUTUNER vX.Y.Z (Phase 1 build, Phase 2 disabled)"
-           "feature_manager initialized"
-           "(no Phase 2 banner)"
-         If you see a Phase 2 banner, abort the validation —
-         wrong build flashed.
+  2. Flash the dongle:
+       bash firmware/flash.sh
+     (firmware/flash.sh defaults to FUTUNER_PHASE2_ENABLED=0 via
+      the config header default. If you have any doubt, pass
+      `-DFUTUNER_PHASE2_ENABLED=0` explicitly.)
+     - Print the git rev hash before flashing:
+         git rev-parse HEAD > /tmp/flash_rev.txt
+       and append to today's status log.
+     - Watch the serial boot log post-flash via:
+         bash firmware/monitor.sh
+       Expect:
+         "FUTUNER vX.Y.Z (Phase 1 build, Phase 2 disabled)"
+         "feature_manager initialized"
+         "(no Phase 2 banner)"
+       If you see a Phase 2 banner, abort the validation —
+       wrong build flashed.
 
   3. Verify dongle is reachable post-flash:
-       - tools/srm status
-       - Should show: firmware build hash matches HEAD, Phase 2
-         disabled, VIN pairing state (paired/unpaired)
-       - If running build doesn't match HEAD's expected hash,
-         tools/srm flash didn't take — halt and surface.
+       python3 tools/ws_driver.py status
+       — should print firmware build info, VIN pairing state,
+         currently registered features.
+       — If WOT_LOGGING is NOT in the feature list, that's P-28
+         showing itself. Note it; Phase 5 will be marked
+         expected-fail.
 
 ==========================================================
 STEP 2 — Pre-validation regression baseline
 ==========================================================
 
-  Before touching the car, prove no regressions:
+  Before touching the car, prove no regressions by running all
+  9 host eval gates:
 
-  tools/srm validate --eval-gates-only
+    cd ~/esp/obd/FUTV1.1
+    for g in firmware/test/feature_manager/eval.sh \
+             firmware/test/wot_logger/eval.sh \
+             firmware/test/dtc/eval.sh \
+             firmware/test/vin_pairing/eval.sh \
+             firmware/test/sbf/eval.sh \
+             firmware/test/ui/eval.sh \
+             firmware/test/mdg1_payload/eval.sh \
+             firmware/test/can_capture/eval.sh \
+             firmware/test/mdg1_flash_orchestrator/eval.sh; do
+      echo "=== $g ==="
+      SKIP_IDF_BUILD=1 bash "$g" || echo "FAIL: $g"
+    done
 
-  Must print all 8 gates as PASS:
-    feature_manager / wot_logger / dtc / vin_pairing / sbf / ui
-    / mdg1_payload / mdg1_flash_orchestrator
+  Note: the wifi_manager eval.sh requires bash 4+ (P-33). To run
+  it on stock macOS:
+    ./firmware/test/wifi_manager/host_test_runner
+  (Bypasses the wrapper; the test binary itself runs clean.)
 
-  Any FAIL → halt, surface. Don't proceed to hardware until
-  the codebase regression-baseline is clean.
+  Must print all 9 gates as PASS plus wifi_manager binary PASS.
+  Any FAIL → halt, surface. Don't proceed to hardware until the
+  codebase regression-baseline is clean.
 
 ==========================================================
 STEP 3 — Hardware preconditions
@@ -193,18 +230,19 @@ Before any phase runs, start ALL THREE monitoring streams in
 parallel. They run for the entire validation session.
 
 STREAM A — Candlelight continuous sniff:
-  tools/can_sniff.py --filter 0x7E0 0x7E8 \
+  TS=$(date +%Y%m%d_%H%M%S)
+  python3 tools/can_sniff.py --filter 0x7E0 0x7E8 \
       --timestamp \
-      > firmware/test/hil_phase1/continuous_<session_ts>.candump &
+      --out firmware/test/hil_phase1/captures/continuous_${TS}.candump &
   SNIFF_PID=$!
 
   - Don't filter to anything narrower; we want to see everything
     on the diagnostic IDs throughout the session
   - Also start a parallel UNFILTERED sniff at low priority that
     flags any frame on a non-allow-listed ID:
-      tools/can_sniff.py --watch-for-anomalies \
+      python3 tools/can_sniff.py --watch-for-anomalies \
         --allow 0x7E0,0x7E8,<vehicle-bus-IDs-from-baseline> \
-        > firmware/test/hil_phase1/anomaly_watch_<session_ts>.log &
+        --out firmware/test/hil_phase1/captures/anomaly_watch_${TS}.log &
     ANOMALY_PID=$!
     If this writer prints anything during a phase — STOP that
     phase, surface to owner. Possible gateway probe, tool
@@ -214,7 +252,9 @@ STREAM B — UI browser observation:
   - UI must be open in a browser tab on the same network device
   - For each phase, capture the UI state as evidence:
       * Via WS state-stream subscription (preferred — structured
-        JSON, easy to diff against expected)
+        JSON, easy to diff against expected). Use
+        python3 tools/ws_driver.py subscribe --state-stream
+        to mirror UI state to disk.
       * Or via screenshot if the WS state isn't capturable
         (fallback)
   - Per-phase: snapshot before phase starts, snapshot during,
@@ -226,9 +266,11 @@ STREAM B — UI browser observation:
 
 STREAM C — Dongle WS command/response log:
   - All WS commands you send + all responses received get logged to
-    firmware/test/hil_phase1/ws_session_<session_ts>.jsonl
+    firmware/test/hil_phase1/logs/ws_session_${TS}.jsonl
+  - Use tools/ws_driver.py with its --log flag (or pipe its output
+    into the file).
   - This is your control-plane evidence: what you asked the dongle
-    to do, what it said back
+    to do, what it said back.
 
 ==========================================================
 STEP 5 — Per-phase validation
@@ -239,6 +281,9 @@ marker (echo "# PHASE N START <ts>" >> the candump file, do the
 phase, echo "# PHASE N END <ts>"). This lets the post-session
 analyzer slice the continuous capture per-phase.
 
+Each per-phase eval-gate invocation uses the corresponding host
+test as a sanity layer before exercising the wire:
+
 PHASE 1 — Passive baseline
   - Already running (continuous sniff started in Step 4).
   - Just verify: at least 1 frame seen in continuous capture
@@ -247,7 +292,9 @@ PHASE 1 — Passive baseline
 
 PHASE 2 — VIN pairing (only if dongle is unpaired or owner
 authorizes factory-reset)
-  - If already paired: skip. Note in report.
+  - Host sanity gate:
+      SKIP_IDF_BUILD=1 bash firmware/test/vin_pairing/eval.sh
+  - If already paired: skip on-car phase. Note in report.
   - If unpaired: walk the AP→STA→server flow per MISSION_SPEC §1.1
     * Verify dongle's AP SSID appears
     * Phone joins AP, enters STA creds
@@ -260,36 +307,45 @@ authorizes factory-reset)
     "paired to VIN <X>" + wire showed exactly one VIN read.
 
 PHASE 3 — Feature manager arbitration
-  - tools/srm validate --phase feature_manager
-  - Manual layer: start feature A via WS, verify UI shows A
+  - Host sanity gate:
+      SKIP_IDF_BUILD=1 bash firmware/test/feature_manager/eval.sh
+  - Manual layer: start feature A via WS (e.g., sbf_load —
+    wot_log_start would fail per P-28). Verify UI shows A
     running, attempt to start feature B, verify warning + clean
     stop of A before B starts, UI reflects each transition, wire
-    shows no overlapping UDS traffic from A and B
+    shows no overlapping UDS traffic from A and B.
   - Pass: WS + UI + wire all agree on state transitions; no
-    "both active" state ever appears
+    "both active" state ever appears.
 
 PHASE 4 — DTC read/clear
-  - tools/srm validate --phase dtc
+  - Host sanity gate:
+      SKIP_IDF_BUILD=1 bash firmware/test/dtc/eval.sh
   - Wire check: read uses 0x19 only, clear uses 0x14 only
   - Round-trip: read → display in UI → clear (with owner
     confirmation if real DTCs present) → re-read empty
   - Pass: wire matches expected services exactly, UI shows DTC
     list pre-clear and empty post-clear, WS log matches
 
-PHASE 5 — WOT logger
-  - tools/srm validate --phase wot_logger
-  - Synthetic trigger only unless owner authorizes engine-on
-    real WOT pull
-  - Verify: 60s hard cap enforced, log gzipped locally (~3-4KB),
-    uploaded to cloud, local file deleted on cloud confirm
-  - Three-stream agreement: WS shows log lifecycle, UI shows
-    "logging" indicator + "uploaded" + "purged", wire shows
-    expected UDS reads (RPM, throttle, boost, AFR, etc.)
-  - Cloud verification: log appears in dashboard, VIN-associated,
-    all expected parameters present
+PHASE 5 — WOT logger  ⚠️ EXPECTED-FAIL per P-28
+  - DO NOT treat failure here as a regression. P-28 documents
+    the known boot-init-order issue that prevents feature_id=1
+    (FEATURE_WOT_LOGGING) from registering. Until P-28 closes,
+    wot_log_start will return
+    {"error":"feature id 1 is not registered","active_feature":"none"}.
+  - Action: mark Phase 5 as "N/A — blocked on P-28" in the chip
+    report. Note the rc=258 boot log line if visible (confirms
+    the same root cause). Don't waste cycles trying to exercise
+    the rest of the WOT lifecycle.
+  - Host sanity gate (still useful — confirms the host harness
+    side is sound even if the firmware side regresses):
+      SKIP_IDF_BUILD=1 bash firmware/test/wot_logger/eval.sh
+    Must still pass at the host level — that's testing the
+    recorder/uploader unit logic in isolation, not the
+    feature-manager registration path.
 
 PHASE 6 — SBF live tune + ethanol constraints
-  - tools/srm validate --phase sbf
+  - Host sanity gate:
+      SKIP_IDF_BUILD=1 bash firmware/test/sbf/eval.sh
   - Load a known test SBF (stage_one.sbf), select E50
   - Verify RAM updates complete in 1.5–2 s window (timestamp
     from WS, confirmed against wire capture)
@@ -303,7 +359,8 @@ PHASE 6 — SBF live tune + ethanol constraints
   - Three-stream agreement across all five checks
 
 PHASE 7 — UI / WebSocket live gauges
-  - tools/srm validate --phase ui
+  - Host sanity gate:
+      SKIP_IDF_BUILD=1 bash firmware/test/ui/eval.sh
   - UI already open from Step 4. Verify each gauge populates
     with live ECU data:
       RPM, boost, AFR, ignition timing, coolant temp, IAT,
@@ -324,7 +381,7 @@ PHASE 8 — Ethanol BLE bridge OR manual fallback
 STEP 6 — Session teardown and analysis
 ==========================================================
 
-  1. Kill continuous sniff: kill $SNIFF_PID $ANOMALY_PID
+  1. Kill continuous sniffs: kill $SNIFF_PID $ANOMALY_PID
   2. Parse the continuous candump:
        - Count frames per CAN ID — must be ONLY 0x7E0/0x7E8 plus
          baseline-allowed vehicle bus IDs
@@ -336,17 +393,19 @@ STEP 6 — Session teardown and analysis
      T=X±100ms)
   4. Verify per-phase UI snapshots agree with WS responses
   5. Verify battery voltage at end > 13.0 V
+  6. Re-run the 9 host eval gates from Step 2 to confirm no
+     regression after the on-car session.
 
 ==========================================================
 Acceptance criteria
 ==========================================================
 
-- Correct firmware flashed: HEAD git rev, Phase 2 disabled,
-  build hash matches HEAD
-- All 8 prior eval gates PASS pre-hardware
-- Phases 1–8: each PASS or explicitly N/A (with reason)
-- Three-stream agreement at every phase: WS log + UI state +
-  wire capture all consistent
+- Correct firmware flashed: HEAD git rev, Phase 2 disabled
+- All 9 prior eval gates PASS pre-hardware AND post-hardware
+- Phases 1–8: each PASS, or N/A (with reason). Phase 5 is
+  expected N/A per P-28.
+- Three-stream agreement at every phase that runs: WS log + UI
+  state + wire capture all consistent
 - No frames on disallowed CAN IDs throughout session
   (continuous capture is the witness)
 - No anomaly-watch hits
@@ -356,17 +415,14 @@ Acceptance criteria
   watch
 - UI state snapshots archived per phase
 - WS session log archived
-- No commits, no Phase 2 activation, no firmware C changes
 
 ==========================================================
 Forbidden
 ==========================================================
 
 - Building with FUTUNER_PHASE2_ENABLED=1
-- Invoking tools/srm capture or tools/srm flash --phase2
 - Any UDS service that writes flash (0x34, 0x36, 0x37)
 - Clearing real DTCs without owner confirmation
-- Any commit, push, or branch creation
 - Sending any captured log, .bin, or wire trace to a remote
   service that isn't the existing FUTUNER cloud server
 - Killing the continuous sniff before the validation completes
@@ -381,15 +437,14 @@ Print:
   Phase 1 HIL validation — YYYY-MM-DD HH:MM
   ==========================================
   Firmware flashed:                  HEAD <git-rev>, Phase 2 OFF
-  Build hash:                        <hash>
-  Pre-flight (env + 8 gates):        PASS/FAIL
+  Pre-flight (env + 9 gates):        PASS/FAIL
   Continuous sniff started:          PASS/FAIL
   Anomaly watch hits:                <count> (zero is the goal)
   Phase 1 — passive baseline:        PASS/FAIL
   Phase 2 — VIN pairing:             PASS/FAIL/SKIP-already-paired
   Phase 3 — feature manager:         PASS/FAIL
   Phase 4 — DTC read/clear:          PASS/FAIL
-  Phase 5 — WOT logger:              PASS/FAIL
+  Phase 5 — WOT logger:              N/A — blocked on P-28
   Phase 6 — SBF + ethanol constraints: PASS/FAIL  (5/5 sub-checks)
   Phase 7 — UI live gauges:          PASS/FAIL
   Phase 8 — ethanol BLE / fallback:  PASS/FAIL/N-A
@@ -398,20 +453,20 @@ Print:
   Gateway lockout events:            <count> (zero is the goal)
   Battery start / end:               <V> / <V>
   Anomalies:                         <list or "none">
+  Post-hardware 9-gate sweep:        PASS/FAIL
 
   Output files:
-    firmware/test/hil_phase1/continuous_<ts>.candump
-    firmware/test/hil_phase1/anomaly_watch_<ts>.log
+    firmware/test/hil_phase1/captures/continuous_<ts>.candump
+    firmware/test/hil_phase1/captures/anomaly_watch_<ts>.log
     firmware/test/hil_phase1/ui_state/phase_<N>_<feature>_<when>.json
-    firmware/test/hil_phase1/ws_session_<ts>.jsonl
-    (one per phase)
+    firmware/test/hil_phase1/logs/ws_session_<ts>.jsonl
 
 Append the chip report block to today's
 status-YYYY-MM-DD.md under "## Phase 1 HIL validation" and a
 per-file delta block to file-update-YYYY-MM-DD.md (only the
 captures + logs — no secrets, no code changes).
 
-Hand back. Don't commit.
+Hand back.
 
 Ask the owner BEFORE you proceed if anything is unclear,
 particularly: (a) factory-reset for Phase 2 VIN pairing test or
@@ -434,4 +489,5 @@ Proceed.
 - Expected duration: 1–3 hours depending on whether VIN pairing needs to be re-walked and whether the ethanol sensor is in scope.
 - If anything goes sideways (gateway lockout, dongle bricks, unexpected wire traffic), the agent will halt and surface — don't expect it to push through. Halting is the correct behavior.
 - The output files all land under `firmware/test/hil_phase1/`. After the session, those can be shared back to the primary development session for review.
-- Push freeze is active workspace-wide; the agent is instructed not to commit. If you see it staging or committing, that's a bug and worth interrupting.
+- **Phase 5 (WOT logger) is expected to fail until P-28 closes.** That's a documented known issue, not a regression introduced by the validation run.
+- Treat `main` as the integration branch; commits are welcome but not required for the validation run itself. The validator-agent's job is to exercise + report, not to merge fixes.
