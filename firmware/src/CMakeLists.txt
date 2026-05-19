@@ -36,6 +36,7 @@ set(app_sources
     "commands/flex_commands.c"
     "commands/can_sniffer.c"
     "commands/serial_console.c"
+    "commands/wifi_commands.c"
     "commands/wot_log_commands.c"
     "commands/dtc_commands.c"
     "commands/vin_pair_commands.c"

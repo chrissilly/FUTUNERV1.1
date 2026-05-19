@@ -1757,6 +1757,26 @@ function onWifiDisconnectResp(msg){
   }
 }
 
+/* wifi_manager (ddfb677): credential-store, mode-intent, and clear.
+ * All three are CMD_SECURITY_SECURED per commands.c, so they gate on
+ * `authenticated` first — same pattern as setAuthToken above. */
+function wifiStaSet(){
+  if (!authenticated){ toast('Authenticate first','error'); return; }
+  const ssid = document.getElementById('staSSID').value.trim();
+  const password = document.getElementById('staPassword').value;
+  if (!ssid){ toast('Enter SSID','error'); return; }
+  wsSend({command:'wifi_sta_set', params:{ssid:ssid, password:password}});
+}
+function wifiMode(mode){
+  if (!authenticated){ toast('Authenticate first','error'); return; }
+  if (mode !== 'ap' && mode !== 'sta'){ toast('Mode must be ap|sta','error'); return; }
+  wsSend({command:'wifi_mode', params:{mode:mode}});
+}
+function wifiClear(){
+  if (!authenticated){ toast('Authenticate first','error'); return; }
+  wsSend({command:'wifi_clear'});
+}
+
 /* =========================================================================
  * List Commands
  * ========================================================================= */
