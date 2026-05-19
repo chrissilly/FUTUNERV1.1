@@ -53,6 +53,38 @@ void mdg1_transport_shadow_close(mdg1_uds_transport_t *iface);
  */
 void mdg1_transport_shadow_set_seed(mdg1_uds_transport_t *iface, uint32_t seed_be);
 
+/*
+ * Overwrite the synthesized F1 5B response's most-recent entry
+ * (entry[0]) with `fingerprint_9b`. Used by host tests that want to
+ * exercise the "our tool wrote this last" branch of the F1 5B
+ * detection logic. The pointer must remain valid only for the duration
+ * of this call — the bytes are copied into the shadow context.
+ * Calling with NULL is a no-op.
+ */
+void mdg1_transport_shadow_set_prog_history_top(mdg1_uds_transport_t *iface,
+                                                const uint8_t *fingerprint_9b);
+
+/*
+ * Arm the shadow to emit `count` 7F <sid> 78 (RCRRP) pending negative
+ * responses for the next `count` requests with service-ID `sid`, BEFORE
+ * the normal positive/negative response is produced.
+ *
+ * Used by tests that exercise the orchestrator's pending-loop handling
+ * (NRC_ERROR_HANDLING_AUDIT.md Critical Finding #1). For example, to
+ * model MM's observed 2× 7F 11 78 before the final 51 01 on the dev-RS7
+ * ECUReset, call:
+ *     mdg1_transport_shadow_inject_pending(&iface, MDG1_UDS_SID_ECU_RESET, 2);
+ *
+ * Effects compound across multiple calls: a second call with count=N
+ * replaces an existing slot for the same SID (does not add). A call
+ * with count <= 0 clears the slot. Slots are independent across SIDs.
+ *
+ * Capacity is MDG1_SHADOW_PENDING_INJECT_SLOTS — calls beyond that
+ * silently no-op when no free slot is available.
+ */
+void mdg1_transport_shadow_inject_pending(mdg1_uds_transport_t *iface,
+                                          uint8_t sid, int count);
+
 #ifdef __cplusplus
 }
 #endif

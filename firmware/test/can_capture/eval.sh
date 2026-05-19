@@ -242,11 +242,49 @@ FORBIDDEN_GLOBS=(
 )
 
 if command -v git >/dev/null 2>&1 && git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    # 2026-05-17: pulled in the shared overrides mechanism the other
+    # 7 prior gates already use, so cross-cutting prompts (e.g. Phase 2
+    # orchestrator work) don't trip this gate. Each authorized prompt
+    # adds its file list to firmware/test/_shared/eval_forbidden_overrides.txt
+    # with a date + scope comment so the audit trail stays visible.
+    OVERRIDE_FILE="$PROJECT_ROOT/firmware/test/_shared/eval_forbidden_overrides.txt"
+    OVERRIDES=()
+    if [ -f "$OVERRIDE_FILE" ]; then
+        while IFS= read -r ol; do
+            ol="${ol# }"; ol="${ol% }"
+            [ -z "$ol" ] && continue
+            case "$ol" in '#'*) continue;; esac
+            OVERRIDES+=("$ol")
+        done < "$OVERRIDE_FILE"
+    fi
+    is_overridden() {
+        local p="$1"
+        for ov in "${OVERRIDES[@]}"; do
+            [ "$p" = "$ov" ] && return 0
+            case "$ov" in */) case "$p" in "$ov"*) return 0;; esac;; esac
+        done
+        return 1
+    }
     for path in "${FORBIDDEN_GLOBS[@]}"; do
-        if git -C "$PROJECT_ROOT" status --porcelain "$path" 2>/dev/null | grep -q '.'; then
-            fail "out-of-sandbox modification: $path"
-        else
+        git_lines=$(git -C "$PROJECT_ROOT" status --porcelain "$path" 2>/dev/null)
+        if [ -z "$git_lines" ]; then
             pass "untouched: $path"
+            continue
+        fi
+        unauthorized=()
+        while IFS= read -r l; do
+            [ -z "$l" ] && continue
+            rp="${l:3}"
+            case "$rp" in *' -> '*) rp="${rp#* -> }";; esac
+            if ! is_overridden "$rp"; then
+                unauthorized+=("$rp")
+            fi
+        done <<< "$git_lines"
+        if [ ${#unauthorized[@]} -eq 0 ]; then
+            pass "untouched (allowlisted): $path"
+        else
+            fail "out-of-sandbox modification: $path"
+            for u in "${unauthorized[@]}"; do echo "        unauthorized: $u"; done
         fi
     done
 else

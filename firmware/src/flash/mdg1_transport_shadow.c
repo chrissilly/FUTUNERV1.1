@@ -227,13 +227,69 @@ static char *hex_alloc_and_canon(const uint8_t *bytes, size_t len)
 /* Shadow transport context                                           */
 /* ------------------------------------------------------------------ */
 
+/* ECU session state tracked by the shadow. Mirrors the real MDG1's
+ * UDS-level state machine well enough for orchestrator gate testing:
+ *
+ *   DEFAULT    on open (or after 11 01 ECUReset)
+ *   EXTENDED   after 10 03
+ *   PROGRAMMING after 10 02
+ *
+ * The shadow rejects 27 11 SecurityAccess in DEFAULT with NRC 0x12
+ * (subFunctionNotSupportedInActiveSession) — that's what the real
+ * RS7 ECU returned during HIL Phase 3 attempt 2026-05-12, which is
+ * what caught Bug 1 (orchestrator was emitting SA without prior
+ * session-control). */
+typedef enum {
+    SHADOW_SESSION_DEFAULT = 0,
+    SHADOW_SESSION_EXTENDED,
+    SHADOW_SESSION_PROGRAMMING,
+} shadow_session_state_t;
+
+/* Per-SID pending-NRC injection counters. Each entry is independent;
+ * the shadow_recv path checks if the request's SID has a non-zero
+ * injection count, and if so emits 7F <sid> 78 (RCRRP) and decrements
+ * BEFORE producing the actual response. Used by tests that exercise
+ * the orchestrator's pending-loop handling against realistic
+ * pre-positive pending bursts. Size is the number of distinct SIDs we
+ * can model pending for in one test run. */
 typedef struct {
-    FILE                *log;          /* shadow log file */
-    response_playback_t *pb;
-    uint8_t              last_tx[MDG1_MAX_UDS_MESSAGE_BYTES];
-    size_t               last_tx_len;
-    uint32_t             security_seed_be;  /* synthesized for 27 11 response */
+    uint8_t sid;        /* 0 = unused slot */
+    int     remaining;  /* pending responses to emit before the real one */
+} pending_inject_slot_t;
+
+typedef struct {
+    FILE                  *log;          /* shadow log file */
+    response_playback_t   *pb;
+    uint8_t                last_tx[MDG1_MAX_UDS_MESSAGE_BYTES];
+    size_t                 last_tx_len;
+    uint32_t               security_seed_be;  /* synthesized for 27 11 response */
+    shadow_session_state_t session;
+    /* Synthesized F1 5B response — 9-entry rolling history. The
+     * first MDG1_PROG_FINGERPRINT_LEN bytes are entry[0] (most-recent
+     * fingerprint). Default initialization: another tool's fingerprint
+     * at entry[0] so detection returns cal_only_allowed = false. The
+     * test that exercises the "our tool wrote this last" branch
+     * overwrites entry[0] with MDG1_PROG_FINGERPRINT_BYTES via
+     * mdg1_transport_shadow_set_prog_history_top(). */
+    uint8_t                prog_history[MDG1_PROG_HISTORY_PAYLOAD_LEN];
+    /* Pending-NRC injection state. Up to MDG1_SHADOW_PENDING_INJECT_SLOTS
+     * distinct SIDs may have a pre-positive pending burst armed at any
+     * time. Tests use mdg1_transport_shadow_inject_pending() to set them
+     * up; the shadow_recv path consumes them. */
+    pending_inject_slot_t  pending_inject[MDG1_SHADOW_PENDING_INJECT_SLOTS];
 } shadow_ctx_t;
+
+/* Internal: look up the slot for `sid`. Returns NULL if no slot armed. */
+static pending_inject_slot_t *find_pending_slot(shadow_ctx_t *sx, uint8_t sid)
+{
+    for (size_t i = 0; i < MDG1_SHADOW_PENDING_INJECT_SLOTS; i++) {
+        if (sx->pending_inject[i].sid == sid &&
+            sx->pending_inject[i].remaining > 0) {
+            return &sx->pending_inject[i];
+        }
+    }
+    return NULL;
+}
 
 /* ------------------------------------------------------------------ */
 /* Response synthesis for session-variant frames                      */
@@ -244,9 +300,20 @@ static int synth_session_variant_response(shadow_ctx_t *sx,
                                           uint8_t *out, size_t out_cap)
 {
     if (req_len < 1) return -1;
-    /* SecurityAccess request seed (0x27 0x11) → 0x67 0x11 + 4-byte seed */
+    /* SecurityAccess request seed (0x27 0x11):
+     *   DEFAULT session         → 7F 27 12 (subFunctionNotSupportedInActiveSession)
+     *   EXTENDED or PROGRAMMING → 67 11 + 4-byte seed
+     * Models the real MDG1 ECU's session-gating that the orchestrator
+     * caught on 2026-05-12 (Bug 1 surface). */
     if (req_len >= 2 && req[0] == MDG1_UDS_SID_SECURITY_ACCESS &&
         req[1] == MDG1_SECURITY_LEVEL_SEED) {
+        if (sx->session == SHADOW_SESSION_DEFAULT) {
+            if (out_cap < 3) return -1;
+            out[0] = MDG1_UDS_NEGATIVE_RESPONSE;
+            out[1] = MDG1_UDS_SID_SECURITY_ACCESS;
+            out[2] = MDG1_UDS_NRC_SUBFUNCTION_NOT_SUPPORTED_IN_SESSION;
+            return 3;
+        }
         if (out_cap < 6) return -1;
         out[0] = 0x67;
         out[1] = MDG1_SECURITY_LEVEL_SEED;
@@ -256,9 +323,19 @@ static int synth_session_variant_response(shadow_ctx_t *sx,
         out[5] = (uint8_t)(sx->security_seed_be);
         return 6;
     }
-    /* SecurityAccess send key (0x27 0x12 + 4) → 0x67 0x12 */
+    /* SecurityAccess send key (0x27 0x12 + 4):
+     *   DEFAULT session         → 7F 27 12 (same gating)
+     *   EXTENDED or PROGRAMMING → 67 12 (positive ack, no payload)
+     */
     if (req_len >= 2 && req[0] == MDG1_UDS_SID_SECURITY_ACCESS &&
         req[1] == MDG1_SECURITY_LEVEL_KEY) {
+        if (sx->session == SHADOW_SESSION_DEFAULT) {
+            if (out_cap < 3) return -1;
+            out[0] = MDG1_UDS_NEGATIVE_RESPONSE;
+            out[1] = MDG1_UDS_SID_SECURITY_ACCESS;
+            out[2] = MDG1_UDS_NRC_SUBFUNCTION_NOT_SUPPORTED_IN_SESSION;
+            return 3;
+        }
         if (out_cap < 2) return -1;
         out[0] = 0x67;
         out[1] = MDG1_SECURITY_LEVEL_KEY;
@@ -298,6 +375,25 @@ static esp_err_t shadow_send(void *ctx, const uint8_t *data, size_t len)
     fprintf(sx->log, "TX %s\n", hex_buf);
     free(hex_buf);
 
+    /* Track session-state transitions on TX. The state change reflects
+     * what the *next* shadow_recv will model: a 10 02 TX shifts state
+     * to PROGRAMMING so the synth path returns the positive 50 02 (and
+     * a subsequent 27 11 sees PROGRAMMING and returns 67 11 + seed
+     * rather than the DEFAULT-session NRC).
+     *
+     * For 11 01 ECUReset we DON'T flip the state here — the ack 51 01
+     * must come back to the orchestrator with the OLD state, otherwise
+     * the orchestrator's post-reset 10 03 would already see DEFAULT.
+     * The state flip-to-DEFAULT happens in shadow_recv after the 51 01
+     * is synthesized. */
+    if (len >= 2 && data[0] == MDG1_UDS_SID_DIAG_SESSION) {
+        if (data[1] == MDG1_SESSION_EXTENDED) {
+            sx->session = SHADOW_SESSION_EXTENDED;
+        } else if (data[1] == MDG1_SESSION_PROGRAMMING) {
+            sx->session = SHADOW_SESSION_PROGRAMMING;
+        }
+    }
+
     /* Stash for the upcoming recv_response. */
     memcpy(sx->last_tx, data, len);
     sx->last_tx_len = len;
@@ -312,6 +408,33 @@ static esp_err_t shadow_recv(void *ctx, uint8_t *buf, size_t cap,
     if (!sx || !sx->log) return ESP_ERR_INVALID_STATE;
     if (!buf || !out_len) return ESP_ERR_INVALID_ARG;
     *out_len = 0;
+
+    /* (0) Pending-NRC injection. If a test has armed pending bursts for
+     * the request's SID, emit 7F <sid> 78 (RCRRP) and decrement BEFORE
+     * the normal synthesis path. The orchestrator's uds_recv_skip_pending
+     * helper loops on this and recursively calls back into shadow_recv,
+     * which eventually exhausts the injection counter and falls through
+     * to the real positive/negative response.
+     *
+     * This is the test surface for NRC_ERROR_HANDLING_AUDIT.md Critical
+     * Finding #1 — without injection, the shadow always responded
+     * positive-on-first-recv and the pending-loop bug in the orchestrator
+     * never reproduced. */
+    if (sx->last_tx_len >= 1) {
+        pending_inject_slot_t *slot = find_pending_slot(sx, sx->last_tx[0]);
+        if (slot != NULL && cap >= 3) {
+            buf[0] = MDG1_UDS_NEGATIVE_RESPONSE;
+            buf[1] = sx->last_tx[0];
+            buf[2] = MDG1_UDS_NRC_RESPONSE_PENDING;
+            *out_len = 3;
+            slot->remaining--;
+            char *hex_buf = hex_alloc_and_canon(buf, 3);
+            if (!hex_buf) return ESP_ERR_INVALID_STATE;
+            fprintf(sx->log, "RX %s\n", hex_buf);
+            free(hex_buf);
+            return ESP_OK;
+        }
+    }
 
     /* (1) Session-variant procedural response? */
     int n = synth_session_variant_response(sx, sx->last_tx, sx->last_tx_len,
@@ -346,7 +469,35 @@ static esp_err_t shadow_recv(void *ctx, uint8_t *buf, size_t cap,
             case MDG1_UDS_SID_ECU_RESET:
                 if (cap >= 2 && sx->last_tx_len >= 2) {
                     buf[0]=0x51; buf[1]=sx->last_tx[1]; n2 = 2;
+                    /* ECUReset hard takes the ECU back to DEFAULT session.
+                     * The orchestrator's post-reset code must re-establish
+                     * EXTENDED via 10 03 before the next 10 02.
+                     * Flip happens AFTER the ack synth so the wire log
+                     * carries the positive 51 01 from the OLD state. */
+                    if (sx->last_tx[1] == MDG1_RESET_HARD) {
+                        sx->session = SHADOW_SESSION_DEFAULT;
+                    }
                 }
+                break;
+            case MDG1_UDS_SID_READ_DID:
+                /* Special-case 22 F1 5B (programming history rolling log)
+                 * — synthesize from prog_history buffer so the orchestrator's
+                 * F1 5B detection logic can inspect entry[0]. Other DIDs
+                 * fall through to the playback fixture or generic READ_DID
+                 * fallback below. */
+                if (sx->last_tx_len >= 3 &&
+                    sx->last_tx[1] == (uint8_t)(MDG1_DID_PROGRAMMING_HISTORY_LOG >> 8) &&
+                    sx->last_tx[2] == (uint8_t)(MDG1_DID_PROGRAMMING_HISTORY_LOG & 0xFFu)) {
+                    if (cap >= 3 + MDG1_PROG_HISTORY_PAYLOAD_LEN) {
+                        buf[0] = 0x62;
+                        buf[1] = sx->last_tx[1];
+                        buf[2] = sx->last_tx[2];
+                        memcpy(&buf[3], sx->prog_history, MDG1_PROG_HISTORY_PAYLOAD_LEN);
+                        n2 = 3 + MDG1_PROG_HISTORY_PAYLOAD_LEN;
+                    }
+                }
+                /* All other 22 ... requests fall through to playback /
+                 * generic READ_DID fallback. */
                 break;
             case MDG1_UDS_SID_ROUTINE_CONTROL:
                 /* 71 01 <RID hi> <RID lo> 00 */
@@ -463,6 +614,15 @@ esp_err_t mdg1_transport_shadow_open(const char *out_log_path,
     shadow_ctx_t *sx = (shadow_ctx_t *)calloc(1, sizeof(*sx));
     if (!sx) return ESP_ERR_INVALID_STATE;
     sx->security_seed_be = MDG1_SHADOW_SECURITY_SEED_PLACEHOLDER;
+    sx->session = SHADOW_SESSION_DEFAULT;
+    /* Default the programming-history rolling log to a sentinel
+     * "another tool wrote this last" pattern: entry[0] is all 0xAA,
+     * entries[1..8] are all 0x00. This causes the orchestrator's F1 5B
+     * detection to return cal_only_allowed = false unless a test
+     * explicitly calls mdg1_transport_shadow_set_prog_history_top()
+     * with MDG1_PROG_FINGERPRINT_BYTES. */
+    memset(sx->prog_history, 0x00, sizeof(sx->prog_history));
+    memset(sx->prog_history, 0xAA, MDG1_PROG_FINGERPRINT_LEN);
 
     sx->log = fopen(out_log_path, "wb");
     if (!sx->log) { free(sx); return ESP_ERR_INVALID_STATE; }
@@ -495,4 +655,45 @@ void mdg1_transport_shadow_set_seed(mdg1_uds_transport_t *iface, uint32_t seed_b
     if (!iface || !iface->ctx) return;
     shadow_ctx_t *sx = (shadow_ctx_t *)iface->ctx;
     sx->security_seed_be = seed_be;
+}
+
+void mdg1_transport_shadow_set_prog_history_top(mdg1_uds_transport_t *iface,
+                                                const uint8_t *fingerprint_9b)
+{
+    if (!iface || !iface->ctx || !fingerprint_9b) return;
+    shadow_ctx_t *sx = (shadow_ctx_t *)iface->ctx;
+    /* Overwrite entry[0] only. Older entries stay zeroed (we don't
+     * model a real history chain; detection only inspects entry[0]). */
+    memcpy(sx->prog_history, fingerprint_9b, MDG1_PROG_FINGERPRINT_LEN);
+}
+
+void mdg1_transport_shadow_inject_pending(mdg1_uds_transport_t *iface,
+                                          uint8_t sid, int count)
+{
+    if (!iface || !iface->ctx) return;
+    shadow_ctx_t *sx = (shadow_ctx_t *)iface->ctx;
+    /* Look for an existing slot for this SID first (replace semantics). */
+    for (size_t i = 0; i < MDG1_SHADOW_PENDING_INJECT_SLOTS; i++) {
+        if (sx->pending_inject[i].sid == sid) {
+            if (count <= 0) {
+                sx->pending_inject[i].sid = 0;
+                sx->pending_inject[i].remaining = 0;
+            } else {
+                sx->pending_inject[i].remaining = count;
+            }
+            return;
+        }
+    }
+    if (count <= 0) return;  /* nothing to clear */
+    /* Otherwise grab the first free slot. */
+    for (size_t i = 0; i < MDG1_SHADOW_PENDING_INJECT_SLOTS; i++) {
+        if (sx->pending_inject[i].sid == 0 &&
+            sx->pending_inject[i].remaining == 0) {
+            sx->pending_inject[i].sid = sid;
+            sx->pending_inject[i].remaining = count;
+            return;
+        }
+    }
+    /* No free slot — silently no-op. Tests should never need more than
+     * MDG1_SHADOW_PENDING_INJECT_SLOTS distinct SIDs armed at once. */
 }

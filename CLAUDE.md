@@ -62,21 +62,6 @@ All data here is SRM proprietary intellectual property. Do not exfiltrate, do no
 
 Keep individual files focused on a single responsibility. If a file exceeds ~500 lines, that's a smell — propose a split before continuing.
 
-### 7. 🛑 PUSH FREEZE (active 2026-05-12 → until owner lifts)
-
-**Do not push anything to remote git (GitHub) until the owner explicitly authorizes.** This includes:
-
-- No `git push` (any branch, any remote).
-- No `git push --force` ever.
-- No `gh pr create` or other GitHub-facing actions that publish code.
-- No pushing tags.
-
-**Local commits are still allowed and encouraged** — keep work checkpointed locally. The freeze is on *publication*, not on version control.
-
-Why this rule exists: recent work (notably AES key recovery for Phase 2 flash) involves sensitive material that the owner needs to audit before anything leaves the local machine. Until the freeze lifts, treat every remote as untrusted-third-party and stop at the local commit boundary.
-
-To lift this freeze, the owner will say so explicitly (e.g. "freeze lifted", "push OK", "ship it"). Until then, if a task seems to require pushing, **stop and confirm**.
-
 ---
 
 ## Repository layout

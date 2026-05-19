@@ -23,5 +23,12 @@ ui/test/*.pyc
 tools/__pycache__/
 tools/*.pyc
 
-# Agent-task worktrees — transient runtime state, not portable.
-.claude/worktrees/
+# Agent-task worktrees + scheduler state — transient runtime, not portable.
+.claude/
+
+# External-volume mounts (drive-pulls, dongle SDcard captures, etc.)
+# never get committed via this repo.
+/Volumes/
+
+# Raw ECU binary dumps — proprietary IP per Hard Rule 5. Stay local.
+*.bin
