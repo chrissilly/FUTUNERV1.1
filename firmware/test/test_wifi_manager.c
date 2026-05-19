@@ -379,7 +379,10 @@ static void test_ws_server_starts_unconditionally_on_boot(void) {
         if (case_end != NULL) {
             char saved = *case_end;
             *((char *)case_end) = '\0';
-            bool starts_server_in_handler = strstr(handler, "ws_server_start") != NULL;
+            /* Match an actual function call `ws_server_start(`, not bare
+             * substring — a comment in the case branch may legitimately
+             * mention the name when documenting the gating removal. */
+            bool starts_server_in_handler = strstr(handler, "ws_server_start(") != NULL;
             *((char *)case_end) = saved;
             EXPECT(!starts_server_in_handler,
                    "AP_STACONNECTED handler does NOT start ws_server (gating removed)");
