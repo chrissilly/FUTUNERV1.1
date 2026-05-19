@@ -186,3 +186,22 @@ cloud/scripts/
 ui/control_panel.js
 ui/test/mock_dongle_responses.json
 firmware/futuner_control_panel.html
+
+# ---------------------------------------------------------------------
+# 2026-05-19 — Hermes merge-regression audit (post-06:05 cleanup)
+# ---------------------------------------------------------------------
+# Cross-cutting audit pass found more merge seams beyond REG-1/2/3:
+#   REG-9  add sa2_vm.c + mdg1_crc.c to CMake app_sources (latent link
+#          gap if FUTUNER_PHASE2_ENABLED=1)
+#   REG-10 remove duplicate WIFI_AP_IP #define in main.c (drift risk)
+#   REG-11 delete orphan flash_commands.{c,h} + ota/ota_update.{c,h}
+#          (file not in build, no registry entry, dead since merge)
+#   REG-4..8 HIL doc CLI vapor fixes (ws_driver.py status/subscribe/
+#          --log, flash.sh -D flag, 9 → 10 gate count)
+# Tracked surfaces touched by this prompt:
+handoffs/PHASE1_HIL_VALIDATION.md
+firmware/src/commands/flash_commands.c
+firmware/src/commands/flash_commands.h
+firmware/src/ota/ota_update.c
+firmware/src/ota/ota_update.h
+firmware/src/ota/
