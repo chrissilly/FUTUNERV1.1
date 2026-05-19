@@ -75,6 +75,18 @@ Mechanical check (do this in your head before any doc commit that adds a CLI inv
    (b) rewrite the doc to use flags that exist.
    NEVER commit a doc that references vapor.
 
+### 8. Check git history before rewriting docs to match thin surfaces
+
+If a doc references a CLI/API surface that doesn't exist in the current code, the default assumption is **NOT** "rewrite the doc." The default assumption is "the surface used to exist and got truncated by a merge / squash / lost commit." Rewriting a doc to match a regressed surface bakes in the regression.
+
+Mechanical check (do this in your head before any "the doc is wrong, fix the doc" reflex):
+
+1. `git log --all --full-history -- <tool path>` (and `--diff-filter=D` for files that may have been deleted).
+2. If a prior version had the referenced surface, **restore the tool** — that is the fix.
+3. Only rewrite the doc if history confirms the surface was always thin (i.e., the doc author was wrong, not the tool author).
+
+Today's incident (2026-05-19): the HIL handoff doc was rewritten 3× against thin `ws_driver.py` / `tools/srm` / `tools/can_sniff.py` surfaces before anyone checked git history. The right sequence — check history first, restore-or-rewrite second — costs ~5 minutes; the wrong sequence cost ~3 cycles. The lesson sits next to Rule 7 because the two together form the doc-vs-code-surface discipline: Rule 7 catches new vapor at commit time, Rule 8 prevents regressed surfaces from being papered over with doc rewrites.
+
 ---
 
 ## Repository layout

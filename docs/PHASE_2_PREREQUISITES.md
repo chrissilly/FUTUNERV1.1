@@ -956,6 +956,35 @@ See P-21. Reserved to close cross-reference gap from
 
 ---
 
+## P-29 🔴 RESERVED (NEW 2026-05-19)
+
+Gap in the P-ID sequence between P-28 (WOT logger init order) and
+P-33 (wifi_manager bash 3.2 portability). Reserved during the
+2026-05-19 Hermes audit close-out to keep the sequence dense — no
+external cross-reference yet, but reserving prevents the same
+"numbers are sticky, but the gap is confusing" smell P-21..P-23
+already had. Content TBD.
+
+---
+
+## P-30 🔴 RESERVED (NEW 2026-05-19)
+
+See P-29. Reserved during 2026-05-19 audit close-out.
+
+---
+
+## P-31 🔴 RESERVED (NEW 2026-05-19)
+
+See P-29. Reserved during 2026-05-19 audit close-out.
+
+---
+
+## P-32 🔴 RESERVED (NEW 2026-05-19)
+
+See P-29. Reserved during 2026-05-19 audit close-out.
+
+---
+
 ## P-34 🟡 UI `wifi_scan` command has no firmware handler (NEW 2026-05-19)
 
 `ui/control_panel.js:899` calls `wsSend({command:'wifi_scan'})` but no
