@@ -22,8 +22,8 @@
 
 static const char *TAG = "MAIN";
 
-#define WIFI_AP_IP "192.168.10.1"
-/* C1 fix: password removed from source — loaded from NVS at runtime */
+/* WIFI_AP_IP is defined in wifi/wifi_ap.h (included above). C1 fix:
+ * password removed from source — loaded from NVS at runtime. */
 
 #define CAN_TASK_STACK_SIZE 8192
 #define CAN_TASK_PRIORITY   5
