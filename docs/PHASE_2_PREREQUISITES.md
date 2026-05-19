@@ -886,6 +886,220 @@ as a future-hardware claim awaiting verification.
 
 ---
 
+## P-18 🟢 connection_manager silence during Phase 2 (NEW 2026-05-19, RETROACTIVE)
+
+Filed retroactively to close the orphan cross-references in
+`HANDOFF_TO_PC.md` (2026-05-12 era) that said "P-18 CLOSED — coordinator
+arbitration works." Verified: `firmware/src/isotp_coordinator/` exposes
+`ISOTP_OWNER_PHASE2_FLASH` and `connection_manager.c` correctly stays
+silent when the coordinator owner is the flash path. Closed.
+
+**Closes when:** already closed at landing time. Retained for cross-ref
+integrity from `HANDOFF_TO_PC.md:162,176`.
+
+---
+
+## P-19 🟡 Default AP password hardening (NEW 2026-05-19, RETROACTIVE)
+
+`firmware/src/config/wifi_config.h:WIFI_AP_PASSWORD_DEFAULT` is
+literally `"password"`. Filed retroactively to close the orphan
+cross-references in `wifi_config.h:49`, `HANDOFF_TO_PC.md:177,183`, and
+the (now retracted) P-25 self-reference at line 831.
+
+**Fix paths:** either (a) generate a per-device password at first boot
+from the chip MAC and surface it via a printed sticker / first-boot UX,
+or (b) gate AP-mode behind a hold-button-on-power-cycle pairing step
+that exposes the AP for a 60-second window. Decision deferred to the
+security-pass prompt; the current value is held by owner sign-off.
+
+**Closes when:** factory firmware does not ship with a known-default
+AP password.
+
+---
+
+## P-20 🟡 Admin unlock password move to NVS (NEW 2026-05-19, RETROACTIVE)
+
+The admin-tier WS `unlock` password is currently hardcoded as
+`futuner_admin_2024` in `firmware/src/commands/command_handler.c`.
+Filed retroactively to close the orphan cross-reference in
+`HANDOFF_TO_PC.md:178` and `PC_PHASE1_HANDOFF.md:249`.
+
+**Fix:** move the admin password to NVS with a per-device random
+default, surface a setter command (admin-tier only), and rotate on
+factory-reset.
+
+**Closes when:** no hardcoded admin password remains in
+`command_handler.c`.
+
+---
+
+## P-21 🔴 RESERVED (NEW 2026-05-19, RETROACTIVE)
+
+`HANDOFF_TO_PC.md:183` says "the three unfiled P-items from last night
+need proper numbering — assign P-21, P-22, P-23." The content was
+never recorded. Filed as RESERVED to close the cross-reference gap;
+contents TBD by owner.
+
+---
+
+## P-22 🔴 RESERVED (NEW 2026-05-19, RETROACTIVE)
+
+See P-21. Reserved to close cross-reference gap from
+`HANDOFF_TO_PC.md:183`.
+
+---
+
+## P-23 🔴 RESERVED (NEW 2026-05-19, RETROACTIVE)
+
+See P-21. Reserved to close cross-reference gap from
+`HANDOFF_TO_PC.md:183`.
+
+---
+
+## P-34 🟡 UI `wifi_scan` command has no firmware handler (NEW 2026-05-19)
+
+`ui/control_panel.js:899` calls `wsSend({command:'wifi_scan'})` but no
+matching entry exists in `firmware/src/commands/commands.c::COMMAND_REGISTRY`
+and no HTTP sidecar handles it. The UI Scan-for-networks button is
+currently a silent no-op. Pre-existing UI gap — predates the
+2026-05-19 audit.
+
+**Fix paths:** (a) add `cmd_wifi_scan` in `wifi_commands.c` that wraps
+`esp_wifi_scan_start` + result aggregation, register at UNSECURED tier,
+or (b) remove the UI scan affordance and document that the user
+enters SSID manually.
+
+**Closes when:** the UI Scan button either drives a real handler or is
+removed from the UI.
+
+---
+
+## P-35 🟡 UI `fs_upload` command has no firmware handler (NEW 2026-05-19)
+
+`ui/control_panel.js:1722` calls `wsSend({command:'fs_upload', path, data, size})`
+but no matching entry exists in the C registry, and `ws_server.c`
+registers no HTTP POST upload endpoint. Pre-existing UI gap.
+
+**Fix paths:** (a) add `cmd_fs_upload` that wraps `cmd_fs_write` with
+multi-chunk support (UI already does base64), or (b) add an HTTP POST
+`/upload` URI handler in `ws_server.c`, or (c) rewrite the UI's upload
+flow to chunked `fs_write` calls.
+
+**Closes when:** UI uploads work end-to-end against a stock build.
+
+---
+
+## P-36 🟡 WiFi NVS keys + AP IP triplet still in wifi_ap.h (NEW 2026-05-19)
+
+`wifi_config.h` was created to centralize wifi constants per the
+no-magic-numbers rule, but three NVS key strings (`WIFI_AP_PASSWORD_NVS_KEY`,
+`WIFI_STA_SSID_NVS_KEY`, `WIFI_STA_PASS_NVS_KEY`) and the AP IP triplet
+(`WIFI_AP_IP`, `WIFI_AP_GATEWAY`, `WIFI_AP_NETMASK`) still live in
+`firmware/src/wifi/wifi_ap.h`. Caught by the 2026-05-19 Hermes audit
+(C4).
+
+**Fix:** relocate the six defines to `wifi_config.h` (where the rest of
+the wifi tunables already live), with the same "approval before lock —
+DEFER LOCK UNTIL OWNER REVIEW" comment block.
+
+**Closes when:** `wifi_ap.h` no longer contains any behavioral
+constants; `wifi_config.h` is the single source of truth for wifi
+tunables.
+
+---
+
+## P-37 🟡 Orchestrator inline buffer-size literals (NEW 2026-05-19)
+
+`mdg1_flash_orchestrator.c` has multiple inline integer literals for
+RX/TX buffer sizes and retry budgets that should reference named
+constants in `mdg1_flash_orchestrator_config.h`:
+
+- line 83: `for (int i = 0; i < 8; i++)` — pending-loop max iterations
+- line 195: `uint8_t rx[64]` — `uds_exchange_tolerant_of_nrc` rx buffer
+- line 265: `uint8_t rx[3 + MDG1_PROG_HISTORY_PAYLOAD_LEN + 8]` — `+ 8` slop
+- line 335,569: `uint8_t rx[8]` — resync + RequestDownload rx buffers
+- line 336: `const int max_attempts = 8` — post-reset TesterPresent resync
+- line 469: `uint8_t tx[8], rx[16]` — SA exchange buffers
+- line 489,492: `0xA5A5A5A5u` — sentinel SA fallback key
+- line 590: `cap = plaintext_size + (plaintext_size / 8) + 64` — LZRB headroom
+
+Caught by 2026-05-19 Hermes audit (C5). Project rule prohibits inline
+behavioral constants.
+
+**Fix:** add named `MDG1_UDS_PENDING_MAX_ITERATIONS`, `MDG1_UDS_RX_STACK_MED_BYTES`,
+`MDG1_UDS_RESYNC_MAX_ATTEMPTS`, `MDG1_SA_TX_BYTES`, `MDG1_SA_RX_BYTES`,
+`MDG1_SA_FALLBACK_KEY_SENTINEL`, `MDG1_LZRB_HEADROOM_DIVISOR`,
+`MDG1_LZRB_HEADROOM_FIXED_BYTES` defines in
+`mdg1_flash_orchestrator_config.h` and rewire orchestrator.c.
+
+**Closes when:** no inline behavioral integer literals in
+`mdg1_flash_orchestrator.c`.
+
+---
+
+## P-38 🟡 mdg1_flash_orchestrator/eval.sh hard-depends on off-repo path (NEW 2026-05-19)
+
+`firmware/test/mdg1_flash_orchestrator/eval.sh:50-64` hard-fails if
+`/Users/rabbit/sniffer/mm_FULL_Flash.log` and the matching ECU bin are
+absent. These files are off-repo (owner's local sniffer capture
+archive) and not in the project tree. The repo only has a 4-line stub
+candump in `firmware/test/can_capture/fixtures/magicmotorsport/`.
+Result: any non-owner machine (CI, fresh clone, secondary dev box)
+cannot run sections 1, 9, 10 of this eval gate.
+
+**Fix paths:** (a) check the real MM captures into the repo (size
+permitting), or (b) check in a smaller representative slice as the
+test-pinned fixture, or (c) make `MM_CAPTURE_DIR` defaulting to the
+in-repo fixtures path with a clear "owner sets this env var to use
+their full local capture" hatch.
+
+**Closes when:** `bash firmware/test/mdg1_flash_orchestrator/eval.sh`
+runs to completion on a fresh clone on any dev machine.
+
+---
+
+## P-39 🟡 mdg1_uds_transport_t.flush is declared but never invoked (NEW 2026-05-19)
+
+`firmware/src/flash/mdg1_uds_transport.h:91-97` declares a `flush`
+function-pointer field on the transport interface with the contract
+"Called between orchestrator phases that the underlying transport
+might have queued data for." But `mdg1_flash_orchestrator.c` never
+invokes `transport->flush(...)` anywhere — the contract is signed but
+not enforced. Caught by 2026-05-19 Hermes audit (C5).
+
+**Fix paths:** either (a) wire the orchestrator to call
+`transport->flush(ctx)` between phases (specifically after ECUReset
+and before SecurityAccess re-establishment), or (b) delete the field
+and update the header contract to reflect the actual behavior.
+
+**Closes when:** the header contract and the orchestrator behavior are
+in sync.
+
+---
+
+## P-40 🟡 Orchestrator preflight_ecureset_and_resync silently drops NRCs (NEW 2026-05-19)
+
+`mdg1_flash_orchestrator.c::preflight_ecureset_and_resync` (around
+line 337-343) loops `uds_exchange` calls; if `pe != ESP_OK` OR
+`rx[0] != 0x7E`, the result is silently dropped (no early return inside
+the loop, no `MDG1_FLASH_PHASE_NRC_RECEIVED` progress event). Only the
+outer `ESP_ERR_TIMEOUT` is surfaced. Caught by 2026-05-19 Hermes audit
+(C5).
+
+This is the same class of bug that `NRC_ERROR_HANDLING_AUDIT.md`
+identified for the post-SA flash phases (Bug 2 surface), but the
+preflight resync loop was overlooked.
+
+**Fix:** route the resync loop through `uds_exchange_strict` (or a
+new `uds_exchange_strict_with_expected_response_byte` helper for the
+`rx[0] == 0x7E` case) so non-pending NRCs fire the
+`MDG1_FLASH_PHASE_NRC_RECEIVED` progress event and bail.
+
+**Closes when:** the resync loop surfaces NRCs the same way the
+post-SA phases do.
+
+---
+
 ## Update protocol
 
 When you close an item out, change its emoji to 🟢 and add a one-line
