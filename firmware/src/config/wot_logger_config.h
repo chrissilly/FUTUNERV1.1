@@ -124,7 +124,7 @@
  *
  * Locked 2026-05-05.
  */
-#define WOT_UPLOAD_DEFAULT_HOST             "https://api.sillyrabbitmotorsport.com"
+#define WOT_UPLOAD_DEFAULT_HOST             "https://sillyrabbitmotorsport.com/fut"
 
 /*
  * HTTP status code lower/upper bounds that count as a successful

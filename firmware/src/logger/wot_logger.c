@@ -10,6 +10,7 @@
 #  include "freertos/FreeRTOS.h"
 #  include "freertos/task.h"
 #  include "esp_http_client.h"
+#  include "esp_crt_bundle.h"
 #  include "wifi/wifi_ap.h"
 #  include "logger/logger_manager.h"
 #  include "nvs/nvs_manager.h"
@@ -69,9 +70,10 @@ static int target_http_post(const char    *url,
                             void          *user_ctx) {
     (void)user_ctx;
     esp_http_client_config_t cfg = {
-        .url = url,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = (int)timeout_ms,
+        .url               = url,
+        .method            = HTTP_METHOD_POST,
+        .timeout_ms        = (int)timeout_ms,
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (client == NULL) {

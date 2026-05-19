@@ -20,7 +20,7 @@
  *
  * Proposed default — needs approval from Sean before lock.
  */
-#define LICENSE_DEFAULT_HOST                    "https://api.sillyrabbitmotorsport.com"
+#define LICENSE_DEFAULT_HOST                    "https://sillyrabbitmotorsport.com/fut"
 
 /*
  * Path components appended to the configured host. Per

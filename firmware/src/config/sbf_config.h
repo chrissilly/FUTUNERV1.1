@@ -71,7 +71,7 @@
  *
  * Proposed default — needs approval from Sean before lock.
  */
-#define SBF_DEFAULT_HOST                    "https://api.sillyrabbitmotorsport.com"
+#define SBF_DEFAULT_HOST                    "https://sillyrabbitmotorsport.com/fut"
 
 /*
  * HTTP request timeout (ms) for the SBF download. Larger than the
