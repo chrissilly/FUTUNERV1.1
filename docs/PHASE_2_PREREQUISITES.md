@@ -726,6 +726,25 @@ flag without needing AP-client interaction.
 
 ---
 
+## P-33 🟡 `wifi_manager/eval.sh` bash 3.2 portability (NEW 2026-05-19)
+
+**Severity:** Medium (test-tooling, not product)
+**Found:** 2026-05-19, during phase1 merge sanity check on Mac
+**File:** `firmware/test/wifi_manager/eval.sh`
+
+The eval wrapper uses `declare -A` (associative arrays), which is bash 4+ only. macOS default bash is 3.2 (Apple stopped updating after GPLv3). Tests themselves pass via the `host_test_runner` binary; only the `eval.sh` wrapper fails to load on stock macOS.
+
+**Fix options:**
+- Rewrite using parallel indexed arrays (portable across bash 3.2 / 4+)
+- Add `#!/usr/bin/env bash` + document `brew install bash` requirement
+- Migrate eval logic to a Python wrapper (consistent with other `tools/`)
+
+Don't act on this prompt — owner reviews.
+
+**Closes when:** `bash firmware/test/wifi_manager/eval.sh` runs to completion and exits 0 on stock macOS bash 3.2 without needing brew bash.
+
+---
+
 ## P-28 🔴 WOT logger recorder init returns rc=258 — feature 1 never registers (NEW 2026-05-17)
 
 Filed during Phase 1 smoke test on PC (2026-05-17). Surfaced by Tier 2 `wot_log_start` returning `{"error":"feature id 1 is not registered","active_feature":"none"}`.
