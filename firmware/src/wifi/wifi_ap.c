@@ -43,6 +43,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
         sta_connected = true;
         sta_retry_count = 0;
         ESP_LOGI(TAG, "STA connected — IP: %s", sta_ip_str);
+        /* P-44: httpd binds to current netifs at start time. STA netif
+         * comes up after boot's wifi_ap_start → ws_server_start, leaving
+         * STA-side port 80 = TCP RST. Stop + restart here so httpd rebinds
+         * to AP + STA. ws_server_stop is idempotent. */
+        ws_server_stop();
+        ws_server_start();
         return;
     }
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
