@@ -41,6 +41,16 @@
 #define DTC_UDS_POSITIVE_OFFSET               0x40
 #define DTC_UDS_NEGATIVE_RESPONSE             0x7F
 
+/* NRC byte for RequestCorrectlyReceived-ResponsePending. ECU emits
+ * 7F <sid> 78 while it's working on a long-running request; the client
+ * must keep waiting for the eventual non-pending response per ISO 14229. */
+#define DTC_UDS_NRC_RESPONSE_PENDING          0x78
+
+/* P2*_server extended response window (ms) per ISO 14229 §7.2 — the
+ * max time the ECU may keep emitting NRC 0x78 before the final response.
+ * Used to bound the pending-skip loop in target_uds_request. */
+#define DTC_UDS_P2_STAR_SERVER_MS             5000
+
 /* Expected positive responses. Proposed default — needs approval from Sean. */
 #define DTC_UDS_READ_POSITIVE_SID             0x59  /* 0x19 + 0x40 */
 #define DTC_UDS_CLEAR_POSITIVE_SID            0x54  /* 0x14 + 0x40 */

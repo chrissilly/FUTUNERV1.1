@@ -205,20 +205,41 @@ static int target_uds_request(const uint8_t *req,
 
     uint32_t start_ms =
         (uint32_t)((uint32_t)xTaskGetTickCount() * (uint32_t)portTICK_PERIOD_MS);
+    /* P-53: after the first NRC 0x78 (response pending), the ECU may keep
+     * emitting NRC 0x78 for up to P2*_server (5 s per ISO 14229). Extend the
+     * effective timeout once pending is seen so a slow ECU response isn't
+     * lost; without this, a stale NRC 0x78 (or its eventual positive
+     * response) from a prior exchange leaks into the next call. */
+    uint32_t effective_timeout_ms = timeout_ms;
     while (true) {
         uint16_t out_size = (uint16_t)0;
         esp_err_t recv_rc = can_manager_receive_isotp(resp,
                                                       (uint16_t)resp_cap,
                                                       &out_size);
         if (recv_rc == ESP_OK && out_size > (uint16_t)0) {
+            /* NRC 0x78 = ResponsePending. Drain it and keep polling for
+             * the eventual non-pending response. Must live at this layer
+             * because dtc_uds.c treats any 7F response as terminal — the
+             * eventual positive then leaks into the next call's demux. */
+            if (out_size >= (uint16_t)DTC_UDS_NEGATIVE_RESPONSE_BYTES &&
+                resp[0] == (uint8_t)DTC_UDS_NEGATIVE_RESPONSE &&
+                resp[2] == (uint8_t)DTC_UDS_NRC_RESPONSE_PENDING) {
+                ESP_LOGD(TAG, "UDS NRC 0x78 (pending) for sid 0x%02X — drain + keep polling",
+                         (unsigned)resp[1]);
+                if (effective_timeout_ms < (uint32_t)DTC_UDS_P2_STAR_SERVER_MS) {
+                    effective_timeout_ms = (uint32_t)DTC_UDS_P2_STAR_SERVER_MS;
+                }
+                vTaskDelay(pdMS_TO_TICKS(DTC_TARGET_POLL_INTERVAL_MS));
+                continue;
+            }
             isotp_coordinator_release(ISOTP_OWNER_CONNECTION_MANAGER);
             return (int)out_size;
         }
         uint32_t now_ms =
             (uint32_t)((uint32_t)xTaskGetTickCount() * (uint32_t)portTICK_PERIOD_MS);
-        if ((now_ms - start_ms) >= timeout_ms) {
+        if ((now_ms - start_ms) >= effective_timeout_ms) {
             ESP_LOGW(TAG, "UDS response timeout after %u ms",
-                     (unsigned)timeout_ms);
+                     (unsigned)effective_timeout_ms);
             isotp_coordinator_release(ISOTP_OWNER_CONNECTION_MANAGER);
             return 0;
         }
