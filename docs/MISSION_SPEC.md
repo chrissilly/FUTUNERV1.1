@@ -79,6 +79,17 @@ All Phase 1 features deploy and validate **before** touching full binary flash. 
 
 ### 4.2 SBF/FBF File System and Live Calibration Switching
 
+> **🛑 DEFERRED 2026-05-21 — by Sean.** Live RAM calibration switching
+> moves to a later phase after Phase 1 (non-tuning surface) is shipped
+> and customer-validated end-to-end. The SBF JSON parser, scal/bdef
+> RAM-write path, and SBF orchestrator code stay in the tree but are
+> not exercised against an ECU in Phase 1. The companion **SBF/FBF
+> Builder Tool** (§6 Phase 1 Deliverable 3) is deferred with it.
+> Sister section §4.5 (constraints + rev limiter) is also deferred —
+> the two ship as a single package when live tune resumes. Tracked
+> in `docs/PHASE_1_COMPLETION_PLAN.md` Track B (reduced scope) and
+> owner directive log at the bottom of that doc.
+
 **SBF (Stage Binary File):** JSON-formatted configuration file containing:
 - Calibration map definitions (start/end addresses, byte order, data type)
 - Multiple tune stages in one file (Stage 1, 2, 3)
@@ -178,6 +189,16 @@ stage_one.sbf:
 ---
 
 ### 4.5 Ethanol Live-Update Constraints and Rev Limiter Safety Logic
+
+> **🛑 DEFERRED 2026-05-21 — by Sean.** Ships as a single package with
+> §4.2 (live calibration switching) when live tune resumes. The
+> constraint engine, dwell timer state machine, WOT lockout, and rev
+> limiter clamp/restore are not needed for Phase 1 close since live
+> tune itself is deferred. §4.4 ethanol BLE bridge is **NOT** deferred
+> — its scope reduces to logging-only (sensor reading appears in WOT
+> log rows; no live-tune feed). Tracked in `docs/PHASE_1_COMPLETION_PLAN.md`
+> Track B (reduced scope) and owner directive log at the bottom of
+> that doc.
 
 **Problem:** ethanol content fluctuates naturally (pump blending, tank settling). Without constraints, the dongle would trigger constant micro-updates, destabilizing the tune and causing oscillation.
 
