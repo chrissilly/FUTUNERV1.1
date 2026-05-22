@@ -745,7 +745,7 @@ Don't act on this prompt — owner reviews.
 
 ---
 
-## P-28 🔴 WOT logger recorder init returns rc=258 — feature 1 never registers (NEW 2026-05-17)
+## P-28 🟢 WOT logger recorder init returns rc=258 — feature 1 never registers (RESOLVED 2026-05-21, commit `4788876`)
 
 Filed during Phase 1 smoke test on PC (2026-05-17). Surfaced by Tier 2 `wot_log_start` returning `{"error":"feature id 1 is not registered","active_feature":"none"}`.
 
@@ -1126,6 +1126,441 @@ new `uds_exchange_strict_with_expected_response_byte` helper for the
 
 **Closes when:** the resync loop surfaces NRCs the same way the
 post-SA phases do.
+
+---
+
+## P-43 🟡 Cloud admin endpoint `GET /admin/devices/{mac}` missing (NEW 2026-05-21)
+
+Cloud-side, current admin API only exposes `GET /admin/devices` (list-
+all) and `POST /admin/devices/{mac}/license` (single-device licensing).
+There's no `GET /admin/devices/{mac}` single-row selector, so any
+tool that wants to confirm a specific dongle's enrollment + paid
+state has to list-all and filter client-side. Surfaced during the
+2026-05-19 HIL Chip Report write-up.
+
+**Fix scope:** add `GET /admin/devices/{mac}` to `cloud/src/main.py`.
+Mirror the existing `POST /admin/devices/{mac}/license` access
+pattern (same auth model, same 404 shape if MAC unknown).
+
+**Closes when:** `curl -H "X-Admin-Key:..." https://.../admin/devices/<mac>`
+returns the per-row JSON, or 404 if the MAC isn't enrolled.
+
+---
+
+## P-44 🟢 ws_server doesn't rebind to STA netif on STA_GOT_IP (RESOLVED 2026-05-21, commit `2e28b5f`)
+
+`httpd_start()` binds to the netifs that exist at start time. STA
+netif comes up AFTER boot's `wifi_ap_start → ws_server_start`, so
+the STA-side port 80 returned TCP RST. UI + WS reachable only from
+the AP IP. Discovered during the 2026-05-19 HIL when the dongle
+joined Seanwifi as STA but ws_driver.py against the STA IP got
+`ConnectionRefusedError`.
+
+**Fix landed:** `IP_EVENT_STA_GOT_IP` handler in `wifi_ap.c` now
+calls `ws_server_stop() + ws_server_start()` so httpd rebinds to
+AP+STA together. `ws_server_stop` was already idempotent. Validated
+end-to-end across THREE STA transitions during HIL (Seanwifi → openc
+→ Seanwifi).
+
+**Closes when:** post-flash WS reachable from STA IP without a manual
+reboot. **(Closed.)**
+
+---
+
+## P-45 🟢 Firmware HTTPS clients default to wrong cloud host (RESOLVED 2026-05-21, commit `4253304`)
+
+All 3 firmware HTTPS client modules (`vin_pairing`, `wot_uploader`,
+`sbf_orchestrator`) defaulted `LICENSE_DEFAULT_HOST` /
+`WOT_UPLOAD_DEFAULT_HOST` / `SBF_DEFAULT_HOST` to
+`https://api.sillyrabbitmotorsport.com` — a pre-pivot URL. The deployed
+cloud is at `https://sillyrabbitmotorsport.com/fut`. The `api.*`
+subdomain resolves but the TLS cert lacks an `api.*` SAN, so the
+HTTPS handshake fails with `ESP_ERR_HTTP_CONNECT (0x7002)`.
+Discovered during 2026-05-19 HIL when `vin_pair_now` returned
+"register: HTTP 28674".
+
+**Fix landed:** all 3 defaults updated to `https://sillyrabbitmotorsport.com/fut`
+in a single coherent commit (P-45 + P-46 combined). Path concat
+audited per-client; all use `snprintf("%s%s", host, path)` cleanly.
+
+**Closes when:** firmware HTTPS clients reach the deployed cloud
+without NVS override. **(Closed.)**
+
+---
+
+## P-46 🟢 HTTPS clients don't attach CA bundle — TLS setup fails (RESOLVED 2026-05-21, commit `4253304`)
+
+All 3 firmware HTTPS client `esp_http_client_config_t` initializers
+were missing `.crt_bundle_attach`. ESP-IDF's `esp-tls-mbedtls` refuses
+to set up SSL without a server-verification option configured, so
+the call fails with `ESP_ERR_MBEDTLS_SSL_SETUP_FAILED (0x8017)`
+BEFORE any URL bytes are sent. Latent since the modules were written
+— masked by the P-45 wrong-host bug aborting earlier. Surfaced when
+P-45 was patched and the cloud sync still failed with a different
+error chain.
+
+`CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y` was already enabled
+in sdkconfig; the bundle was in the build, just not wired.
+
+**Fix landed:** `#include "esp_crt_bundle.h"` + `.crt_bundle_attach
+= esp_crt_bundle_attach` added at 3 sites (4 client structs total —
+vin_pairing has GET and POST). Same commit as P-45.
+
+**Closes when:** firmware HTTPS handshake succeeds with the deployed
+cert. **(Closed.)** Serial trace verified
+`esp-x509-crt-bundle: Certificate validated` x2 during vin_pair_now.
+
+---
+
+## P-47 🟡 3 cloud-host constants drift independently across files (NEW 2026-05-21)
+
+`LICENSE_DEFAULT_HOST`, `WOT_UPLOAD_DEFAULT_HOST`, `SBF_DEFAULT_HOST`
+are all defined per-module. The P-45 fix had to touch all three. Any
+future URL change repeats the work and risks one site drifting.
+
+**Fix scope:** extract a shared `CLOUD_DEFAULT_HOST` constant (and
+its NVS override key) into a single header. The 3 modules either
+include that header directly or wrap it locally with `static_assert`
+that the local copy still equals the canonical one.
+
+**Closes when:** there is exactly one source-of-truth for the cloud
+host in firmware.
+
+---
+
+## P-48 🟡 Cloud source + docs still reference `api.sillyrabbitmotorsport.com` (NEW 2026-05-21)
+
+`cloud/Caddyfile`, `cloud/scripts/centos-server-setup.sh`,
+`cloud/src/main.py` docstring, `cloud/README.md`, and ~9 docs files
+under `docs/` still cite `api.sillyrabbitmotorsport.com` even though
+the deployed cloud is at `sillyrabbitmotorsport.com/fut`. Dead
+reference but misleading — new engineers can mis-orient.
+
+**Fix scope:** sweep + update. Categorize each hit per the dispatch
+shape: source comments → update; Caddyfile / setup scripts → update
+OR add deprecation note; docs → update with a footnote pointing at
+the URL-fix commit (`4253304`).
+
+**Closes when:** `grep -rE 'api\.sillyrabbitmotorsport\.com' ~/esp/obd/FUTV1.1/`
+returns nothing except in deprecation-noted archive files.
+
+---
+
+## P-49 🟡 Refactor 3 cloud HTTPS clients to a single cloud_client factory (NEW 2026-05-21)
+
+Currently `vin_pairing.c`, `wot_logger.c`, `sbf_orchestrator.c` each
+duplicate the `esp_http_client_config_t` initializer (URL + TLS bundle
++ method + timeout). Future TLS knobs (cert pinning, IP allowlist,
+timeout policy) require touching 3 sites. Same drift surface as P-47
+but at the C-init-struct level.
+
+**Fix scope:** extract to `firmware/src/cloud/cloud_client.{c,h}` —
+`cloud_client_https_init(esp_http_client_handle_t *out, const char *path)`
+constructs the bundle-attached, host-correct config. All three
+sites call the factory and never touch `esp_http_client_config_t`
+literals.
+
+**Closes when:** all `esp_http_client_config_t` literals outside
+`cloud_client.c` are gone.
+
+---
+
+## P-50 🟡 HTTPS smoke test missing from firmware/test/ (NEW 2026-05-21)
+
+P-46 was latent for months — host eval gates never exercised the TLS
+config because there was no test that wired the real CA bundle
+through `esp_http_client`. The dongle's HIL surfaced it, customer
+would have surfaced it first if the run had skipped HIL.
+
+**Fix scope:** add `firmware/test/cloud_client/eval.sh` that mocks
+`esp_http_client` against a known-good cert + a known-bad cert (no
+matching SAN). Catches future drift in the bundle attachment, the
+URL constant, or the host name. Would have caught P-45+P-46 in CI.
+
+**Closes when:** `firmware/test/cloud_client/eval.sh` exists, passes,
+and removes one of the bugs from P-45 / P-46's diff to confirm it
+fails red.
+
+---
+
+## P-51 🟡 Battery voltage read surface missing from WS API (NEW 2026-05-21)
+
+Phase 4.6 should expose battery voltage for the pre-flash gate
+(MISSION_SPEC §2.1 + Phase 2 P-04 both need it). The dongle has no
+firmware-side voltage reader: no ADC tap, no UDS DID mapped in the
+logger table, and `can_send_raw` is HARD-rule forbidden so the agent
+can't probe via DID without sign-off. During the 2026-05-19 HIL the
+battery-voltage precondition was skipped on owner directive.
+
+**Fix scope:** add `battery_voltage` WS command. Implementation
+choice (Sean input — D-decision):
+1. Standard OBD PID `0x4221` via UDS read — works on any ECU
+2. VAG-specific DID — narrower but possibly more accurate
+3. Internal ADC on the OBD power pin via voltage divider — requires
+   ESP32-S3 ADC channel + a board rev
+
+**Closes when:** `battery_voltage` command returns ECU-reported
+voltage on dev RS7 within ±0.5 V of an OBD scan-tool reference.
+
+---
+
+## P-52 🟡 Candlelight macOS gs_usb sustained-use wedge (NEW 2026-05-21)
+
+Both `tools/can_sniff.py` and Sean's known-working `~/sniffer/can_tail.py`
+wedge after sustained passive RX on macOS. Symptoms:
+- can_sniff.py: returns 0 frames during a confirmed-on-wire dtc_read
+- can_tail.py: starts capturing fine, gets to 1194 lines, then 100%
+  CPU + file growth stops while USB stays enumerated
+- Active TX (`can_sniff --uds`) still works — the device's gs_usb
+  surface isn't broken for write
+- Confirmed not a code issue. Both tools claim the device cleanly;
+  the wedge is driver/kernel-side
+
+**Workaround:** physical USB replug per session, or short-window
+captures (<60s).
+
+**Fix options (Sean decides — listed for visibility, not a Claude pick):**
+1. Linux box for wire witness (kernel-mode `gs_usb` is stable)
+2. Replace Candlelight with a USB-CAN device with better macOS
+   driver support (PEAK PCAN-USB FD, Kvaser, or similar)
+3. Userspace driver alternative (libusb-mac fork, gs_usb-mac project)
+
+**Closes when:** wire witness sustains a 60+ minute HIL session
+without wedging. Required for restoring the three-stream HIL
+contract (WS + serial + wire) on the next HIL pass.
+
+---
+
+## P-53 🟢 dtc_clear response demux conflates pre-read with clear response (RESOLVED 2026-05-21, commit `a54d690`)
+
+dtc_clear()'s pre-read (UDS 0x19 0x02 — used to populate cleared_count
+in the WS response) saw the ECU's NRC 0x78 (ResponsePending) and
+returned immediately. The eventual positive read response (SID 0x59)
+then sat in the ISO-TP receive queue. When dtc_uds_clear_diagnostic_information
+sent the actual 0x14 ClearDTC request, target_uds_request returned
+the stale 0x59 response instead of the 0x14's actual response. The
+clear parser logged "malformed response (len=8 sid=0x59)" and bailed.
+
+**Fix landed:** drain NRC 0x78 at the transport layer.
+`target_uds_request` now inspects each receive; if `7F <sid> 78`,
+discards the frame, extends the timeout window to P2*_server (5 s
+per ISO 14229), and keeps polling. Standard UDS RCRRP handling.
+
+`MDG1_UDS_NRC_RESPONSE_PENDING` already existed for the Phase 2
+flash orchestrator; the Phase 1 DTC path now ports the same pattern
+via new `DTC_UDS_NRC_RESPONSE_PENDING` + `DTC_UDS_P2_STAR_SERVER_MS`
+constants in `dtc_config.h` (per CLAUDE.md Rule 3, no magic numbers).
+
+**Closes when:** dtc_clear pre-read returns 7 DTCs and the clear's
+own response (positive 0x54 OR a meaningful ECU NRC) round-trips
+cleanly. **(Demux side closed — observed `DTC_UDS: read parsed 7 DTCs`
+then `DTC_UDS: clear NRC 0x11` on dev RS7.)** P-54 tracks the
+downstream NRC 0x11.
+
+---
+
+## P-54 🟡 ClearDTC NRC 0x11 from ECU after P-53 demux fix (NEW 2026-05-21)
+
+With P-53 landed, the clear request now reaches the wire and the
+response demux is clean. But ECU returns NRC 0x11 (serviceNotSupported)
+on `14 FF FF FF`. The HIL chip report logged this but the wire-format
+verification was blocked by P-52 (Candlelight wedge).
+
+**Hypothesis (per PHASE_1_COMPLETION_PLAN.md A1):** session-state.
+Bosch MG1 honors `0x14 ClearDTC` only in Extended Diagnostic Session,
+not Default. `0x19 ReadDTC` is in the Default session service set,
+which is why Phase 4-read worked while Phase 4-clear didn't.
+
+**Discriminator (3 added frames before the clear request):**
+1. `10 03` (DiagnosticSessionControl → Extended) — expect `50 03 …`
+2. `14 FF FF FF` (ClearDTC) — look at the response
+   - `54` positive → fixed; session was the issue
+   - `33` SecurityAccess required → chain `27 0x` after extended
+   - `22` conditionsNotCorrect → engine state requirement
+   - `11` again → DID/service mapping deeper than session; escalate
+
+**Fix scope (if hypothesis holds):** wrap
+`dtc_uds_clear_diagnostic_information` with a session-entry preamble
++ session-exit. Add `DTC_CLEAR_REQUIRES_EXTENDED_SESSION` config
+flag so other ECU families that don't need it can opt out.
+
+This touches ECU-wire-surface code — owner sign-off required before
+the patch lands.
+
+**Closes when:** dtc_clear on dev RS7 returns `{"ok":true}` AND
+subsequent dtc_read returns 0 codes AND wire witness shows the
+`10 03` + `14 FF FF FF` frames.
+
+---
+
+## P-55 🟡 Logger DID resolution / value scaling broken on RS7 (NEW 2026-05-21)
+
+KOEO RPM read as `-5369`. Cannot be derived from any byte permutation
+of a valid 0. Not a scale-formula bug — either wrong DID mapping,
+demux conflation (P-53 class), or wrong UDS service for this variant.
+
+**Diagnostic surface landed 2026-05-21 (commit `fed30f1`):**
+`get_logger_data_raw` WS command returns the pre-parse hex of the
+most-recent ECU poll response. Lets the off-vehicle A2L cross-check
+the DID table without re-running HIL for every scale-formula guess.
+
+**Pending HIL probe (still 🟡):**
+1. Single-shot read of RPM DID alone — confirm raw bytes
+2. Cross-check active DID list in `firmware/src/logger/` against the
+   A2L for `4K0907557G__0003` specifically (not whatever MG1 variant
+   the table was originally sourced from)
+3. Depending on outcome:
+   - Wrong DID table → regenerate from `4K0907557G__0003` A2L
+   - Demux conflation → port the P-53 NRC drain to the logger path
+   - Wrong service → swap `$22 ReadDataByIdentifier` →
+     `$23 ReadMemoryByAddress`
+
+**Closes when:** all 6 logger variables (nmot_w, InjSys_ratEthPrtnBascFu,
+Com_stCrCtlPan, rl_w, tmot, wdkba) return plausible KOEO values on
+dev RS7. Plausibility table pinned in
+`firmware/test/logger/koeo_baseline.json` for regression.
+
+---
+
+## P-56 🟡 HIL doc references retired `tools/can_sniff.py` (NEW 2026-05-21)
+
+`handoffs/PHASE1_HIL_VALIDATION.md` cites `tools/can_sniff.py` in
+multiple capture-step invocations. Sean's 2026-05-19 directive:
+canonical sniffer is `~/sniffer/can_tail.py`; `can_sniff.py` retained
+in `tools/` only for legacy reference. The HIL doc still uses the
+old name, and Rule 7 says every CLI invocation in a doc must be
+`--help`-verified against the actual tool before merge.
+
+**Fix scope:** replace every `can_sniff.py` invocation in the HIL
+doc with the matching `can_tail.py` form. `--help`-verify each line.
+Add a header note: "wire witness = ~/sniffer/can_tail.py (Sean
+directive 2026-05-19); tools/can_sniff.py retained for legacy
+reference only."
+
+**Closes when:** HIL doc no longer references `can_sniff.py` in any
+active step. `grep -n 'can_sniff' handoffs/PHASE1_HIL_VALIDATION.md`
+returns nothing.
+
+---
+
+## P-57 🟢 UI wsSend callback routing broken — _cbId never echoed by firmware (RESOLVED 2026-05-21, commit `3c0aef7`)
+
+UI `wsSend(obj, cb)` attached a client-side `_cbId` integer to the
+outgoing frame and stored `cb` in `pendingCb[cbId]`. Firmware
+`command_handler.c` does not parse or echo `_cbId`; responses come
+back with only the `command` field. `handleMsg` looked up
+`pendingCb[msg._cbId]`, always undefined → cb never fired. Every UI
+interaction that depended on a response (license_status,
+write_ecu acknowledgment, get_logger_profile readback,
+set_logger_profile confirmation) silently failed. Surfaced by the
+2026-05-21 Claude-in-Chrome UI vet — `wsSend({command:'get_status'}, cb)`
+on the existing UI WS times out while a fresh `new WebSocket(...)`
+to the same dongle returns in <50 ms.
+
+**Fix landed:** UI-only change. `pendingCb` is now a FIFO queue
+keyed by command name (firmware echoes `command` in `send_response`).
+3 cb-using call sites (`set_logger_profile`, `get_logger_profile`,
+`write_ecu`) resolve correctly without changing firmware.
+
+**Closes when:** Cowork repro
+`wsSend({command:'get_status'}, m => console.log(m))` logs within
+1 second on a freshly-flashed dongle. **(Pending Cowork verify
+post-flash.)**
+
+---
+
+## P-58 🟢 vin_pair_now persists license cache but not local ECU pair record (RESOLVED 2026-05-21, commit `a9c0b5f`)
+
+vin_pair_now succeeded on cloud-side persistence (license cache
+present + paid + vin populated and reloaded on boot) but never wrote
+the local ECU pair record to NVS. `connection_manager`'s CHECK_PAIRING
+handler at boot looks for `ecu_info` via `nvs_manager_load_ecu_info`;
+on miss it logs "No valid ECU info found in NVS" and stays
+`paired=false`. Customer expectation per UI vet: "pair this dongle
+with my car" means both cloud license AND local pair persist.
+
+**Fix landed:** in `vin_pairing_run_now`, after `license_fetch`
+succeeds, call `connection_manager_pair_vehicle()` to write
+`ecu_info` to NVS via `nvs_manager_save_ecu_info` and flip
+`is_paired=true`. Re-uses the existing tested CM API (same path
+cmd_pair_ecu uses). The CM function's auto-disconnect+reconnect
+side effect is acceptable for a one-time pairing action.
+
+Persistence failure treated as non-fatal: cloud side already
+succeeded, user can manually pair_ecu to retry. Host-build guard
+via `#ifndef VIN_PAIRING_HOST_BUILD`.
+
+**Closes when:** dev RS7 HIL — vin_pair_now succeeds, dongle
+power-cycle, `get_status` returns `paired:true` on boot without
+manual re-pair. **(Pending HIL verify post-flash.)**
+
+---
+
+## P-59 🟢 UI Rule-9 violations: pair_vehicle, unpair_vehicle, reboot (RESOLVED 2026-05-21, commit `92be4f1`)
+
+UI vet 2026-05-21 found 3 commands the UI invoked that didn't match
+any firmware registry entry:
+- `pair_vehicle` → registry has `pair_ecu` (NAME MISMATCH)
+- `unpair_vehicle` → registry has `remove_pairing` (NAME MISMATCH)
+- `reboot` → no handler (MISSING)
+
+Each silently no-op'd on the wire (made worse by P-57 hiding the
+"unknown command" response from the user).
+
+**Fix landed:** UI renames (pair_vehicle → pair_ecu, unpair_vehicle
+→ remove_pairing) + new `cmd_reboot` in `system_commands.c` calling
+`esp_restart()` via a one-shot FreeRTOS task that delays
+`SYSTEM_CMD_REBOOT_ACK_DELAY_MS` (500 ms, per CLAUDE.md Rule 3) so
+the WS server can flush the ACK first. Registered
+`CMD_SECURITY_SECURED`.
+
+P-34 (wifi_scan) and P-35 (fs_upload) remain as pre-existing UI gaps.
+
+**Closes when:** every UI `wsSend` command exists in
+`COMMAND_REGISTRY`. **(Closed for the 3 P-59-tracked cases;
+P-34 + P-35 still open.)**
+
+---
+
+## P-60 🟡 Dashboard gauges show `--` despite logger having 6 variables (NEW 2026-05-21)
+
+`get_status.data.logger_variable_count = 6` but every dashboard
+readout reads `--`. Cascade:
+1. P-57 broken callback routing means even if `get_logger_data`
+   responses arrived, the UI didn't process them.
+2. UI does not call `logger_start` on dashboard mount; dongle isn't
+   polling the ECU for variables until the user manually starts the
+   logger.
+3. Even if both worked, P-55 (logger DID corruption) would surface
+   as bogus values.
+
+P-57 + P-55 together mostly resolve the symptom. Remaining gap is
+the auto-start UX decision: should the dashboard auto-fire
+`logger_start` on mount, or should the user click a "Start"
+control?
+
+**Fix scope:** UX decision (Sean), then small UI change to call
+`logger_start` from the dashboard-mount handler. ~5 lines.
+
+**Closes when:** opening the dashboard on RS7 populates all 6 gauges
+with plausible KOEO values within 2 s of mount, no manual button
+press required.
+
+---
+
+## P-61 🟡 UI title says "FUTUNER v2" but project + firmware is v1.1 (NEW 2026-05-21)
+
+`document.title = "FUTUNER v2 Control Panel"`. Page header text
+shows "FUTUNER v2 Connected". Project root is `FUTV1.1/` and
+`PHASE_1_COMPLETION_PLAN.md` references FUTUNER v1.1. Cosmetic but
+confusing.
+
+**Resolution path:** UI version label aligns with firmware version,
+OR confirm "v2 UI on v1.1 firmware" is intentional naming (some
+teams version UI independently of firmware) and document it.
+
+**Closes when:** the UI version label tells a coherent story to a
+new user.
 
 ---
 
