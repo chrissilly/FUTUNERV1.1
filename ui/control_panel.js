@@ -149,8 +149,12 @@ function setActiveFeature(name) {
 let ws = null, authenticated = false, pollTimer = null;
 let sniffing = false, sniffFrames = 0, sniffRateCount = 0, sniffRateVal = 0;
 let xdfData = null;
+/* P-57: pendingCb is keyed by command name (FIFO queue per command).
+ * Earlier impl keyed by a client-side `_cbId` integer the dongle didn't
+ * echo back, so the callback never resolved. Firmware's send_response
+ * preserves the `command` field; we route on that. Concurrent calls
+ * to the same command resolve in send order. */
 let pendingCb = {};
-let cbId = 0;
 let logcfgPollCounter = 0;
 
 let liveTuneState = {
@@ -590,15 +594,23 @@ function setConn(ok){
 }
 function wsSend(obj, cb){
   if (!ws || ws.readyState !== 1){ toast('Not connected','error'); return; }
-  if (cb){ obj._cbId = ++cbId; pendingCb[cbId] = cb; }
+  /* P-57: queue cb by command name. Firmware echoes `command` in the
+   * response; we route the next-in-line cb for that command when it
+   * arrives. No `_cbId` round-trip needed. */
+  if (cb && obj && obj.command){
+    if (!pendingCb[obj.command]) pendingCb[obj.command] = [];
+    pendingCb[obj.command].push(cb);
+  }
   ws.send(JSON.stringify(obj));
 }
 
 function handleMsg(msg){
-  /* Callback handler — preserve existing semantics. */
-  if (msg._cbId && pendingCb[msg._cbId]){
-    pendingCb[msg._cbId](msg);
-    delete pendingCb[msg._cbId];
+  /* P-57: cb routing now keyed by command name (FIFO per command).
+   * See pendingCb declaration + wsSend rationale. */
+  if (msg.command && pendingCb[msg.command] && pendingCb[msg.command].length){
+    const cb = pendingCb[msg.command].shift();
+    if (pendingCb[msg.command].length === 0) delete pendingCb[msg.command];
+    try { cb(msg); } catch(err) { console.error('wsSend cb threw', err); }
   }
 
   /* Hot path: can_frame stays as a direct call (sniffer rate-sensitive). */
