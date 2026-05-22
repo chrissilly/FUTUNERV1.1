@@ -148,19 +148,21 @@ section "4. Command surface wiring"
 CMD_REGISTRY="$CMD_DIR/commands.c"
 if [ -f "$CMD_REGISTRY" ]; then
     # Each new mutating cmd must be SECURED; wifi_status stays UNSECURED.
-    declare -A want_tier=(
-        ["wifi_sta_set"]="CMD_SECURITY_SECURED"
-        ["wifi_mode"]="CMD_SECURITY_SECURED"
-        ["wifi_clear"]="CMD_SECURITY_SECURED"
-        ["wifi_status"]="CMD_SECURITY_UNSECURED"
-    )
-    for cmd in "${!want_tier[@]}"; do
-        tier="${want_tier[$cmd]}"
+    # P-33: declare -A (associative arrays) is bash 4+ only; macOS ships
+    # bash 3.2. Use parallel indexed arrays (want_cmds[i] → want_tiers[i])
+    # so the eval gate runs on stock macOS without `brew install bash`.
+    want_cmds=("wifi_sta_set" "wifi_mode" "wifi_clear" "wifi_status")
+    want_tiers=("CMD_SECURITY_SECURED" "CMD_SECURITY_SECURED" "CMD_SECURITY_SECURED" "CMD_SECURITY_UNSECURED")
+    i=0
+    while [ $i -lt ${#want_cmds[@]} ]; do
+        cmd="${want_cmds[$i]}"
+        tier="${want_tiers[$i]}"
         if grep -E "\"$cmd\"" "$CMD_REGISTRY" | grep -q "$tier"; then
             pass "$cmd registered with $tier"
         else
             fail "$cmd missing or wrong security tier (want $tier)"
         fi
+        i=$((i+1))
     done
     # Legacy commands must remain registered per the owner-locked P-24 plan.
     for cmd in wifi_connect wifi_disconnect; do

@@ -727,7 +727,7 @@ flag without needing AP-client interaction.
 
 ---
 
-## P-33 🟡 `wifi_manager/eval.sh` bash 3.2 portability (NEW 2026-05-19)
+## P-33 🟢 `wifi_manager/eval.sh` bash 3.2 portability (RESOLVED 2026-05-22, see commit message)
 
 **Severity:** Medium (test-tooling, not product)
 **Found:** 2026-05-19, during phase1 merge sanity check on Mac
