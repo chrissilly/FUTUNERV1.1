@@ -198,6 +198,33 @@ esp_err_t vin_pairing_run_now(char *err_out, size_t err_cap) {
             outcome = lic_rc;
         } else {
             ESP_LOGI(TAG, "vin_pairing OK; license refreshed");
+#ifndef VIN_PAIRING_HOST_BUILD
+            /* P-58: persist ECU pair record to NVS so the dongle reports
+             * paired=true on the NEXT boot. Without this, the cloud-side
+             * license cache persisted (license_status.present=true) but
+             * the local ECU pair record never landed in NVS, so on the
+             * next power cycle connection_manager's CHECK_PAIRING handler
+             * found "No valid ECU info found in NVS" and reverted to
+             * paired=false. The customer expectation is "pair this dongle
+             * with my car" = both cloud license AND local pairing.
+             *
+             * connection_manager_pair_vehicle() writes ecu_info to NVS
+             * via nvs_manager_save_ecu_info() and flips is_paired=true,
+             * then forces a clean disconnect+reconnect to apply the
+             * paired state cleanly. The brief reconnect is acceptable
+             * UX for a one-time pairing action; matches existing
+             * cmd_pair_ecu admin-path behavior.
+             *
+             * Treat persistence failure as non-fatal: cloud side already
+             * succeeded; user can retry pair_ecu manually. */
+            esp_err_t pair_rc = connection_manager_pair_vehicle();
+            if (pair_rc != ESP_OK && pair_rc != ESP_ERR_INVALID_STATE) {
+                ESP_LOGW(TAG,
+                         "P-58: connection_manager_pair_vehicle rc=%d "
+                         "(license OK, ECU NVS pair not persisted)",
+                         (int)pair_rc);
+            }
+#endif
         }
     }
 
