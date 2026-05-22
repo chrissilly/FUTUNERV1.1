@@ -72,6 +72,55 @@ esp_err_t cmd_get_logger_data(int fd, const char *params, char *response, size_t
     return ESP_OK;
 }
 
+esp_err_t cmd_get_logger_data_raw(int fd, const char *params, char *response, size_t response_size) {
+    (void)fd;
+    (void)params;
+
+    cJSON *root = cJSON_CreateObject();
+
+    if (!connection_manager_is_connected()) {
+        emit_error(root, "get_logger_data_raw", "Not connected to ECU", response, response_size);
+        return ESP_OK;
+    }
+    if (!connection_manager_is_logger_configured()) {
+        emit_error(root, "get_logger_data_raw", "Logger not configured", response, response_size);
+        return ESP_OK;
+    }
+
+    /* Pull the retained raw response bytes from logger_manager. */
+    uint8_t raw[LOGGER_MGR_RAW_RESPONSE_MAX];
+    uint16_t len = logger_manager_get_last_raw_response(raw, sizeof(raw));
+    if (len == (uint16_t)0) {
+        emit_error(root, "get_logger_data_raw", "No logger data received yet", response, response_size);
+        return ESP_OK;
+    }
+
+    /* Hex-encode: each byte → two upper-case nibbles, no separator. */
+    char hex[(LOGGER_MGR_RAW_RESPONSE_MAX * 2) + 1];
+    static const char digits[] = "0123456789ABCDEF";
+    for (uint16_t i = 0; i < len; i++) {
+        hex[i * 2 + 0] = digits[(raw[i] >> 4) & 0x0F];
+        hex[i * 2 + 1] = digits[raw[i] & 0x0F];
+    }
+    hex[len * 2] = '\0';
+
+    cJSON_AddBoolToObject(root, "success", true);
+    cJSON_AddStringToObject(root, "command", "get_logger_data_raw");
+    cJSON_AddStringToObject(root, "hex", hex);
+    cJSON_AddNumberToObject(root, "byte_count", (double)len);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    if (json_str) {
+        strncpy(response, json_str, response_size - 1);
+        response[response_size - 1] = '\0';
+        free(json_str);
+    }
+    cJSON_Delete(root);
+
+    ESP_LOGD(TAG, "Sent raw logger response: %u bytes", (unsigned)len);
+    return ESP_OK;
+}
+
 esp_err_t cmd_get_single_variable(int fd, const char *params, char *response, size_t response_size) {
     (void)fd;
 

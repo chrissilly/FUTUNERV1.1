@@ -19,6 +19,7 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"pair_ecu", "Pair with current ECU", CMD_SECURITY_UNSECURED, cmd_pair_ecu},
     {"configure_logger", "Configure logger variables", CMD_SECURITY_UNSECURED, cmd_configure_logger},
     {"get_logger_data", "Get all logger variable values", CMD_SECURITY_UNSECURED, cmd_get_logger_data},
+    {"get_logger_data_raw", "Raw hex of most-recent ECU poll response (P-55 diagnostic)", CMD_SECURITY_UNSECURED, cmd_get_logger_data_raw},
     {"get_single_variable", "Get single variable value by name", CMD_SECURITY_UNSECURED, cmd_get_single_variable},
     {"write_ecu", "Write data to ECU RAM", CMD_SECURITY_SECURED, cmd_write_ecu},
     {"remove_pairing", "Remove paired vehicle", CMD_SECURITY_SECURED, cmd_remove_pairing},

@@ -18,6 +18,14 @@ static uint8_t preserved_count = 0;
 static uint32_t buffer_address = 0;
 static uint16_t buffer_size = 0;
 
+/* P-55: most-recent ECU poll response bytes, retained for the
+ * get_logger_data_raw WS command. Written by logger_manager_handle_poll_response
+ * BEFORE the parse step so off-vehicle A2L cross-checking can validate
+ * what the ECU actually sent vs. what the scale/offset formulas produced.
+ * Length 0 means no poll response yet. */
+static uint8_t  last_raw_response[LOGGER_MGR_RAW_RESPONSE_MAX];
+static uint16_t last_raw_response_len = 0;
+
 esp_err_t logger_manager_init(uint32_t buf_addr, uint16_t buf_size) {
     buffer_address = buf_addr;
     buffer_size = buf_size;
@@ -153,7 +161,19 @@ bool logger_manager_handle_poll_response(const uint8_t *response, uint16_t respo
         ESP_LOGW(TAG, "Logger not configured, ignoring response");
         return false;
     }
-    
+
+    /* P-55: snapshot the raw bytes BEFORE the parse step so
+     * get_logger_data_raw can expose what the ECU actually returned
+     * (independent of scale/offset formula correctness). */
+    if (response != NULL && response_len > (uint16_t)0) {
+        uint16_t copy_len = response_len;
+        if (copy_len > (uint16_t)LOGGER_MGR_RAW_RESPONSE_MAX) {
+            copy_len = (uint16_t)LOGGER_MGR_RAW_RESPONSE_MAX;
+        }
+        memcpy(last_raw_response, response, copy_len);
+        last_raw_response_len = copy_len;
+    }
+
     if (!logger_config_parse_poll_response(&logger_config, response, response_len, current_values)) {
         ESP_LOGE(TAG, "Failed to parse poll response");
         return false;
@@ -176,5 +196,14 @@ bool logger_manager_handle_poll_response(const uint8_t *response, uint16_t respo
 
 bool logger_manager_has_data(void) {
     return has_received_data && logger_config.is_configured && logger_config.variable_count > 0;
+}
+
+uint16_t logger_manager_get_last_raw_response(uint8_t *out_buf, uint16_t out_cap) {
+    if (out_buf == NULL || out_cap == (uint16_t)0) return 0;
+    if (last_raw_response_len == (uint16_t)0) return 0;
+    uint16_t copy_len = last_raw_response_len;
+    if (copy_len > out_cap) copy_len = out_cap;
+    memcpy(out_buf, last_raw_response, copy_len);
+    return copy_len;
 }
 
