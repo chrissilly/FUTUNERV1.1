@@ -35,12 +35,13 @@ customer-experience column for every in-scope row.
 | MISSION_SPEC § | Feature | Host gate | Customer experience | Notes |
 |----------------|---------|-----------|---------------------|-------|
 | 4.1 | VIN pairing + licensing | 🟢 PASS | 🟡 PARTIAL | Cloud confirmed `paid=1` on RS7; UI shows `paired:false` post-reboot (P-58 — persistence suspected broken) |
-| **4.2** | **SBF / FBF live cal switching** | **🟢 PASS** | **🛑 DEFERRED** | Moves to a later phase per owner directive 2026-05-21. Code stays in tree, not exercised. |
-| **4.2** | **SBF / FBF builder tool (XDF → JSON)** | **N/A** | **🛑 DEFERRED** | Bundled with §4.2 deferral. |
+| **4.2** | **SBF / FBF live cal switching** | n/a | **🚚 MOVED TO PHASE 3 §6.1** | See `docs/PHASE_3_PREREQUISITES.md` P3-02. |
+| **4.2** | **SBF / FBF builder tool** | n/a | **🚚 MOVED TO PHASE 3 §6.1** | See `docs/PHASE_3_PREREQUISITES.md` P3-01. |
 | 4.3 | Live gauges (WebSocket streaming) | 🟢 PASS | 🔴 BROKEN | Logger surface alive, UI callback routing broken (P-57 BLOCKER), values scale-corrupted (P-55) |
 | 4.3 | Data logging (gzip + cloud sync) | 🟢 PASS | 🔴 BLOCKED | P-28 — `wot_logger_init` runs before profile load, `FEATURE_WOT_LOGGING` never registers |
-| 4.4 | Ethanol BLE bridge (LOGGING-ONLY scope) | N/A | 🔴 NOT BUILT | `flex_*` commands return "Not yet implemented". Scope reduced: ethanol % logged in WOT rows; **no** live-tune feed. |
-| **4.5** | **Ethanol constraints + rev limiter** | **N/A** | **🛑 DEFERRED** | Ships with §4.2 when live tune resumes. |
+| 4.4a | Ethanol BLE bridge (LOGGING-ONLY, Phase 1) | N/A | 🔴 NOT BUILT | `flex_*` commands return "Not yet implemented". Scope: ethanol % logged in WOT rows. |
+| 4.4b | Ethanol BLE live-tune feed | n/a | **🚚 MOVED TO PHASE 3 §4.4b → §6** | See `docs/PHASE_3_PREREQUISITES.md` P3-06. |
+| **4.5** | **Ethanol constraints + rev limiter** | n/a | **🚚 MOVED TO PHASE 3 §6.2** | See `docs/PHASE_3_PREREQUISITES.md` P3-03 / P3-04. |
 | 4.6 | OBD fault code read | 🟢 PASS | 🟡 PARTIAL | Read returns 7 DTCs on RS7 wire-witnessed; UI routing prevents display (P-57 downstream) |
 | 4.6 | OBD fault code clear | 🟢 PASS | 🔴 BROKEN | Demux fixed (P-53 RESOLVED); ECU returns NRC 0x11 — needs session-state fix (P-54) |
 | 4.7 | Transport — CAN | 🟢 PASS | 🟢 PASS | Production driver in use |
@@ -269,23 +270,30 @@ Chip Report.
 
 ---
 
-## Track B — Reduced scope (post 2026-05-21 owner directive)
+## Track B — Reduced scope (post 2026-05-21 + 2026-05-22 owner directives)
 
-> **Scope cut 2026-05-21:** B1 (SBF builder), B2 (SBF live-tune E2E),
-> and B4 (constraints + rev limiter) are DEFERRED to a later phase
-> with §4.2 / §4.5. Track B reduces to B3 (re-scoped to logging-only)
-> and B5 (Ethernet skeleton, hardware-pending). Old content for
-> B1/B2/B4 preserved in git history at `4253304^..HEAD` and is
-> recoverable if/when scope reopens.
+> **Phase 3 silo 2026-05-22:** Tracks B1 (builder tool), B2 (live-tune
+> E2E), B4 (constraints + rev limiter) have been **MOVED TO PHASE 3**.
+> They are no longer Phase 1 work and do not gate Phase 1 close.
+> See `docs/PHASE_3_PREREQUISITES.md` for P3-01..P3-11 tracking.
+>
+> Track B reduces to **B3** (ethanol BLE — LOGGING-ONLY scope, Phase 1)
+> and **B5** (Ethernet skeleton, hardware-pending). Old in-tree content
+> for the live-tune tracks remains in git history at `4253304^..HEAD`
+> and is exercised in Phase 3, not removed.
 
-### B3 · Ethanol Sensor BLE Bridge Firmware — LOGGING-ONLY (MISSION_SPEC §4.4)
+### B3 · Ethanol Sensor BLE Bridge Firmware — LOGGING-ONLY (MISSION_SPEC §4.4a)
+
+> **Logging path only.** The live-tune feed for the ethanol value
+> (§4.4b) is Phase 3 work — see `docs/PHASE_3_PREREQUISITES.md` P3-06.
+> Phase 1 ships the read path and the logged column only.
 
 **Scope (reduced):** Receive ethanol percentage from external BLE
 ethanol sensor; surface the value as a **logged variable only**.
-NO live-tune feed. NO constraint engine. The sensor reading
-appears in WOT log rows alongside RPM / boost / AFR. Cloud log
-shows ethanol % per data point. If sensor disconnects, manual
-override via UI keeps the logged value populated.
+The sensor reading appears in WOT log rows alongside RPM / boost /
+AFR. Cloud log shows ethanol % per data point. If sensor disconnects,
+manual override via UI keeps the logged value populated. (Constraint
+engine + actuator paths intentionally absent — those land in Phase 3.)
 
 **Where it lives:** `firmware/src/ethanol_ble/` — new module.
 
@@ -391,10 +399,11 @@ After all features pass HIL, capture each feature's golden output
 diff against golden on every run. Prevents the kind of silent
 regressions that bit us during the PC/Mac merge cycle.
 
-**Exit criteria:** Each of the 7 feature modules
-(vin_pairing, sbf, dtc, wot_logger, ui, ethanol_ble, ethanol_constraints)
-has a golden-output fixture in its test directory and the eval gate
-diffs against it.
+**Exit criteria:** Each of the 5 in-scope Phase 1 feature modules
+(vin_pairing, dtc, wot_logger, ui, ethanol_ble) has a golden-output
+fixture in its test directory and the eval gate diffs against it.
+(The Phase 3 features — calibration switcher, constraint engine — get
+their own golden fixtures in Phase 3.)
 
 ---
 
@@ -436,13 +445,14 @@ out of order means rewriting B work when α/β/γ land.
 **Phase δ — Reduced unbuilt features (1-2 sessions)**
 
 - B3 (Ethanol BLE bridge — **LOGGING-ONLY** per 2026-05-21 scope cut)
-  — firmware + HIL with sensor; logged variable in WOT rows; no
-  live-tune feed
+  — firmware + HIL with sensor; logged variable in WOT rows. The
+  live-tune feed for this sensor is Phase 3 work, not Phase δ.
 - B5 (Ethernet skeleton) — design-and-compile if hardware not
   arrived; full validation deferred-pending-hardware
 
-B1 / B2 / B4 deferred with §4.2 / §4.5. Phase δ no longer the time
-sink it used to be.
+The former B1 / B2 / B4 entries are Phase 3 work (see
+`docs/PHASE_3_PREREQUISITES.md`). Phase δ in this plan is now
+small and well-bounded.
 
 **Phase ε — Final HIL + regression pinning (1 HIL session + 1 host session)**
 
@@ -466,8 +476,8 @@ Sean sign-off before each track starts.
 | D2 | Ethanol sensor product choice — which BLE sensor is the v1 target? | B3 |
 | D3 | Ethanol sensor on dev RS7 today, or order one in? | B3 HIL timing |
 | D4 | Ethernet hardware status — arrived yet? | B5 (becomes design-only if no) |
-| ~~D5~~ | ~~Rev limiter RAM address on `4K0907557G__0003`~~ 🛑 | DEFERRED with B4 (2026-05-21) |
-| ~~D6~~ | ~~SBF storage location — `/storage/sbf/`~~ 🛑 | DEFERRED with B2 (2026-05-21) |
+| ~~D5~~ | ~~Rev limiter RAM address on `4K0907557G__0003`~~ 🚚 | MOVED TO PHASE 3 — P3-04 (`docs/PHASE_3_PREREQUISITES.md`) |
+| ~~D6~~ | ~~File storage location for cal switching — `/storage/...`~~ 🚚 | MOVED TO PHASE 3 — P3-05 |
 | D7 | Admin password rotation (P-19/P-20 security pass) — bundle into Phase 1 or defer? | Out of plan |
 
 ---
@@ -484,19 +494,22 @@ unblocked from a Phase-1-side correctness standpoint.
       shows 🟢 in `PHASE_2_PREREQUISITES.md`
 - [ ] MISSION_SPEC §4.1 — VIN pair + license: HIL PASS, persistence
       across power cycle verified
-- [ ] ~~MISSION_SPEC §4.2 — SBF live tune~~ 🛑 DEFERRED 2026-05-21
-- [ ] ~~MISSION_SPEC §4.2 — SBF builder tool~~ 🛑 DEFERRED 2026-05-21
+- [ ] ~~MISSION_SPEC §4.2~~ 🚚 MOVED TO PHASE 3 — see
+      `docs/PHASE_3_PREREQUISITES.md` (P3-01, P3-02). Not a Phase 1
+      exit gate.
 - [ ] MISSION_SPEC §4.3 — Live gauges: all 6 vars return plausible
       KOEO values (P-55 closed); UI routing fixed (P-57 closed);
       gauges populate in browser on dashboard mount
 - [ ] MISSION_SPEC §4.3 — Data logging: P-28 closed; WOT log
       captures, gzip, cloud-uploads, and local-deletes within
       configured window
-- [ ] MISSION_SPEC §4.4 — Ethanol BLE bridge (LOGGING-ONLY): sensor
-      reading appears in WOT log rows; manual fallback functional
-      on RS7; **no** live-tune feed
-- [ ] ~~MISSION_SPEC §4.5 — Ethanol constraints + rev limiter~~ 🛑
-      DEFERRED 2026-05-21
+- [ ] MISSION_SPEC §4.4a — Ethanol BLE bridge (LOGGING-ONLY, Phase 1):
+      sensor reading appears in WOT log rows; manual fallback
+      functional on RS7. (§4.4b live-tune feed is Phase 3 work — see
+      P3-06, not a Phase 1 exit gate.)
+- [ ] ~~MISSION_SPEC §4.5~~ 🚚 MOVED TO PHASE 3 — see
+      `docs/PHASE_3_PREREQUISITES.md` (P3-03, P3-04). Not a Phase 1
+      exit gate.
 - [ ] MISSION_SPEC §4.6 — Fault code read AND clear both PASS on RS7
       (P-54 closed for clear)
 - [ ] MISSION_SPEC §4.7 — Transport abstraction: CAN PASS in
@@ -509,6 +522,8 @@ unblocked from a Phase-1-side correctness standpoint.
 - [ ] Per-feature golden fixtures landed (C2)
 - [ ] `FUTUNER_PHASE2_ENABLED` still 0 — flipping it is a separate
       owner-signed action
+- [ ] `FUTUNER_PHASE3_ENABLED` still 0 — flipping it is a separate
+      owner-signed action (Phase 3 silo, 2026-05-22)
 
 ---
 
@@ -518,12 +533,15 @@ These exist and matter but do NOT block Phase 1 close. Listed here
 for visibility, owned elsewhere.
 
 - Phase 2 prerequisites (`PHASE_2_PREREQUISITES.md` P-01 through P-23+)
-- Multi-variant SBF support beyond `4K0907557G__0003` (P-11, P-15)
+- Phase 3 prerequisites (`PHASE_3_PREREQUISITES.md` P3-01 through P3-11) —
+  live-tune ecosystem, owned and tracked separately as of 2026-05-22
+- Multi-variant cal support beyond `4K0907557G__0003` — moved to
+  Phase 3 with the rest of the cal-switching surface (P3-10)
 - Security pass (P-19 default AP password, P-20 admin password, P-25
   WS auth posture review)
 - Cloud build pipeline integration (P-13)
 - Recovery binary per ECU family (P-03) — Phase 2 surface
-- Per-variant manifest schema beyond dev car (P-11)
+- Per-variant manifest schema beyond dev car (Phase 3, P3-10)
 - AES key custody decision (P-06) — Phase 2 surface
 
 ---
@@ -576,3 +594,63 @@ reconsider live tune as a follow-on phase.
 **Phase 2 (full binary flash) stays gated.** `FUTUNER_PHASE2_ENABLED`
 stays `0` until reduced Phase 1 closes per the EXIT criteria checklist
 above.
+
+### 2026-05-22 — Phase 3 silo (live tune given its own phase)
+
+> **Sean / SRM Engineering.** The live-tune ecosystem moves out of
+> "later phase" limbo and into a discrete **Phase 3**. Phase 1
+> remains gated by the EXIT checklist above; Phase 2 (destructive
+> flash) and Phase 3 (live RAM-write tuning) are independent gates
+> beyond it.
+
+What changed today:
+
+1. New doc `docs/PHASE_3_PREREQUISITES.md` seeded with P3-01..P3-11,
+   mirroring the structure of `PHASE_2_PREREQUISITES.md`. It owns
+   the calibration-file builder tool, the live cal-switching apply
+   path on RS7, the ethanol constraint engine, the rev-limiter RAM
+   address, on-device storage layout, the BLE live-tune feed, the
+   pre-apply safety gate, the 9 map-switch slots UI, the
+   `FEATURE_LIVE_TUNE` arbitration registration, the manifest schema,
+   and the `FUTUNER_PHASE3_ENABLED` build flag.
+
+2. `MISSION_SPEC.md` restructured: a new §6 ("Phase 3 — Live Tuning
+   Ecosystem") sits between Phase 2 and the development roadmap.
+   §4.2 and §4.5 are now pointer stubs into §6. §4.4 split into
+   §4.4a (Phase 1 logging-only) and §4.4b (Phase 3 live-tune feed
+   pointer).
+
+3. This plan (`PHASE_1_COMPLETION_PLAN.md`) scrubbed: B1/B2/B4 are
+   no longer Phase 1 work, the exit checklist no longer references
+   §4.2 / §4.5 as Phase 1 gates, decision points D5/D6 redirect to
+   Phase 3 P-items, and the Track B intro callout points readers
+   at `PHASE_3_PREREQUISITES.md` rather than calling the work
+   "deferred."
+
+4. `firmware/src/config/futuner_config.h` gets a `FUTUNER_PHASE3_ENABLED`
+   compile flag defaulting to `0`, mirroring the existing
+   `FUTUNER_PHASE2_ENABLED` pattern. Flipping it is a separate
+   owner-signed action just like Phase 2.
+
+Rationale for siloing rather than continuing to call it "deferred":
+deferred items rot in plans because there is no owner, no doc, no
+P-numbers, no exit criteria. Naming a Phase 3 forces those to exist
+up front. It also makes the customer-facing roadmap honest:
+non-destructive logging + DTC (Phase 1) → destructive flash (Phase 2)
+→ live RAM-write tuning (Phase 3), each gated behind its own
+compile flag and its own owner sign-off.
+
+What is **NOT** changed:
+
+- Phase 1 EXIT criteria above. Phase 1 still closes when its own
+  checklist is green. Phase 3 work does not gate Phase 1 close.
+- Phase 2 prereqs in `PHASE_2_PREREQUISITES.md`. Those items
+  remain Phase 2's responsibility. Where a former Phase 2 prereq
+  is actually Phase 3 territory, it is annotated in-place with a
+  "MOVED TO PHASE 3 — see PHASE_3_PREREQUISITES.md P-NN" note;
+  numbering is preserved.
+- The B3 logging-only ethanol surface stays in Phase 1 (it is the
+  read path; the live-tune actuator path is what moves).
+- Phase 2 stays gated on Phase 1 closing, and now also stays
+  independent of Phase 3 (you can ship Phase 2 with Phase 3
+  disabled, and vice versa).
