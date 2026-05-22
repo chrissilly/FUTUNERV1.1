@@ -1469,7 +1469,7 @@ dev RS7. Plausibility table pinned in
 
 ---
 
-## P-56 🟡 HIL doc references retired `tools/can_sniff.py` (NEW 2026-05-21)
+## P-56 🟢 HIL doc references retired `tools/can_sniff.py` (RESOLVED 2026-05-22)
 
 `handoffs/PHASE1_HIL_VALIDATION.md` cites `tools/can_sniff.py` in
 multiple capture-step invocations. Sean's 2026-05-19 directive:

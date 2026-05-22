@@ -100,7 +100,10 @@ Context bootstrap (read in this order)
 - ~/esp/obd/FUTV1.1/docs/PHASE_2_PREREQUISITES.md   (P-items, including
                                   P-28 which blocks Phase 5 of this
                                   validation)
-- ~/esp/obd/FUTV1.1/tools/can_sniff.py --help
+- ~/sniffer/can_tail.py (Sean directive 2026-05-19: canonical wire
+  witness. tools/can_sniff.py retained in-tree for legacy reference
+  only — P-52 documents the macOS gs_usb sustained-use wedge that
+  drove the swap.)
 - ~/esp/obd/FUTV1.1/tools/ws_driver.py --help
 - ~/esp/obd/FUTV1.1/firmware/src/commands/commands.c
 
@@ -243,22 +246,28 @@ parallel. They run for the entire validation session.
 
 STREAM A — Candlelight continuous sniff:
   TS=$(date +%Y%m%d_%H%M%S)
-  python3 tools/can_sniff.py --filter 0x7E0 0x7E8 \
-      --timestamp \
-      --out firmware/test/hil_phase1/captures/continuous_${TS}.candump &
+  CAP=firmware/test/hil_phase1/captures/continuous_${TS}.candump
+  ~/sniffer/can_tail.py 500000 "$CAP" &
   SNIFF_PID=$!
 
-  - Don't filter to anything narrower; we want to see everything
-    on the diagnostic IDs throughout the session
-  - Also start a parallel UNFILTERED sniff at low priority that
-    flags any frame on a non-allow-listed ID:
-      python3 tools/can_sniff.py --watch-for-anomalies \
-        --allow 0x7E0,0x7E8,<vehicle-bus-IDs-from-baseline> \
-        --out firmware/test/hil_phase1/captures/anomaly_watch_${TS}.log &
-    ANOMALY_PID=$!
-    If this writer prints anything during a phase — STOP that
-    phase, surface to owner. Possible gateway probe, tool
-    contention, or unexpected dongle behavior.
+  - can_tail.py captures EVERYTHING on the bus to the named outfile
+    (default ./candump.log; second arg overrides). No --filter, no
+    --allow, no --timestamp flag — the candump log format already
+    includes the timestamp prefix `(relative_seconds.us)`.
+  - Stop the sniff with SIGINT: `kill -INT $SNIFF_PID`. The signal
+    handler in can_tail.py runs notifier.stop() + bus.shutdown()
+    cleanly.
+  - Anomaly detection is a POST-CAPTURE grep — the candump file
+    contains every frame; the analyzer surfaces non-allowlisted IDs:
+      grep -vE 'can0 (7E0|7E8|<vehicle-bus-IDs-from-baseline>)#' \
+        "$CAP" > firmware/test/hil_phase1/captures/anomaly_watch_${TS}.log
+    If this writer has any content after a phase — STOP, surface to
+    owner. Possible gateway probe, tool contention, or unexpected
+    dongle behavior.
+  - Sustained-use note: P-52 documents a macOS gs_usb wedge after
+    ~30 min. If frame growth stalls mid-session, SIGINT the sniff
+    and restart fresh (`mv` the candump to a per-window file first
+    so the new sniff lands in a clean log).
 
 STREAM B — UI browser observation:
   - UI must be open in a browser tab on the same network device
@@ -322,36 +331,38 @@ PHASE 1 — Two-phase baseline (passive 0-frame + active >=2-frame)
   splitter leg).
 
   PHASE 1a — Passive snapshot (assert quiet bus)
-    timeout 2 python3 tools/can_sniff.py \
-      --out firmware/test/hil_phase1/captures/baseline_passive.candump \
-      --timestamp \
-      --allow 7E0,7E8 \
-      --watch-for-anomalies
-    (macOS note: `timeout` is GNU; substitute `--duration 2` and drop
-     the timeout wrapper, OR `brew install coreutils` for gtimeout.)
-    ASSERT: frame count == 0. Any frames here indicate a renegade
+    CAP_1A=firmware/test/hil_phase1/captures/baseline_passive_${TS}.candump
+    ~/sniffer/can_tail.py 500000 "$CAP_1A" &
+    PID_1A=$!
+    sleep 2
+    kill -INT $PID_1A; wait $PID_1A 2>/dev/null
+    FRAMES_1A=$(grep -cE '^\(' "$CAP_1A" 2>/dev/null)
+    ASSERT: $FRAMES_1A == 0. Any frames here indicate a renegade
     broadcaster, leftover diagnostic session from a prior tool, or
     ghost CAN host on the bus. HALT and surface to owner.
+    (Anomaly subset: same as Stream A post-capture grep above —
+     run it against $CAP_1A to confirm no non-allowlisted IDs.)
 
   PHASE 1b — Active snapshot (assert keepalive engages)
     Single session-provoking WS command, then sniff for 3 seconds.
     Provoke via dtc_read (TesterPresent isn't in the WS command
     surface; dtc_read opens a UDS session and yields the same
     keepalive witness on 0x7E0/0x7E8):
+      CAP_1B=firmware/test/hil_phase1/captures/baseline_active_${TS}.candump
+      ~/sniffer/can_tail.py 500000 "$CAP_1B" &
+      PID_1B=$!
+      sleep 0.5  # let the sniffer subscribe before traffic starts
       python3 tools/ws_driver.py --host <dongle-ip> --script dtc_read
-      timeout 3 python3 tools/can_sniff.py \
-        --out firmware/test/hil_phase1/captures/baseline_active.candump \
-        --timestamp \
-        --allow 7E0,7E8 \
-        --watch-for-anomalies \
-        --tee
-    (Same macOS `timeout` note as above.)
-    ASSERT: frame count >= 2 (one 19 02 dtc-read request + one 59 02
+      sleep 3
+      kill -INT $PID_1B; wait $PID_1B 2>/dev/null
+      FRAMES_1B=$(grep -cE '^\(' "$CAP_1B")
+    ASSERT: $FRAMES_1B >= 2 (one 19 02 dtc-read request + one 59 02
     positive response minimum; expect additional 3E 00 / 7E 00 keepalive
-    pairs at ~4 Hz over 3s if the
-    dongle holds the session open). Three-stream witness verified:
-    WS-driven request reflected in wire capture.
-  - Pass: 1a quiet, 1b >=2 frames, no anomaly-watch hits in either.
+    pairs at ~4 Hz over 3s if the dongle holds the session open).
+    Three-stream witness verified: WS-driven request reflected in
+    wire capture.
+  - Pass: 1a $FRAMES_1A == 0, 1b $FRAMES_1B >= 2, no anomaly hits
+    (post-capture grep clean for both).
 
 PHASE 2 — VIN pairing (only if dongle is unpaired or owner
 authorizes factory-reset)
