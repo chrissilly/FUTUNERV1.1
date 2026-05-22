@@ -15,6 +15,10 @@
 - 🟡 IN PROGRESS / PARTIALLY ANSWERED
 - 🟢 DONE
 - ⚫ OBSOLETE / CLOSED-AS-UNRECOVERABLE — numeric slot kept reserved but content unrecoverable; not reused
+- 🚚 MOVED TO PHASE 3 — entry kept at this number for historical
+  traceability; active tracking is in `docs/PHASE_3_PREREQUISITES.md`
+  under the cross-referenced P3-NN entry. Added 2026-05-22 with the
+  Phase 3 silo (live-tune ecosystem given its own phase).
 
 ---
 
@@ -59,7 +63,8 @@ in Phase 2):
 - Sets address `0x11E6AE` (ethanol) to `70%` baseline.
 
 **Stage B — `stage1_patched.sbf`** (35 KB, what gets APPLIED OVER RAM
-in Phase 1):
+in Phase 3 — _formerly Phase 1; moved 2026-05-22 with the live-tune
+silo, see `docs/PHASE_3_PREREQUISITES.md`_):
 - Reverts the rev-limit display from limp to full Stage 1
   (1 regular segment, 2 bytes at `0x9F93E`).
 - Reverts the max_load_1 table and 19 calibration maps (lambda + 17
@@ -412,7 +417,14 @@ These don't exist in `cloud/src/main.py` today.
 
 ---
 
-## P-11 🟡 Per-variant manifest replaces sbf_variants table + ECU sentinel check
+## P-11 🚚 Per-variant manifest replaces sbf_variants table + ECU sentinel check
+
+> **MOVED TO PHASE 3 (2026-05-22)** — see `docs/PHASE_3_PREREQUISITES.md`
+> **P3-10** (manifest schema) and **P3-02** (sentinel check before
+> live-tune apply). Both sub-items below belong to the live-tune
+> ecosystem (RAM-write apply path), not the destructive Phase 2 flash
+> path. P-11 stays at this number for historical traceability; active
+> tracking happens under the P3-NN entries.
 
 **2026-05-07 status update.** Sub-item (a) is materially solved by
 the SEFIV1.0 find: the Scorpion EFI tool's `config.json` schema is a
@@ -481,7 +493,18 @@ sentinel check is wired into `sbf_orchestrator`.
 
 ---
 
-## P-12 🔴 Frozen `scal_file.c` parser format-v4 verification (NEW 2026-05-07)
+## P-12 🚚 Frozen `scal_file.c` parser format-v4 verification (NEW 2026-05-07)
+
+> **MOVED TO PHASE 3 (2026-05-22)** — see `docs/PHASE_3_PREREQUISITES.md`
+> **P3-01** (SBF builder) and **P3-02** (SBF apply on RS7). The SCAL
+> parser is the live-tune RAM-write path's binary loader; Phase 2's
+> binary flash path consumes raw `stage1_primed.bin`, not parsed SCAL
+> records. P-12 stays at this number for historical traceability;
+> active tracking happens under the P3-NN entries.
+>
+> The clause below "before any Phase 2 work assumes parser correctness"
+> was always a misnomer — Phase 2 doesn't touch this parser. Treat as
+> "before any **Phase 3** work assumes parser correctness."
 
 **Why this is needed.** The frozen `scal/scal_file.{c,h}` parser was
 carry-forward from FUTV1.0 reverse-engineering. The on-disk Scorpion
