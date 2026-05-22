@@ -444,7 +444,7 @@ static esp_err_t run_load_and_apply(uint8_t stage, uint8_t ethanol_pct) {
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "esp_http_client.h"
-#include "esp_crt_bundle.h"
+#include "cloud/cloud_client.h"
 #include "wifi/wifi_ap.h"
 #include "state_machine/connection_manager.h"
 #include "ecu_write/ecu_write.h"
@@ -524,12 +524,8 @@ static int target_http_get(const char *url, const char *bearer,
                            uint32_t timeout_ms, void *ctx) {
     (void)ctx;
     if (body_len_out != NULL) *body_len_out = (size_t)0;
-    esp_http_client_config_t cfg = {
-        .url = url, .method = HTTP_METHOD_GET,
-        .timeout_ms        = (int)timeout_ms,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t cli = esp_http_client_init(&cfg);
+    /* P-49: TLS config centralized in cloud_client. */
+    esp_http_client_handle_t cli = cloud_client_https_init(url, HTTP_METHOD_GET, (int)timeout_ms);
     if (cli == NULL) return (int)ESP_FAIL;
     if (bearer != NULL && bearer[0] != '\0') {
         char auth[LICENSE_AUTH_HEADER_MAX];

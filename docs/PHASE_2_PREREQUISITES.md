@@ -1293,7 +1293,7 @@ returns nothing except in deprecation-noted archive files.
 
 ---
 
-## P-49 🟡 Refactor 3 cloud HTTPS clients to a single cloud_client factory (NEW 2026-05-21)
+## P-49 🟢 Refactor 3 cloud HTTPS clients to a single cloud_client factory (RESOLVED 2026-05-22)
 
 Currently `vin_pairing.c`, `wot_logger.c`, `sbf_orchestrator.c` each
 duplicate the `esp_http_client_config_t` initializer (URL + TLS bundle

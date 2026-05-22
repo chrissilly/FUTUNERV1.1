@@ -47,6 +47,7 @@ set(app_sources
     "feature_manager/feature_manager.c"
     "dtc/dtc_feature.c"
     "dtc/dtc_uds.c"
+    "cloud/cloud_client.c"
     "license/license.c"
     "vin_pairing/vin_pairing.c"
     "sbf/sbf_loader.c"

@@ -10,7 +10,7 @@
 #  include "freertos/FreeRTOS.h"
 #  include "freertos/task.h"
 #  include "esp_http_client.h"
-#  include "esp_crt_bundle.h"
+#  include "cloud/cloud_client.h"
 #  include "wifi/wifi_ap.h"
 #  include "logger/logger_manager.h"
 #  include "logger/logger_profile.h"
@@ -76,13 +76,8 @@ static int target_http_post(const char    *url,
                             uint32_t       timeout_ms,
                             void          *user_ctx) {
     (void)user_ctx;
-    esp_http_client_config_t cfg = {
-        .url               = url,
-        .method            = HTTP_METHOD_POST,
-        .timeout_ms        = (int)timeout_ms,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    /* P-49: TLS config centralized in cloud_client. */
+    esp_http_client_handle_t client = cloud_client_https_init(url, HTTP_METHOD_POST, (int)timeout_ms);
     if (client == NULL) {
         return (int)ESP_FAIL;
     }
