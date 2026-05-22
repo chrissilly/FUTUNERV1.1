@@ -1176,7 +1176,7 @@ fixture-portability work continues under P-38.
 
 ---
 
-## P-43 🟡 Cloud admin endpoint `GET /admin/devices/{mac}` missing (NEW 2026-05-21)
+## P-43 🟡 Cloud admin endpoint `GET /admin/devices/{mac}` missing — code landed, PENDING-DEPLOY-AND-VERIFY (NEW 2026-05-21, code 2026-05-22)
 
 Cloud-side, current admin API only exposes `GET /admin/devices` (list-
 all) and `POST /admin/devices/{mac}/license` (single-device licensing).

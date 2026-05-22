@@ -447,6 +447,25 @@ async def admin_list_devices(x_admin_key: Optional[str] = Header(None)):
     return [dict(r) for r in rows]
 
 
+@app.get("/admin/devices/{mac}")
+async def admin_get_device(mac: str, x_admin_key: Optional[str] = Header(None)):
+    """
+    P-43: single-row selector for an enrolled device. Mirrors the
+    admin_set_license auth model (require_admin) and 404 shape
+    ("No such device: <mac>") used by POST /admin/devices/{mac}/license.
+    Returns the same per-row shape that admin_list_devices returns —
+    so tools that want to confirm a specific dongle's enrollment +
+    paid state don't have to round-trip the full list.
+    """
+    require_admin(x_admin_key)
+    conn = db()
+    row = conn.execute("SELECT * FROM devices WHERE mac = ?", (mac,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, f"No such device: {mac}")
+    return dict(row)
+
+
 @app.put("/admin/firmware/{build_hash}")
 async def admin_upload_firmware(
     build_hash: str,
@@ -635,6 +654,7 @@ async def root():
             "POST /admin/calibrations/{filename}",
             "POST /admin/devices/{mac}/assign_calibration",
             "GET  /admin/devices",
+            "GET  /admin/devices/{mac}",
             "GET  /admin/log/{mac}",
         ],
     }
