@@ -347,6 +347,28 @@ upper-layer ISO-TP confirms no CAN-specific assumptions. Ethernet
 skeleton compiles. Defer on-car verification until hardware arrives;
 mark item DEFERRED-PENDING-HARDWARE rather than blocking Phase 1 close.
 
+**Audit findings (2026-05-22, overnight Phase α):**
+
+- `firmware/src/transport/` did not exist. Scaffolded: README.md +
+  `transport_iface.h` (proposed interface, mirrors the Phase 2
+  `mdg1_uds_transport_t` shape) + `transport_eth.c` (TODO stubs).
+  None registered in CMakeLists.txt — design-doc-in-code-form
+  rather than active firmware.
+- Phase 2 flash orchestrator already implements its own per-call
+  transport vtable (`mdg1_uds_transport_t`). Phase 1 main UDS path
+  does NOT — calls `can_manager_*` functions directly. Upper
+  layers (`isotp_coordinator`, `logger_manager`, `dtc_uds`,
+  `vin_pairing`) only touch the CAN-named facade, not TWAI
+  primitives directly. Migration to the transport interface should
+  be a thin adapter swap on the CAN side; the big work is the
+  Ethernet leg.
+- `main_sniff.c` uses `twai_general_config_t` directly, but that's
+  a separate sniffer build target gated by `SNIFF_MODE=1` — not in
+  the production runtime path.
+- Status STAYS DEFERRED-PENDING-HARDWARE. README.md captures the
+  migration sequence; reviewable in
+  `firmware/src/transport/README.md`.
+
 ---
 
 ## Track C — Verification gaps
