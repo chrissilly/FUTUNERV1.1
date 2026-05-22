@@ -4,11 +4,20 @@
 #include "error/error_tracker.h"
 #include "wifi/wifi_ap.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "cJSON.h"
 #include <string.h>
 #include <stdio.h>
 
 static const char *TAG = "SYSTEM_CMD";
+
+/* P-59: delay between cmd_reboot ACK send and the actual esp_restart()
+ * so the WS server has time to flush the response to the client.
+ * 500 ms covers AP-side and STA-side round-trips with margin and still
+ * feels responsive. Per CLAUDE.md Rule 3 (no magic numbers). */
+#define SYSTEM_CMD_REBOOT_ACK_DELAY_MS  500
 
 esp_err_t cmd_get_status(int fd, const char *params, char *response, size_t response_size) {
     cJSON *root = cJSON_CreateObject();
@@ -169,5 +178,33 @@ esp_err_t cmd_logger_start(int fd, const char *params, char *response, size_t re
 esp_err_t cmd_logger_stop(int fd, const char *params, char *response, size_t response_size) {
     connection_manager_logger_stop();
     snprintf(response, response_size, "{\"logger\":\"stopped\"}");
+    return ESP_OK;
+}
+
+/* P-59: one-shot deferred-restart task. Delays
+ * SYSTEM_CMD_REBOOT_ACK_DELAY_MS so the WS server can flush the
+ * cmd_reboot ACK to the client, then calls esp_restart(). */
+static void reboot_task(void *arg) {
+    (void)arg;
+    ESP_LOGW(TAG, "reboot requested; restarting in %d ms", SYSTEM_CMD_REBOOT_ACK_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(SYSTEM_CMD_REBOOT_ACK_DELAY_MS));
+    esp_restart();
+}
+
+esp_err_t cmd_reboot(int fd, const char *params, char *response, size_t response_size) {
+    (void)fd;
+    (void)params;
+    /* Send the ACK first; the deferred task triggers esp_restart() after
+     * the response has had a chance to flush. SECURED in COMMAND_REGISTRY
+     * so unauthenticated clients can't reboot the dongle. */
+    snprintf(response, response_size, "{\"ok\":true,\"message\":\"rebooting\"}");
+    BaseType_t rc = xTaskCreate(reboot_task, "reboot", 2048, NULL,
+                                tskIDLE_PRIORITY + 1, NULL);
+    if (rc != pdPASS) {
+        ESP_LOGE(TAG, "failed to spawn reboot_task (rc=%d) — falling back to immediate restart",
+                 (int)rc);
+        /* Last resort: response won't flush, but caller WILL see a reset. */
+        esp_restart();
+    }
     return ESP_OK;
 }

@@ -27,6 +27,7 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"list_commands", "List all available commands", CMD_SECURITY_UNSECURED, cmd_list_commands},
     {"get_errors", "Get error log history", CMD_SECURITY_UNSECURED, cmd_get_errors},
     {"clear_errors", "Clear error log", CMD_SECURITY_SECURED, cmd_clear_errors},
+    {"reboot", "Soft reset the dongle (esp_restart after ACK flush) — P-59", CMD_SECURITY_SECURED, cmd_reboot},
     /* Legacy WiFi commands — kept intact pending P-24 (UI/cloud migrate
      * to the new wifi_sta_set / wifi_mode / wifi_clear surface). */
     {"wifi_connect", "Join external WiFi (saves to NVS) — LEGACY, see wifi_sta_set/wifi_mode", CMD_SECURITY_UNSECURED, cmd_wifi_connect},

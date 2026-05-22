@@ -14,5 +14,10 @@ esp_err_t cmd_wifi_status(int fd, const char *params, char *response, size_t res
 esp_err_t cmd_logger_start(int fd, const char *params, char *response, size_t response_size);
 esp_err_t cmd_logger_stop(int fd, const char *params, char *response, size_t response_size);
 
+/* P-59: soft restart via esp_restart() after the WS ACK is sent. The
+ * actual restart is deferred SYSTEM_CMD_REBOOT_ACK_DELAY_MS so the
+ * httpd has time to flush the response to the client. SECURED. */
+esp_err_t cmd_reboot(int fd, const char *params, char *response, size_t response_size);
+
 #endif // SYSTEM_COMMANDS_H
 
