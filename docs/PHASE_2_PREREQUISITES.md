@@ -14,6 +14,7 @@
 - 🔴 NOT STARTED
 - 🟡 IN PROGRESS / PARTIALLY ANSWERED
 - 🟢 DONE
+- ⚫ OBSOLETE / CLOSED-AS-UNRECOVERABLE — numeric slot kept reserved but content unrecoverable; not reused
 
 ---
 
@@ -956,32 +957,38 @@ See P-21. Reserved to close cross-reference gap from
 
 ---
 
-## P-29 🔴 RESERVED (NEW 2026-05-19)
+## P-29 ⚫ OBSOLETE — content unrecoverable (CLOSED 2026-05-22)
 
-Gap in the P-ID sequence between P-28 (WOT logger init order) and
-P-33 (wifi_manager bash 3.2 portability). Reserved during the
-2026-05-19 Hermes audit close-out to keep the sequence dense — no
-external cross-reference yet, but reserving prevents the same
-"numbers are sticky, but the gap is confusing" smell P-21..P-23
-already had. Content TBD.
+Reserved during the 2026-05-19 Hermes audit close-out to hold P-IDs
+for an intended UI-fix batch from the PC handoff. Content was never
+recorded into either archived handoff doc
+(`handoffs/archive/PC_PHASE1_HANDOFF.md`,
+`handoffs/archive/HANDOFF_TO_PC.md`) and is not derivable from git
+history. Per A4 in `PHASE_1_COMPLETION_PLAN.md`: "if the content is
+unrecoverable, mark each entry OBSOLETE with a note referencing the
+2026-05-19 PC reset event."
 
----
-
-## P-30 🔴 RESERVED (NEW 2026-05-19)
-
-See P-29. Reserved during 2026-05-19 audit close-out.
-
----
-
-## P-31 🔴 RESERVED (NEW 2026-05-19)
-
-See P-29. Reserved during 2026-05-19 audit close-out.
+Closed: the P-29..P-32 surface is now covered by P-57..P-61 from
+the 2026-05-21 UI vet, which capture the actual UI bugs the placeholder
+slots were meant to hold. P-NN numbers are sticky; not reused.
 
 ---
 
-## P-32 🔴 RESERVED (NEW 2026-05-19)
+## P-30 ⚫ OBSOLETE — content unrecoverable (CLOSED 2026-05-22)
 
-See P-29. Reserved during 2026-05-19 audit close-out.
+See P-29.
+
+---
+
+## P-31 ⚫ OBSOLETE — content unrecoverable (CLOSED 2026-05-22)
+
+See P-29.
+
+---
+
+## P-32 ⚫ OBSOLETE — content unrecoverable (CLOSED 2026-05-22)
+
+See P-29.
 
 ---
 
