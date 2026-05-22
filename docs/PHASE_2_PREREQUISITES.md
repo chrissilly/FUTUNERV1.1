@@ -1595,6 +1595,42 @@ press required.
 
 ---
 
+## P-62 🟢 boxcode lost on paired-shortcut path after NVS load (RESOLVED 2026-05-22)
+
+Latent bug surfaced by P-58's NVS persistence fix. `boxcode` is a
+DERIVED value (`hardware_version + "__" + software_version` with
+whitespace trim), computed inline in
+`handle_build_id_response()` at the end of the full-discovery
+sequence. `nvs_manager_save_ecu_info()` persists VIN /
+software_version / hardware_version / build_id but NOT boxcode.
+
+The paired-shortcut path in `handle_check_pairing()` (NVS hit →
+memcpy → CHECK_PATCH_STATUS) skipped the REQUEST_BUILD_ID state
+that performs the derivation, leaving `current_ecu_info.boxcode`
+empty after the memcpy. Empty boxcode then failed
+`logger_variables_is_boxcode_supported` + `logger_profile_apply`,
+kicking CONN_MGR into ERROR ("Boxcode  is NOT supported, logger
+will not be available" — double space = empty value).
+
+Pre-P-58 this was latent because `vin_pair_now` never persisted
+the NVS pair record; CHECK_PAIRING always missed and CONN_MGR ran
+full discovery every boot. After P-58 (`a9c0b5f`), persistence
+works → paired-shortcut becomes the common power-cycle path →
+empty-boxcode error surfaces every boot.
+
+**Fix:** re-derive boxcode in `handle_check_pairing()` after the
+memcpy. ~10 lines mirroring the existing derivation at line ~272.
+No new wire bytes, no state-machine flow change. Closes the
+regression cleanly.
+
+Boot log post-fix (verified 2026-05-22, dev RS7 KOEO):
+- `Boxcode (re-derived from NVS): 4K0907557G__0003`
+- `CHECK_PAIRING → CHECK_PATCH_STATUS → ... → CONNECTED` (no ERROR)
+- `WOT_LOG: recorder init OK (vars=6, trigger=wdkba)`
+- WS `get_status`: `{connected:true, patched:true, paired:true, state:CONNECTED, boxcode:"4K0907557G__0003", logger_variable_count:6}`
+
+---
+
 ## P-61 🟡 UI title says "FUTUNER v2" but project + firmware is v1.1 (NEW 2026-05-21)
 
 `document.title = "FUTUNER v2 Control Panel"`. Page header text

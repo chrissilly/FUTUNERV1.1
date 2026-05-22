@@ -168,12 +168,36 @@ static void handle_wait_vin_response(void) {
 
 static void handle_check_pairing(void) {
     ESP_LOGI(TAG, "Checking if paired with VIN: %s", current_ecu_info.vin);
-    
+
     if (nvs_manager_load_ecu_info(&stored_ecu_info) == ESP_OK) {
         if (strcmp(stored_ecu_info.vin, current_ecu_info.vin) == 0) {
             ESP_LOGI(TAG, "Already paired with this vehicle");
             memcpy(&current_ecu_info, &stored_ecu_info, sizeof(ecu_info_t));
             is_paired = true;
+            /* P-62: re-derive boxcode after NVS load. nvs_manager_save_ecu_info
+             * persists VIN/software_version/hardware_version/build_id but NOT
+             * boxcode (boxcode is a derived value: hw + "__" + sw with
+             * whitespace trim, NOT a discovered field). The full-discovery
+             * path computes boxcode at the REQUEST_BUILD_ID response
+             * handler (see line ~272); the paired-shortcut SKIPS that,
+             * leaving current_ecu_info.boxcode empty after the memcpy.
+             * Empty boxcode then fails logger_variables_is_boxcode_supported
+             * + logger_profile_apply, kicking CONN_MGR into ERROR.
+             *
+             * Pre-P-58 (a9c0b5f) this was latent because vin_pair_now never
+             * persisted the NVS pair record. After P-58 the persistence
+             * works and the paired-shortcut becomes the common path on
+             * every power-cycle. Surfaced 2026-05-22 KOEO test. */
+            char hw[32], sw[16];
+            strncpy(hw, current_ecu_info.hardware_version, sizeof(hw) - 1);
+            hw[sizeof(hw) - 1] = '\0';
+            strncpy(sw, current_ecu_info.software_version, sizeof(sw) - 1);
+            sw[sizeof(sw) - 1] = '\0';
+            for (int i = (int)strlen(hw) - 1; i >= 0 && hw[i] == ' '; i--) hw[i] = '\0';
+            for (int i = (int)strlen(sw) - 1; i >= 0 && sw[i] == ' '; i--) sw[i] = '\0';
+            snprintf(current_ecu_info.boxcode, sizeof(current_ecu_info.boxcode),
+                     "%s__%s", hw, sw);
+            ESP_LOGI(TAG, "Boxcode (re-derived from NVS): %s", current_ecu_info.boxcode);
             change_state(CONN_STATE_CHECK_PATCH_STATUS);
             return;
         }
