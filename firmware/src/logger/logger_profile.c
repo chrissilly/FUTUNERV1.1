@@ -15,6 +15,34 @@ static const char *TAG = "LOGGER_PROFILE";
 /* Maximum JSON file size for a profile (64 var names × ~32 chars + overhead) */
 #define PROFILE_MAX_FILE_SIZE  4096
 
+/* P-28: on-apply callback registry. Modules that need a populated
+ * logger_manager (e.g. wot_logger's recorder, which snapshots the
+ * variable list at init time) register here from their own init() and
+ * complete late-stage setup inside the callback. Cap from
+ * logger_profile.h. */
+static logger_profile_on_apply_fn_t s_on_apply_cbs[LOGGER_PROFILE_MAX_ON_APPLY_CBS];
+static uint8_t s_on_apply_count = 0;
+
+esp_err_t logger_profile_register_on_apply(logger_profile_on_apply_fn_t cb) {
+    if (cb == NULL) return ESP_ERR_INVALID_ARG;
+    for (uint8_t i = 0; i < s_on_apply_count; i++) {
+        if (s_on_apply_cbs[i] == cb) return ESP_OK;  /* idempotent */
+    }
+    if (s_on_apply_count >= LOGGER_PROFILE_MAX_ON_APPLY_CBS) {
+        ESP_LOGE(TAG, "on_apply callback registry full (cap=%d)",
+                 LOGGER_PROFILE_MAX_ON_APPLY_CBS);
+        return ESP_ERR_NO_MEM;
+    }
+    s_on_apply_cbs[s_on_apply_count++] = cb;
+    return ESP_OK;
+}
+
+static void fire_on_apply(const char *boxcode) {
+    for (uint8_t i = 0; i < s_on_apply_count; i++) {
+        if (s_on_apply_cbs[i] != NULL) s_on_apply_cbs[i](boxcode);
+    }
+}
+
 /**
  * Build the full filesystem path for a boxcode's profile.
  * Result: "/cal/profiles/<boxcode>.json"
@@ -244,9 +272,11 @@ bool logger_profile_apply(const char *boxcode) {
                 logger_variables_add_by_name(config->variables[i].name);
             }
         }
+        fire_on_apply(boxcode);
         return true;
     } else if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to load profile, using required-only");
+        fire_on_apply(boxcode);
         return true;  /* Still functional with just required vars */
     }
 
@@ -264,5 +294,6 @@ bool logger_profile_apply(const char *boxcode) {
              boxcode,
              (int)(logger_manager_get_variable_count() - applied),
              applied, saved_count);
+    fire_on_apply(boxcode);
     return true;
 }

@@ -13,6 +13,7 @@
 #  include "esp_crt_bundle.h"
 #  include "wifi/wifi_ap.h"
 #  include "logger/logger_manager.h"
+#  include "logger/logger_profile.h"
 #  include "nvs/nvs_manager.h"
 #  include <sys/stat.h>
 #  include <dirent.h>
@@ -42,6 +43,12 @@ static const char *TAG = "WOT_LOG";
 
 static bool s_running = false;
 static bool s_initialized = false;
+/* P-28: tracks early-init completion (feature descriptor registered,
+ * uploader initialized, on_apply callback registered). The recorder
+ * init is deferred until logger_profile_apply() fires our callback,
+ * at which point logger_manager has the variable list we need to
+ * snapshot. s_initialized only flips true after the late init lands. */
+static bool s_early_initialized = false;
 static char s_resolved_url[WOT_UPLOAD_URL_MAX];
 
 // ------------------------------------------------------------------
@@ -236,8 +243,49 @@ esp_err_t wot_logger_register_with_feature_manager(void) {
     return ESP_OK;
 }
 
+#ifndef WOT_LOGGER_HOST_BUILD
+/* P-28: late-init callback fired by logger_profile_apply() once
+ * logger_manager has been populated with the boxcode's variables.
+ * snapshot_logger_profile() now sees a non-zero var_count, so
+ * wot_recorder_init succeeds and FEATURE_WOT_LOGGING becomes fully
+ * usable. Earlier impl ran this whole chain at boot from main.c
+ * before the ECU had even been discovered, which is why
+ * wot_recorder_init failed with var_count=0 and the feature never
+ * registered. Idempotent — subsequent fires no-op once s_initialized. */
+static void wot_logger_on_logger_profile_applied(const char *boxcode) {
+    (void)boxcode;
+    if (s_initialized) return;
+    if (!s_early_initialized) {
+        ESP_LOGW(TAG, "on_logger_profile_applied before early init — ignoring");
+        return;
+    }
+    snapshot_logger_profile();
+    if (s_var_count == 0) {
+        ESP_LOGW(TAG, "on_logger_profile_applied: logger_manager has 0 vars — "
+                      "recorder init deferred until next apply");
+        return;
+    }
+    wot_recorder_config_t rec_cfg = {
+        .clock_now_ms          = target_clock_now_ms,
+        .on_finish             = target_on_finish,
+        .user_ctx              = NULL,
+        .trigger_var_index     = s_trigger_index,
+        .variables_per_sample  = s_var_count,
+        .variable_names        = s_var_names,
+    };
+    esp_err_t rc = wot_recorder_init(&rec_cfg);
+    if (rc != ESP_OK) {
+        ESP_LOGE(TAG, "recorder init rc=%d (will retry on next profile apply)", (int)rc);
+        return;
+    }
+    s_initialized = true;
+    ESP_LOGI(TAG, "WOT_LOG: recorder init OK (vars=%u, trigger=%s)",
+             (unsigned)s_var_count, WOT_TRIGGER_VARIABLE_NAME);
+}
+#endif
+
 esp_err_t wot_logger_init(void) {
-    if (s_initialized) {
+    if (s_initialized || s_early_initialized) {
         return ESP_OK;
     }
 
@@ -251,19 +299,14 @@ esp_err_t wot_logger_init(void) {
     s_initialized = true;
     return ESP_OK;
 #else
-    snapshot_logger_profile();
+    /* P-28: split init into early (boot-time) and late (post logger
+     * profile apply) phases. Early registers the feature descriptor
+     * and the uploader, neither of which depend on logger variables.
+     * Late init is in wot_logger_on_logger_profile_applied(). */
 
-    wot_recorder_config_t rec_cfg = {
-        .clock_now_ms          = target_clock_now_ms,
-        .on_finish             = target_on_finish,
-        .user_ctx              = NULL,
-        .trigger_var_index     = s_trigger_index,
-        .variables_per_sample  = s_var_count,
-        .variable_names        = s_var_names,
-    };
-    esp_err_t rc = wot_recorder_init(&rec_cfg);
+    esp_err_t rc = wot_logger_register_with_feature_manager();
     if (rc != ESP_OK) {
-        ESP_LOGE(TAG, "recorder init rc=%d", (int)rc);
+        ESP_LOGE(TAG, "feature_manager register rc=%d", (int)rc);
         return rc;
     }
 
@@ -284,22 +327,18 @@ esp_err_t wot_logger_init(void) {
     rc = wot_uploader_init(&up_cfg);
     if (rc != ESP_OK) {
         ESP_LOGE(TAG, "uploader init rc=%d", (int)rc);
-        wot_recorder_deinit();
         return rc;
     }
 
-    rc = wot_logger_register_with_feature_manager();
+    rc = logger_profile_register_on_apply(wot_logger_on_logger_profile_applied);
     if (rc != ESP_OK) {
-        ESP_LOGE(TAG, "feature_manager register rc=%d", (int)rc);
-        wot_uploader_deinit();
-        wot_recorder_deinit();
-        return rc;
+        ESP_LOGW(TAG, "logger_profile_register_on_apply rc=%d "
+                      "(recorder init will be skipped)", (int)rc);
     }
 
-    // Hook into logger_manager's per-poll data callback only when
-    // start() is later called; init does NOT auto-start.
-    s_initialized = true;
-    ESP_LOGI(TAG, "wot_logger initialized (url=%s, trigger_var=%s)",
+    s_early_initialized = true;
+    ESP_LOGI(TAG, "wot_logger early init OK (url=%s, trigger_var=%s); "
+                  "recorder init deferred to logger profile apply",
              s_resolved_url, WOT_TRIGGER_VARIABLE_NAME);
     return ESP_OK;
 #endif

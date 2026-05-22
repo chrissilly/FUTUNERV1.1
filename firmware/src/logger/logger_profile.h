@@ -20,6 +20,11 @@
 #define LOGGER_PROFILE_MAX_SELECTED  64  /* Max optional vars in a profile */
 #define LOGGER_PROFILE_DIR           "profiles"
 
+/* P-28: max on-apply callbacks. Per CLAUDE.md Rule 3 (no magic numbers)
+ * — adjust here, not at call sites. Sized for current callers
+ * (wot_logger) with headroom. */
+#define LOGGER_PROFILE_MAX_ON_APPLY_CBS  4
+
 /**
  * Initialize the profile system. Creates the profiles directory if needed.
  * Must be called after fs_manager_mount_partition(FS_PARTITION_STORAGE).
@@ -71,5 +76,28 @@ bool logger_profile_exists(const char *boxcode);
  *         false on error
  */
 bool logger_profile_apply(const char *boxcode);
+
+/**
+ * Callback fired after logger_profile_apply() successfully populates
+ * logger_manager. Modules that need a populated logger_manager
+ * (e.g. wot_logger's recorder, which snapshots variables_per_sample
+ * at init time) register here from their own init() and complete
+ * late-stage setup inside the callback. Called in registration order.
+ *
+ * Added 2026-05-21 to fix P-28 — wot_logger_init() ran at boot before
+ * any logger profile existed, so the recorder init failed with 0 vars
+ * and FEATURE_WOT_LOGGING never registered.
+ *
+ * @param boxcode  The boxcode whose profile was just applied.
+ *                 NUL-terminated; valid only for the duration of the call.
+ */
+typedef void (*logger_profile_on_apply_fn_t)(const char *boxcode);
+
+/**
+ * Register an on-apply callback. Returns ESP_ERR_INVALID_ARG on NULL,
+ * ESP_ERR_NO_MEM if the registry is full
+ * (LOGGER_PROFILE_MAX_ON_APPLY_CBS).
+ */
+esp_err_t logger_profile_register_on_apply(logger_profile_on_apply_fn_t cb);
 
 #endif // LOGGER_PROFILE_H
