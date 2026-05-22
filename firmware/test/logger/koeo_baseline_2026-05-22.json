@@ -1,0 +1,123 @@
+{
+  "$schema_note": "P-55 KOEO baseline. Captured 2026-05-22 on dev RS7 (boxcode 4K0907557G__0003, MAC 30:ED:A0:B6:35:40), key on, engine OFF. Captured via WS get_logger_data_raw + get_logger_data on STA IP 10.48.146.232. Documentation-only baseline; DID table NOT fixed yet — Sean's decision (A2L lookup vs source rewrite vs service swap).",
+  "boxcode": "4K0907557G__0003",
+  "vehicle": "dev RS7 (Sean Cyr)",
+  "capture_state": "KOEO (key on, engine off, in shop)",
+  "capture_date": "2026-05-22",
+  "firmware_head": "7765e5f",
+  "raw_response_hex_samples": [
+    {"hex": "7E0080580A1B9600000100", "bytes": 11, "captured_at": "T+0"},
+    {"hex": "7E0080630A1B9400000100", "bytes": 11, "captured_at": "T+1 (post-recovery)"}
+  ],
+  "raw_response_decode_hint": "First 2 bytes appear to be a header (SID 0x7E, subfunc 0x00). Remaining 9 bytes for 6 vars of widths 2,2,2,2,1,1 = 10 bytes — off by 1 vs response_len=11. Either header is 1 byte (SID only) OR one of the size declarations is off OR there's an alignment/padding step the parser doesn't expect.",
+  "variables": [
+    {
+      "name": "nmot_w",
+      "display_name": "Engine Speed",
+      "unit": "rpm",
+      "firmware_ram_address": "0x60020618",
+      "firmware_size_bytes": 2,
+      "firmware_scale": 0.25,
+      "firmware_offset": 0,
+      "parsed_value_sample1": -6777.25,
+      "parsed_value_sample2": -6905.25,
+      "expected_koeo": 0,
+      "tolerance": "±50 rpm (idle noise)",
+      "pass_fail": "FAIL",
+      "diagnosis": "Negative RPM is impossible regardless of scale. Sign mis-decode OR wrong DID OR demux conflation."
+    },
+    {
+      "name": "InjSys_ratEthPrtnBascFu",
+      "display_name": "Ethanol Content",
+      "unit": "%",
+      "firmware_ram_address": "0x6001522A",
+      "firmware_size_bytes": 2,
+      "firmware_scale": 0.00152587167162585,
+      "firmware_offset": 0,
+      "parsed_value_sample1": -49.999763488769531,
+      "parsed_value_sample2": -49.999763488769531,
+      "expected_koeo": "last-known (0-100% range)",
+      "pass_fail": "FAIL",
+      "diagnosis": "Negative ethanol % is impossible. Same sign/demux class as nmot_w. Identical sample-to-sample value suggests reading a constant memory location (uninitialized?) rather than a live signal."
+    },
+    {
+      "name": "Com_stCrCtlPan",
+      "display_name": "Cruise Control Status",
+      "unit": "-",
+      "firmware_ram_address": "0x600206F8",
+      "firmware_size_bytes": 2,
+      "firmware_scale": 1.0,
+      "firmware_offset": 0,
+      "parsed_value_sample1": 0,
+      "parsed_value_sample2": 0,
+      "expected_koeo": 0,
+      "pass_fail": "PASS",
+      "diagnosis": "Plausible. Cruise idle = 0."
+    },
+    {
+      "name": "rl_w",
+      "display_name": "Load (actual)",
+      "unit": "%",
+      "firmware_ram_address": "0x60015660",
+      "firmware_size_bytes": 2,
+      "firmware_scale": 0.0234375066758221,
+      "firmware_offset": 0,
+      "parsed_value_sample1": 59.132831573486328,
+      "parsed_value_sample2": 62.320331573486328,
+      "expected_koeo": 0,
+      "tolerance": "0-2% (KOEO baseline noise)",
+      "pass_fail": "FAIL",
+      "diagnosis": "Load >50% with engine OFF is impossible. Sample-to-sample variation (59 → 62) suggests it IS reading a live signal but the scale/address is wrong."
+    },
+    {
+      "name": "tmot",
+      "display_name": "Coolant Temp",
+      "unit": "C",
+      "firmware_ram_address": "0x6001BF38",
+      "firmware_size_bytes": 1,
+      "firmware_scale": 0.749803921568627,
+      "firmware_offset": -48,
+      "parsed_value_sample1": -35.990585327148438,
+      "parsed_value_sample2": -35.990585327148438,
+      "expected_koeo": "ambient ± 10°C (shop ambient ~20°C)",
+      "pass_fail": "FAIL",
+      "diagnosis": "(-35.99 + 48) / 0.7498 ≈ 16 = raw byte value. Decoded as `raw=16` would give -35.99°C. Plausibility: ambient 20°C requires raw≈90. The raw=16 reading either means the wrong address is being read (something near-zero), OR signedness is flipped (byte 0xF0 interpreted as 16 instead of 240, which would give 132°C — too hot)."
+    },
+    {
+      "name": "wdkba",
+      "display_name": "Throttle Position",
+      "unit": "%",
+      "firmware_ram_address": "0x6001B842",
+      "firmware_size_bytes": 1,
+      "firmware_scale": 0.392156862745098,
+      "firmware_offset": 0,
+      "parsed_value_sample1": 0.39215686917305,
+      "parsed_value_sample2": 0.39215686917305,
+      "expected_koeo": "0% (no pedal)",
+      "tolerance": "0-2%",
+      "pass_fail": "BORDERLINE",
+      "diagnosis": "raw=1 * scale = 0.39%. Either the throttle is reading raw=1 (very close to 0 but off by 1), OR a different variable's byte position is being read here. Lowest-priority discrepancy of the 6."
+    }
+  ],
+  "summary": {
+    "pass": 1,
+    "borderline": 1,
+    "fail": 4,
+    "total": 6
+  },
+  "next_steps": [
+    "Sean: locate the A2L for 4K0907557G__0003 (probably in a Bosch/VAG tuner-toolchain bundle separate from the SEFIV1.0 archive)",
+    "Once A2L is on disk: cross-check each of the 6 RAM addresses + scale + offset + signedness against canonical Bosch MG1 symbol table. The big questions are:",
+    " - Is `nmot_w` at 0x60020618 actually engine RPM, or is it something else?",
+    " - Is the response signed or unsigned at the byte level?",
+    " - Does the parser handle the 11-byte response correctly given 6 vars × 2,2,2,2,1,1 = 10 bytes payload?",
+    "OR proceed regardless of A2L: write a parser-side fix that handles signed conversion + verifies header length",
+    "Either way, DO NOT modify logger_variables.c without Sean review — DID table changes affect what gets logged to every customer car running this boxcode"
+  ],
+  "no_source_changes_in_this_commit": true,
+  "see_also": [
+    "firmware/src/logger/A2L_DID_AUDIT.md (initial audit doc, 2026-05-22 overnight)",
+    "stuck/A11_battery_voltage.md (related ECU-wire-surface gating)",
+    "PHASE_2_PREREQUISITES.md P-55"
+  ]
+}
