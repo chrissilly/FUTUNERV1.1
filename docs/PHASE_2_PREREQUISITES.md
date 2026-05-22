@@ -1136,6 +1136,46 @@ post-SA phases do.
 
 ---
 
+## P-41 ⚫ OBSOLETE — slot unused (CLOSED 2026-05-22)
+
+Gap between P-40 and P-42 left by the 2026-05-19 audit close-out.
+No content was recorded against this number. Filed as obsolete to
+keep the sequence dense; P-NN numbers are sticky.
+
+---
+
+## P-42 🟢 Shadow-test primary halt gate verified clean (RESOLVED 2026-05-22)
+
+PHASE_1_COMPLETION_PLAN.md A6 flagged a possible "primary halt gate
+regression" in `firmware/test/mdg1_flash_orchestrator/eval.sh` and
+asked for a fresh repro on current main HEAD.
+
+Re-run on origin/main @ 5f62cea (2026-05-22):
+
+    $ SKIP_IDF_BUILD=1 bash firmware/test/mdg1_flash_orchestrator/eval.sh
+    ...
+    Passed: 64
+    Failed: 3
+    FAILURES:
+      - host_test_runner reported failures
+      - shadow_full vs mm_FULL_Flash.log: MISMATCH (orch_diff.log)
+      - CAL section vs mm_MAPS_upload.log: MISMATCH (orch_diff_cal.log)
+    RESULT: FAIL
+
+All 3 failures collapse to the same root cause: `/tmp/lzrb_cli`
+binary not present (eval script even prints the build hint in the
+error). Cross-check: the `test_hil_defensive_secondary_engages_when_primary_bypassed`
+test that exercises the **actual primary halt gate** PASSES. The
+defensive secondary halt fired, the DEFENSIVE HALT log line emitted,
+no SECTION_ERASE leaked through. Primary halt gate is intact.
+
+The 3 failures are downstream of P-38 (fixture portability —
+`/Users/rabbit/sniffer/*` MM captures + `/tmp/lzrb_cli` binary),
+NOT a halt-gate regression. Closing P-42 as not-a-bug; the open
+fixture-portability work continues under P-38.
+
+---
+
 ## P-43 🟡 Cloud admin endpoint `GET /admin/devices/{mac}` missing (NEW 2026-05-21)
 
 Cloud-side, current admin API only exposes `GET /admin/devices` (list-
