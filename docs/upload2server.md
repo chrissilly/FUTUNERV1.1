@@ -1,7 +1,7 @@
 # upload2server.md — pre-flash server readiness checklist
 
 > **What this is.** Everything you need to push to your cloud server
-> (`api.sillyrabbitmotorsport.com`) before flashing a dongle, in the
+> (`sillyrabbitmotorsport.com`) before flashing a dongle, in the
 > order it has to happen. Paste-able commands. Assumes you have shell
 > access to the box running Caddy + Docker and the `ADMIN_API_KEY` set
 > in your shell.
@@ -10,13 +10,13 @@
 > box itself — for that, see `cloud/README.md` (Caddy install, A
 > record, Docker install, initial certificate). This doc assumes the
 > cloud is already up and reachable at
-> `https://api.sillyrabbitmotorsport.com/health`.
+> `https://sillyrabbitmotorsport.com/fut/health`.
 
 ---
 
 ## Pre-flight assumptions
 
-- DNS: `api.sillyrabbitmotorsport.com` resolves to your box.
+- DNS: `sillyrabbitmotorsport.com` resolves to your box.
 - Caddy is reading `cloud/Caddyfile` and reverse-proxying to
   `127.0.0.1:8000`.
 - Docker + docker-compose installed on the box.
@@ -25,7 +25,7 @@
 
   ```bash
   export ADMIN_API_KEY='paste-your-long-random-string-here'
-  export CLOUD='https://api.sillyrabbitmotorsport.com'
+  export CLOUD='https://sillyrabbitmotorsport.com/fut'
   ```
 
 - The dongle's MAC is known (read off the chip or from the boot serial

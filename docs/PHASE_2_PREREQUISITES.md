@@ -1275,7 +1275,7 @@ host in firmware.
 
 ---
 
-## P-48 🟡 Cloud source + docs still reference `api.sillyrabbitmotorsport.com` (NEW 2026-05-21)
+## P-48 🟢 Cloud source + docs still reference `api.sillyrabbitmotorsport.com` (RESOLVED 2026-05-22)
 
 `cloud/Caddyfile`, `cloud/scripts/centos-server-setup.sh`,
 `cloud/src/main.py` docstring, `cloud/README.md`, and ~9 docs files

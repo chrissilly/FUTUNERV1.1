@@ -1,5 +1,5 @@
 """
-api.sillyrabbitmotorsport.com — SRM Cloud server
+sillyrabbitmotorsport.com — SRM Cloud server
 ================================================
 
 Replaces api.dynoscorpion.com (Sean's server) with one Chris/SRM owns.

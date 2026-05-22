@@ -75,7 +75,7 @@ Phase semantics (each opt-out via `--no-X`, or pick one with `--only=X`):
 | Var | Purpose | Default |
 |---|---|---|
 | `ADMIN_API_KEY` | x-admin-key header for cloud admin endpoints. | (no default — required for `--cloud`/`--provision`) |
-| `CLOUD_URL` | Cloud base URL. | `https://api.sillyrabbitmotorsport.com` |
+| `CLOUD_URL` | Cloud base URL. | `https://sillyrabbitmotorsport.com/fut` |
 
 The script never logs the raw key — `--dry-run` shows it as `****-key`,
 the appended progress-log block redacts it the same way.

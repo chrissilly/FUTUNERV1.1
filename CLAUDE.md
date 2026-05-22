@@ -137,7 +137,7 @@ FUTV1.1/
 │   ├── futuner_control_panel.html            ← single-page UI (loaded onto dongle)
 │   ├── partitions.csv, sdkconfig.defaults, CMakeLists.txt
 │   └── build.sh, flash.sh, monitor.sh
-├── cloud/                                    ← FastAPI + SQLite cloud (api.sillyrabbitmotorsport.com)
+├── cloud/                                    ← FastAPI + SQLite cloud (sillyrabbitmotorsport.com)
 ├── ui/                                       ← active SPA (red/black theme)
 ├── sbf/                                      ← sample SBF/FBF files
 ├── tools/                                    ← sbf_to_json.py, can_sniff.py

@@ -61,7 +61,7 @@ from typing import Any, Callable, Iterable, Optional
 CONFIG: dict[str, Any] = {
     # Cloud base URL. Override with $CLOUD_URL.
     # Proposed default — needs Sean's approval before lock.
-    "CLOUD_URL_DEFAULT":          "https://api.sillyrabbitmotorsport.com",
+    "CLOUD_URL_DEFAULT":          "https://sillyrabbitmotorsport.com/fut",
 
     # Dongle WS host during provision (AP-mode IP after fresh flash).
     # Proposed default — needs Sean's approval before lock.

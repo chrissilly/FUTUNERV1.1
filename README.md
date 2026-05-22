@@ -22,7 +22,7 @@ FUTV1.1/
 │   ├── control_panel.html    ← active SPA (red/black theme, mission features)
 │   └── _reference/           ← ScorpionEFI compiled bundle (visual reference only)
 │
-├── cloud/                    ← FastAPI backend (api.sillyrabbitmotorsport.com)
+├── cloud/                    ← FastAPI backend (sillyrabbitmotorsport.com)
 │   ├── src/                  ← endpoints: VIN pairing, SBF download, log upload
 │   ├── tests/                ← pytest suite (5 tests passing)
 │   └── docker-compose.yml

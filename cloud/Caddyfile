@@ -1,8 +1,8 @@
 # Caddy reverse proxy + automatic HTTPS via Let's Encrypt.
 # Put this in /etc/caddy/Caddyfile on a Linux box, then `sudo systemctl reload caddy`.
-# Requires: A record api.sillyrabbitmotorsport.com → this box's public IP, port 80+443 open.
+# Requires: A record sillyrabbitmotorsport.com → this box's public IP, port 80+443 open.
 
-api.sillyrabbitmotorsport.com {
+sillyrabbitmotorsport.com {
     reverse_proxy 127.0.0.1:8000
 
     # Friendly logs

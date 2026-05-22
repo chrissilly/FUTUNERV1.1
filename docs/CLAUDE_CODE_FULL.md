@@ -69,7 +69,7 @@ PHASE A — Pre-flight (silent; PASS/FAIL line per check)
   echo $ADMIN_API_KEY | wc -c                           (>1)
   echo $STA_SSID | wc -c                                (>1)
   python3 -c "import gs_usb"                            (must succeed)
-  curl -fsS https://api.sillyrabbitmotorsport.com/health (must 200)
+  curl -fsS https://sillyrabbitmotorsport.com/fut/health (must 200)
 
 If any fails, STOP and print which one.
 
@@ -96,7 +96,7 @@ PHASE C — Cloud-side enrollment (one curl chain)
   curl -fsS -H "x-admin-key: $ADMIN_API_KEY" \
        -H "Content-Type: application/json" \
        -d "{\"mac\":\"$MAC\"}" \
-       https://api.sillyrabbitmotorsport.com/admin/devices
+       https://sillyrabbitmotorsport.com/fut/admin/devices
 
 Capture auth_token from response. If response is 409
 (already enrolled), GET /admin/devices and reuse the existing
@@ -128,14 +128,14 @@ PHASE E — VIN pair + license paid + SBF assign (cloud + WS)
   curl -fsS -H "x-admin-key: $ADMIN_API_KEY" \
        -H "Content-Type: application/json" \
        -d '{"paid":1}' \
-       https://api.sillyrabbitmotorsport.com/admin/devices/$MAC/license
+       https://sillyrabbitmotorsport.com/fut/admin/devices/$MAC/license
 
   curl -fsS -H "x-admin-key: $ADMIN_API_KEY" \
        -F "file=@$HOME/esp/obd/FUTV1.1/sbf/stage1_patched.sbf" \
-       "https://api.sillyrabbitmotorsport.com/admin/calibrations/stage1_patched.sbf?boxcode=4K0907557G__0003"
+       "https://sillyrabbitmotorsport.com/fut/admin/calibrations/stage1_patched.sbf?boxcode=4K0907557G__0003"
 
   curl -fsS -H "x-admin-key: $ADMIN_API_KEY" \
-       "https://api.sillyrabbitmotorsport.com/admin/devices/$MAC/assign_calibration?filename=stage1_patched.sbf"
+       "https://sillyrabbitmotorsport.com/fut/admin/devices/$MAC/assign_calibration?filename=stage1_patched.sbf"
 
   WS: vin_pair_now    (refresh license cache; expect paid:true now)
   WS: license_status  (verify paid:true, vin populated)

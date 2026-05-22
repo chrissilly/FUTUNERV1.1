@@ -91,7 +91,7 @@ by default.
 Q3 — CONFIG / SECRETS: env vars + per-run flags. NO secrets in
 files committed to the repo.
   - Required env vars: ADMIN_API_KEY (admin auth), CLOUD_URL
-    (default https://api.sillyrabbitmotorsport.com).
+    (default https://sillyrabbitmotorsport.com/fut).
   - Per-run flags: --mac (dongle MAC, required when running --cloud
     or --provision; auto-extracted from boot log when --flash also ON),
     --vin (optional; otherwise dongle reports it on first register),

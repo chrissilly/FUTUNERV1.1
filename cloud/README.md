@@ -1,4 +1,4 @@
-# SRM Cloud — `api.sillyrabbitmotorsport.com`
+# SRM Cloud — `sillyrabbitmotorsport.com`
 
 Server-side replacement for `api.dynoscorpion.com`. Implements the same
 three endpoints the v1.0 SEFI dongle expects, plus an admin surface for
@@ -68,7 +68,7 @@ A $5 VPS works (DigitalOcean, Hetzner, Linode, etc.). You need:
 Add an A record:
 
 ```
-api.sillyrabbitmotorsport.com   →   <your VPS public IP>
+sillyrabbitmotorsport.com   →   <your VPS public IP>
 ```
 
 ### 3. Run with Docker (recommended)
@@ -98,7 +98,7 @@ sudo systemctl reload caddy
 Caddy auto-provisions a Let's Encrypt cert. Within ~30 seconds:
 
 ```bash
-curl https://api.sillyrabbitmotorsport.com/health
+curl https://sillyrabbitmotorsport.com/fut/health
 # {"ok": true, "ts": 1746384000}
 ```
 
@@ -116,7 +116,7 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 ```bash
 ADMIN_KEY="<your ADMIN_API_KEY>"
-BASE=https://api.sillyrabbitmotorsport.com
+BASE=https://sillyrabbitmotorsport.com/fut
 
 # 1. Enroll the dongle. Save the auth_token from the response.
 curl -X POST "$BASE/admin/devices" \

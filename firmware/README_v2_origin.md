@@ -117,7 +117,7 @@ identify the bad address.
 ├── sbf/              ← Sean's calibration binaries + JSON decodes
 ├── tools/            ← SBF decompiler, can_sniff.py
 ├── recovery/         ← restore scripts (diagnose, erase cal, force boot, etc.)
-├── cloud_server/     ← api.sillyrabbitmotorsport.com server (replaces api.dynoscorpion.com)
+├── cloud_server/     ← sillyrabbitmotorsport.com server (replaces api.dynoscorpion.com)
 ├── docs/             ← project knowledge base + RE writeups
 ├── hw_reference/     ← XDF, working dongle dumps, MDG1 RE docs
 └── README.md         ← entry point

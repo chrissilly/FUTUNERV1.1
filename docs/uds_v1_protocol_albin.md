@@ -359,7 +359,7 @@ set.
 Replace SBF (binary, ~35 KB) with **JSON map files (<256 KB)** that:
 - Encode the same map data in a human-readable form (axis arrays + 2-D Z-array per map)
 - Encode the same per-VIN validation field (now openly documented, not DRM)
-- Are compiled/served by SRM's own cloud (`api.sillyrabbitmotorsport.com`)
+- Are compiled/served by SRM's own cloud (`sillyrabbitmotorsport.com`)
 
 The on-the-wire UDS protocol stays identical (services, sub-functions,
 chunking, mid_byte). Only the on-device file format changes.

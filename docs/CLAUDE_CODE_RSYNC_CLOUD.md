@@ -1,7 +1,7 @@
 # Claude Code — Rsync Cloud Source to Remote Server
 
 > Pushes the latest `cloud/` source from your Mac to
-> `futuner@api.sillyrabbitmotorsport.com`, rebuilds the Docker
+> `futuner@sillyrabbitmotorsport.com`, rebuilds the Docker
 > container, restarts it, verifies `/health`. No interactive
 > questions. Fails fast if env vars aren't set.
 >
@@ -13,7 +13,7 @@
 > ```
 >
 > (Hostname and username are hardcoded:
-> `futuner@api.sillyrabbitmotorsport.com`. Default deployment path is
+> `futuner@sillyrabbitmotorsport.com`. Default deployment path is
 > `/home/futuner/srm-cloud`. Override with `export CLOUD_SSH_PATH=...` if your
 > server uses a different path.)
 >
@@ -47,7 +47,7 @@ Docker container, verify /health. No interactive pauses. Don't write
 code, don't commit.
 
 Hardcoded server identity:
-  HOST = api.sillyrabbitmotorsport.com
+  HOST = sillyrabbitmotorsport.com
   USER = futuner
   PATH = ${CLOUD_SSH_PATH:-/home/futuner/srm-cloud}   (env override allowed)
 
@@ -80,7 +80,7 @@ PHASE 1 — Pre-flight (silent; PASS/FAIL line per check)
   Connectivity test:
     sshpass -e ssh -o StrictHostKeyChecking=accept-new \
         -o ConnectTimeout=5 \
-        futuner@api.sillyrabbitmotorsport.com 'echo ok'
+        futuner@sillyrabbitmotorsport.com 'echo ok'
   (export SSHPASS=$CLOUD_SSH_PASS for sshpass -e to read it)
   Must print "ok".
 
@@ -101,7 +101,7 @@ Set SSHPASS=$CLOUD_SSH_PASS in env for the duration.
       --exclude='*.pyc' \
       -e 'ssh -o StrictHostKeyChecking=accept-new' \
       ~/esp/obd/FUTV1.1/cloud/ \
-      futuner@api.sillyrabbitmotorsport.com:${CLOUD_SSH_PATH:-/home/futuner/srm-cloud}/
+      futuner@sillyrabbitmotorsport.com:${CLOUD_SSH_PATH:-/home/futuner/srm-cloud}/
 
 Capture rsync stats (files transferred, bytes sent).
 
@@ -109,7 +109,7 @@ If rsync fails with "permission denied" on the server side, the
 deployment path may not exist or futuner may not own it. Try
 creating it via SSH first:
 
-  sshpass -e ssh futuner@api.sillyrabbitmotorsport.com \
+  sshpass -e ssh futuner@sillyrabbitmotorsport.com \
       'sudo mkdir -p ${CLOUD_SSH_PATH:-/home/futuner/srm-cloud} && sudo chown futuner ${CLOUD_SSH_PATH:-/home/futuner/srm-cloud}'
 
 Then retry rsync. If still failing, STOP and surface the error.
@@ -120,7 +120,7 @@ PHASE 3 — Rebuild + restart Docker container on the server
 
 Run remotely via SSH:
 
-  sshpass -e ssh futuner@api.sillyrabbitmotorsport.com bash -lc "
+  sshpass -e ssh futuner@sillyrabbitmotorsport.com bash -lc "
     set -e
     cd ${CLOUD_SSH_PATH:-/home/futuner/srm-cloud}
     docker-compose down
@@ -133,7 +133,7 @@ Run remotely via SSH:
 If `docker-compose ps` shows the container as "Up", PASS.
 
 If "Exit" or missing, fetch the last 100 lines of logs:
-  sshpass -e ssh futuner@api.sillyrabbitmotorsport.com \
+  sshpass -e ssh futuner@sillyrabbitmotorsport.com \
       "cd ${CLOUD_SSH_PATH:-/home/futuner/srm-cloud} && docker-compose logs srm-cloud --tail=100"
 Surface the logs and STOP.
 
@@ -143,7 +143,7 @@ If docker-compose isn't installed on the server, STOP and tell me.
 PHASE 4 — Verify /health
 ==========================================================
 
-  curl -fsS https://api.sillyrabbitmotorsport.com/health
+  curl -fsS https://sillyrabbitmotorsport.com/fut/health
 
 Expect JSON with "ok":true. If 502 / 503 / connection refused,
 fetch container logs as above, surface, STOP.
@@ -155,13 +155,13 @@ PHASE 5 — Verify admin endpoint reachable (only if ADMIN_API_KEY set)
 If ADMIN_API_KEY env var is non-empty:
 
   curl -fsS -H "x-admin-key: $ADMIN_API_KEY" \
-       https://api.sillyrabbitmotorsport.com/admin/devices
+       https://sillyrabbitmotorsport.com/fut/admin/devices
 
 Expect a JSON array (may be []). If 403, the local ADMIN_API_KEY
 doesn't match the server. Surface that and STOP — no other action.
 
 To find the actual server-side key:
-  sshpass -e ssh futuner@api.sillyrabbitmotorsport.com \
+  sshpass -e ssh futuner@sillyrabbitmotorsport.com \
       "cd ${CLOUD_SSH_PATH:-/home/futuner/srm-cloud} && docker-compose exec -T srm-cloud env | grep ADMIN_API_KEY"
 
 If ADMIN_API_KEY is unset locally, SKIP this phase.
