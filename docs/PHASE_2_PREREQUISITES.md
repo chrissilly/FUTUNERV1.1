@@ -1312,7 +1312,7 @@ literals.
 
 ---
 
-## P-50 🟡 HTTPS smoke test missing from firmware/test/ (NEW 2026-05-21)
+## P-50 🟢 HTTPS smoke test missing from firmware/test/ (RESOLVED 2026-05-22)
 
 P-46 was latent for months — host eval gates never exercised the TLS
 config because there was no test that wired the real CA bundle
