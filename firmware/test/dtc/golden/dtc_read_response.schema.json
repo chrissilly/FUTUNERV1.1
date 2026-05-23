@@ -1,0 +1,31 @@
+{
+  "$comment": "Golden response-shape contract for the dtc feature. Each named field MUST appear as a literal in the firmware source that builds the cJSON response (verified by eval.sh). Inline-documented at the top of dtc_commands.c.",
+  "command": "dtc_read",
+  "handler_source": "firmware/src/commands/dtc_commands.c",
+  "response_envelope": "command_handler wraps {\"command\":..., \"success\":..., \"message\":..., \"data\": <object>}",
+  "required_fields_in_data": {
+    "ok": "bool — true on success, false on failure",
+    "codes": "array — present iff ok=true; each entry has code, status, description",
+    "error": "string — failure reason (present iff ok=false)"
+  },
+  "required_fields_per_code_entry": {
+    "code": "string — DTC code (e.g. P0420)",
+    "status": "number — UDS status mask byte",
+    "description": "string — human-readable description"
+  },
+  "related_commands": {
+    "dtc_clear": {
+      "handler_source": "firmware/src/commands/dtc_commands.c::cmd_dtc_clear",
+      "fields": {
+        "ok": "bool",
+        "cleared_count": "number — present iff ok=true",
+        "error": "string — present iff ok=false"
+      }
+    }
+  },
+  "registry_check": {
+    "required_command_names": ["dtc_read", "dtc_clear"],
+    "registry_source": "firmware/src/commands/commands.c::COMMAND_REGISTRY"
+  },
+  "$note": "P-54 (ClearDTC NRC 0x11) is owner-held; the dtc_clear response shape stays in this golden contract even though wire behavior is still being investigated. The shape doesn't depend on the wire fix."
+}

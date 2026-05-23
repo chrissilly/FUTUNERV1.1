@@ -1,0 +1,31 @@
+{
+  "$comment": "Golden response-shape contract for the vin_pairing feature. Each named field MUST appear as a literal in the firmware source that builds the cJSON response (verified by eval.sh).",
+  "command": "vin_pair_now",
+  "handler_source": "firmware/src/commands/vin_pair_commands.c",
+  "response_envelope": "command_handler wraps {\"command\":..., \"success\":..., \"message\":..., \"data\": <object>}",
+  "required_fields_in_data": {
+    "ok": "bool — true on success, false on failure",
+    "message": "string — human-readable success summary (present iff ok=true)",
+    "error": "string — failure reason from vin_pairing_run_now (present iff ok=false)"
+  },
+  "related_commands": {
+    "get_status": {
+      "handler_source": "firmware/src/commands/system_commands.c::cmd_get_status",
+      "fields": {
+        "paired": "bool — connection_manager_is_paired()",
+        "boxcode": "string — only present when connected; from connection_manager_get_boxcode()"
+      }
+    },
+    "set_auth_token": {
+      "handler_source": "firmware/src/commands/vin_pair_commands.c::cmd_set_auth_token",
+      "fields": {
+        "ok": "bool",
+        "error": "string — only on failure"
+      }
+    }
+  },
+  "registry_check": {
+    "required_command_names": ["vin_pair_now", "set_auth_token", "get_status"],
+    "registry_source": "firmware/src/commands/commands.c::COMMAND_REGISTRY"
+  }
+}

@@ -111,16 +111,26 @@ section "3. No magic numbers in new .c files"
 scan_magic() {
     local file="$1"
     [ -f "$file" ] || return 0
+    # Use perl for the strip pass so multi-line /* ... */ comments
+    # (which can carry version numbers, dates, RFC refs, etc. that
+    # otherwise leak into the scanner as false-positive magic numbers)
+    # are properly removed. The sed fallback we replaced couldn't span
+    # newlines; observed 2026-05-22 when P-64 explanatory comments
+    # tripped the gate on prose, not code.
+    local stripped
+    stripped=$(perl -0777 -pe '
+        s/"(?:\\.|[^"\\])*"//g;
+        s|/\*.*?\*/||gs;
+        s|//[^\n]*||g;
+    ' "$file")
     local suspect
-    suspect=$(
-        sed -E 's://.*$::; s|/\*.*\*/||g' "$file" \
+    suspect=$(printf "%s" "$stripped" \
         | grep -nE '\b[0-9]+\b' \
         | grep -vE '^[^:]+:[^:]*#define\b' \
         | grep -vE '\b[01]\b' \
         | grep -vE '\b(uint|int)(8|16|32|64)_t\b' \
         | grep -vE '0x0+' \
-        || true
-    )
+        || true)
     if [ -z "$suspect" ]; then
         pass "no magic numbers detected in $(basename "$file")"
     else
@@ -333,6 +343,56 @@ elif [ -d "${IDF_PATH:-$HOME/esp/esp-idf}" ]; then
     fi
 else
     echo "  SKIP  IDF_PATH not found; skipping firmware build"
+fi
+
+# ---------------------------------------------------------------------------
+# Golden response-shape + storage + upload contract
+# ---------------------------------------------------------------------------
+section "Golden response-shape + storage + upload contract"
+
+GOLDEN_DIR="$SCRIPT_DIR/golden"
+if [ ! -d "$GOLDEN_DIR" ]; then
+    fail "golden/ directory missing — Phase 1 close-out golden-fixture pinning required"
+else
+    pass "golden/ directory present"
+    if [ -f "$GOLDEN_DIR/wot_log_response.schema.json" ]; then
+        pass "wot_log_response.schema.json contract documented"
+    else
+        fail "wot_log_response.schema.json missing"
+    fi
+
+    # wot_log_start / wot_log_stop response shape
+    for field in "success" "command" "active_feature"; do
+        if grep -qE "\"${field}\"" "$CMD_DIR/wot_log_commands.c" 2>/dev/null; then
+            pass "wot_log_{start,stop} response field \"$field\" emitted"
+        else
+            fail "wot_log_{start,stop} response field \"$field\" missing"
+        fi
+    done
+
+    # P-65 fix: queue dir constant must point at /cal/wot, not /storage/wot.
+    if grep -qE 'WOT_QUEUE_DIR_PATH[[:space:]]+"/cal/wot"' "$CFG_HEADER" 2>/dev/null; then
+        pass "WOT_QUEUE_DIR_PATH = /cal/wot (P-65 fix in place)"
+    else
+        fail "WOT_QUEUE_DIR_PATH not /cal/wot — P-65 regression"
+    fi
+
+    # Upload endpoint constant exists
+    if grep -qE 'WOT_UPLOAD_ENDPOINT_PATH[[:space:]]+"/api/v1/telemetry/log"' \
+           "$CFG_HEADER" 2>/dev/null; then
+        pass "WOT_UPLOAD_ENDPOINT_PATH = /api/v1/telemetry/log"
+    else
+        fail "WOT_UPLOAD_ENDPOINT_PATH constant missing or wrong value"
+    fi
+
+    # Registry must contain the wot + logger commands the golden lists.
+    for cmd in wot_log_start wot_log_stop get_logger_data get_logger_data_raw logger_start logger_stop; do
+        if grep -qE "^\s*\{[[:space:]]*\"${cmd}\"," "$SRC_ROOT/commands/commands.c"; then
+            pass "$cmd registered in COMMAND_REGISTRY"
+        else
+            fail "$cmd NOT registered in COMMAND_REGISTRY"
+        fi
+    done
 fi
 
 # ---------------------------------------------------------------------------

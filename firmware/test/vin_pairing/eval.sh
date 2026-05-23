@@ -401,6 +401,54 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Section 11 — Golden response-shape contract
+# ---------------------------------------------------------------------------
+section "11. Golden response-shape contract"
+
+GOLDEN_DIR="$SCRIPT_DIR/golden"
+if [ ! -d "$GOLDEN_DIR" ]; then
+    fail "golden/ directory missing — Phase 1 close-out golden-fixture pinning required"
+else
+    pass "golden/ directory present"
+
+    if [ -f "$GOLDEN_DIR/vin_pair_response.schema.json" ]; then
+        pass "vin_pair_response.schema.json contract documented"
+    else
+        fail "vin_pair_response.schema.json missing"
+    fi
+
+    # Each field below MUST appear as a cJSON_Add* literal in the
+    # vin_pair_commands.c handler. Walks the golden contract.
+    for field in "ok" "message" "error"; do
+        if grep -qE "cJSON_Add[A-Za-z]+ToObject\([^,]+,[[:space:]]*\"${field}\"" \
+               "$CMD_DIR/vin_pair_commands.c" 2>/dev/null; then
+            pass "vin_pair_now response field \"$field\" emitted by cmd_vin_pair_now"
+        else
+            fail "vin_pair_now response field \"$field\" missing from vin_pair_commands.c"
+        fi
+    done
+
+    # get_status (in system_commands.c) must emit paired + boxcode.
+    for field in "paired" "boxcode"; do
+        if grep -qE "cJSON_Add[A-Za-z]+ToObject\([^,]+,[[:space:]]*\"${field}\"" \
+               "$SRC_ROOT/commands/system_commands.c" 2>/dev/null; then
+            pass "get_status emits \"$field\""
+        else
+            fail "get_status missing \"$field\" — vin_pair golden contract requires it"
+        fi
+    done
+
+    # Registry must contain the commands the golden lists.
+    for cmd in vin_pair_now set_auth_token get_status; do
+        if grep -qE "^\s*\{[[:space:]]*\"${cmd}\"," "$SRC_ROOT/commands/commands.c"; then
+            pass "$cmd registered in COMMAND_REGISTRY"
+        else
+            fail "$cmd NOT registered in COMMAND_REGISTRY — golden contract requires it"
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo

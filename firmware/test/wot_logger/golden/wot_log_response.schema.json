@@ -1,0 +1,54 @@
+{
+  "$comment": "Golden response-shape contract for the wot_logger feature. Validates the WS command surface AND the on-flash log file shape AND the cloud upload payload shape. Each named field/section MUST appear as a literal in the corresponding firmware source (verified by eval.sh).",
+  "ws_commands": {
+    "wot_log_start": {
+      "handler_source": "firmware/src/commands/wot_log_commands.c::cmd_wot_log_start",
+      "fields_in_data": {
+        "success": "bool — true on start, false on feature_manager refusal",
+        "command": "string — echoes \"wot_log_start\"",
+        "active_feature": "string — feature_manager_active_name(), e.g. \"wot_logger\" on success or \"none\" otherwise",
+        "error": "string — failure reason (present iff success=false)"
+      }
+    },
+    "wot_log_stop": {
+      "handler_source": "firmware/src/commands/wot_log_commands.c::cmd_wot_log_stop",
+      "fields_in_data": {
+        "success": "bool — true on stop, false on feature_manager refusal",
+        "command": "string — echoes \"wot_log_stop\"",
+        "active_feature": "string — feature_manager_active_name() (\"none\" on success)"
+      }
+    }
+  },
+  "on_flash_log_file": {
+    "queue_dir_constant": "WOT_QUEUE_DIR_PATH (firmware/src/config/wot_logger_config.h)",
+    "queue_dir_value": "/cal/wot",
+    "filename_pattern": "wot_<ms_timestamp>.csv.gz",
+    "file_format": "RFC-1952 gzip stream wrapping CSV. Inside the wrapper, RFC-1951 DEFLATE in STORED mode (BTYPE=0) on target (P-64) — no actual compression, but valid gzip.",
+    "csv_header_fields": [
+      "timestamp_ms",
+      "nmot_w",
+      "InjSys_ratEthPrtnBascFu",
+      "Com_stCrCtlPan",
+      "rl_w",
+      "tmot",
+      "wdkba"
+    ]
+  },
+  "cloud_upload": {
+    "endpoint_constant": "WOT_UPLOAD_ENDPOINT_PATH (firmware/src/config/wot_logger_config.h)",
+    "endpoint_value": "/api/v1/telemetry/log",
+    "method": "POST",
+    "content_type": "application/gzip OR application/octet-stream",
+    "body": "raw gzip bytes from the on-flash file",
+    "auth_header_constant": "X-Device-Auth (set_auth_token NVS payload)",
+    "success_status": "any 2xx; cloud_client treats 200..299 as ack",
+    "on_ack": "wot_uploader deletes local file and decrements queue_count"
+  },
+  "registry_check": {
+    "required_command_names": ["wot_log_start", "wot_log_stop", "get_logger_data", "get_logger_data_raw", "logger_start", "logger_stop"],
+    "registry_source": "firmware/src/commands/commands.c::COMMAND_REGISTRY"
+  },
+  "$open_gates": [
+    "HTTP 200 from cloud + local file delete on ack: verified end-to-end in a future HIL session (next on-car run); the capture → gzip → fopen legs are proven local-side post-c27abd9."
+  ]
+}

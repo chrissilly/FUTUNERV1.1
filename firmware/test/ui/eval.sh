@@ -179,6 +179,12 @@ declare -a EVAL_COMMAND_EXEMPTIONS=(
     # invoked over USB-CDC stdin or WS-by-hand. Not part of the
     # customer UI by design.
     phase2_hil_preflight phase2_hil_preflight_arm
+    # 2026-05-22 — diagnostic + admin surfaces invoked from outside
+    # the bundled UI (CLI / ws_driver.py / browser console). They
+    # are registered handlers and called via WS in HIL sessions, just
+    # not from a UI button. Exempting from the wsSend coverage check
+    # keeps the gate focused on customer-UI surfaces.
+    get_logger_data_raw reboot
 )
 exempt() {
     local cmd="$1"
@@ -554,6 +560,90 @@ elif [ -d "${IDF_PATH:-$HOME/esp/esp-idf}" ]; then
     fi
 else
     echo "  SKIP  IDF_PATH not found"
+fi
+
+# ---------------------------------------------------------------------------
+# Golden command-registry cross-reference (CLAUDE.md Rule 9)
+# ---------------------------------------------------------------------------
+section "Golden command-registry cross-reference"
+
+GOLDEN_DIR="$SCRIPT_DIR/golden"
+if [ ! -d "$GOLDEN_DIR" ]; then
+    fail "golden/ directory missing — Phase 1 close-out golden-fixture pinning required"
+else
+    pass "golden/ directory present"
+    GOLDEN_FILE="$GOLDEN_DIR/ui_command_registry.schema.json"
+    if [ -f "$GOLDEN_FILE" ]; then
+        pass "ui_command_registry.schema.json contract documented"
+    else
+        fail "ui_command_registry.schema.json missing"
+    fi
+
+    REGISTRY_FILE="$PROJECT_ROOT/firmware/src/commands/commands.c"
+
+    # Every command the golden lists as required-invoked-by-UI must
+    # appear in the registry. Extract from the golden JSON without
+    # depending on jq — names are simple strings inside the
+    # "required_commands_invoked_by_ui" array.
+    if [ -f "$GOLDEN_FILE" ] && [ -f "$REGISTRY_FILE" ]; then
+        REQUIRED_CMDS=$(awk '
+            /"required_commands_invoked_by_ui":/ { in_arr=1; next }
+            in_arr && /\]/ { in_arr=0; next }
+            in_arr { gsub(/[",]/, ""); gsub(/^[[:space:]]+|[[:space:]]+$/, ""); if ($0 != "") print }
+        ' "$GOLDEN_FILE")
+        for cmd in $REQUIRED_CMDS; do
+            if grep -qE "^\s*\{[[:space:]]*\"${cmd}\"," "$REGISTRY_FILE"; then
+                pass "registry contains required UI command: $cmd"
+            else
+                fail "registry MISSING required UI command: $cmd"
+            fi
+        done
+    fi
+
+    # Reverse check: every wsSend({command:"xxx"}) in the bundled UI
+    # source must appear in the registry OR be dispatched specially
+    # in command_handler.c (e.g. `unlock` is auth-gated and lives
+    # outside the registry). Catches NEW commands added to UI that
+    # aren't yet wired in the firmware. Known-pending P-items are
+    # warned about, not failed (registry gap is the P-item's surface).
+    UI_SRC="$PROJECT_ROOT/ui/control_panel.js"
+    CMD_HANDLER_FILE="$PROJECT_ROOT/firmware/src/commands/command_handler.c"
+
+    # Commands intentionally NOT in the registry — handled specially
+    # in command_handler.c or filed as known-pending UI vapor.
+    SPECIAL_DISPATCH="unlock"
+    KNOWN_PENDING_UI_VAPOR="fs_upload wifi_scan"
+
+    if [ -f "$UI_SRC" ] && [ -f "$REGISTRY_FILE" ]; then
+        UI_CMDS=$(grep -oE "wsSend\([[:space:]]*\{[[:space:]]*command[[:space:]]*:[[:space:]]*['\"][a-z_]+['\"]" "$UI_SRC" 2>/dev/null \
+                  | grep -oE "['\"][a-z_]+['\"]" \
+                  | tr -d '"'"'" \
+                  | sort -u)
+        if [ -n "$UI_CMDS" ]; then
+            for cmd in $UI_CMDS; do
+                if grep -qE "^\s*\{[[:space:]]*\"${cmd}\"," "$REGISTRY_FILE"; then
+                    pass "UI-invoked $cmd has a firmware registry entry"
+                elif echo " $SPECIAL_DISPATCH " | grep -q " $cmd "; then
+                    # In command_handler.c special-dispatch — verify
+                    # there's a strcmp(command, "xxx") site for it.
+                    if grep -qE "strcmp\(command,[[:space:]]*\"${cmd}\"\)" "$CMD_HANDLER_FILE" 2>/dev/null; then
+                        pass "UI-invoked $cmd dispatched specially in command_handler.c"
+                    else
+                        fail "UI invokes $cmd; claimed special-dispatch but no strcmp site in command_handler.c"
+                    fi
+                elif echo " $KNOWN_PENDING_UI_VAPOR " | grep -q " $cmd "; then
+                    # P-34 (wifi_scan) and P-35 (fs_upload) are filed
+                    # in PHASE_2_PREREQUISITES.md as registry gaps. Warn
+                    # so the gap stays visible but don't fail the gate.
+                    echo "  WARN  UI invokes $cmd — KNOWN PENDING vapor (see PHASE_2_PREREQUISITES.md P-34 / P-35)"
+                else
+                    fail "UI invokes $cmd but no firmware handler (CLAUDE.md Rule 9 vapor — new gap, file a P-item)"
+                fi
+            done
+        else
+            echo "  SKIP  no wsSend({command:...}) literals extracted from $UI_SRC"
+        fi
+    fi
 fi
 
 # ---------------------------------------------------------------------------

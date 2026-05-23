@@ -73,6 +73,12 @@ EVAL_COMMAND_EXEMPTIONS = {
     "can_sniff_status", "wifi_status",
     # 2026-05-12 — HIL preflight commands; engineering surface only.
     "phase2_hil_preflight", "phase2_hil_preflight_arm",
+    # 2026-05-22 — diagnostic + admin surfaces invoked from CLI / WS-by-
+    # hand / browser console (e.g., get_logger_data_raw is the
+    # pre-parse hex diagnostic landed for P-55; reboot is admin-only
+    # and explicitly NOT bound to a UI button). Registered handlers
+    # exist; they're just not part of the bundled customer UI.
+    "get_logger_data_raw", "reboot",
 }
 
 # Events excluded from the wsEvents handler-coverage check.

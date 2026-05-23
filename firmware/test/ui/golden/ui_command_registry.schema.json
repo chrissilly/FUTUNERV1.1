@@ -1,0 +1,44 @@
+{
+  "$comment": "Golden contract for the UI ↔ firmware command boundary. CLAUDE.md Rule 9: every WS command name a doc or UI module invokes must appear in firmware/src/commands/commands.c COMMAND_REGISTRY[] before commit. This golden enumerates the UI's required command surface so the eval.sh can guarantee no UI-invoked command becomes a vapor reference.",
+  "required_commands_invoked_by_ui": [
+    "get_status",
+    "get_logger_data",
+    "get_logger_data_raw",
+    "logger_start",
+    "logger_stop",
+    "wot_log_start",
+    "wot_log_stop",
+    "dtc_read",
+    "dtc_clear",
+    "vin_pair_now",
+    "set_auth_token",
+    "pair_ecu",
+    "remove_pairing",
+    "reboot",
+    "wifi_mode",
+    "wifi_status",
+    "wifi_sta_set",
+    "wifi_connect",
+    "wifi_disconnect",
+    "wifi_clear",
+    "list_commands",
+    "flex_status",
+    "flex_set_override",
+    "can_sniff_start",
+    "can_sniff_stop",
+    "can_sniff_status",
+    "live_tune_status",
+    "fs_info",
+    "fs_list"
+  ],
+  "registry_source": "firmware/src/commands/commands.c::COMMAND_REGISTRY",
+  "ui_source_files_scanned": [
+    "ui/control_panel.js"
+  ],
+  "extraction_method": "grep -oE 'wsSend\\\\(\\\\s*\\\\{\\\\s*command\\\\s*:\\\\s*[\"'][a-z_]+[\"']' ui/control_panel.js — every match's command name must exist in the registry.",
+  "$open_items": [
+    "P-34: UI invokes wifi_scan but firmware has no handler (filed in PHASE_2_PREREQUISITES.md).",
+    "P-35: UI invokes fs_upload but firmware has no handler (filed in PHASE_2_PREREQUISITES.md).",
+    "Both are visible in the registry mismatch — eval.sh will fail-loud on them when the gates run."
+  ]
+}

@@ -205,3 +205,18 @@ firmware/src/commands/flash_commands.h
 firmware/src/ota/ota_update.c
 firmware/src/ota/ota_update.h
 firmware/src/ota/
+
+# ---------------------------------------------------------------------
+# 2026-05-22 — Phase 1 close-out golden fixtures (Step 6)
+# ---------------------------------------------------------------------
+# New golden/ subtrees + per-feature eval.sh extensions for the
+# vin_pairing / dtc / wot_logger / ui gates. Cross-cutting because
+# each gate has the other three in its FORBIDDEN list.
+firmware/test/vin_pairing/golden/
+firmware/test/dtc/golden/
+firmware/test/wot_logger/golden/
+firmware/test/ui/golden/
+firmware/test/vin_pairing/eval.sh
+firmware/test/dtc/eval.sh
+firmware/test/wot_logger/eval.sh
+firmware/test/ui/eval.sh

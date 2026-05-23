@@ -352,6 +352,52 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Golden response-shape contract
+# ---------------------------------------------------------------------------
+section "Golden response-shape contract"
+
+GOLDEN_DIR="$SCRIPT_DIR/golden"
+if [ ! -d "$GOLDEN_DIR" ]; then
+    fail "golden/ directory missing — Phase 1 close-out golden-fixture pinning required"
+else
+    pass "golden/ directory present"
+    if [ -f "$GOLDEN_DIR/dtc_read_response.schema.json" ]; then
+        pass "dtc_read_response.schema.json contract documented"
+    else
+        fail "dtc_read_response.schema.json missing"
+    fi
+    for field in "ok" "codes" "error"; do
+        if grep -qE "cJSON_Add[A-Za-z]+ToObject\([^,]+,[[:space:]]*\"${field}\"" \
+               "$CMD_DIR/dtc_commands.c" 2>/dev/null; then
+            pass "dtc_read response field \"$field\" emitted by dtc_commands.c"
+        else
+            fail "dtc_read response field \"$field\" missing from dtc_commands.c"
+        fi
+    done
+    for field in "code" "status" "description"; do
+        if grep -qE "cJSON_Add[A-Za-z]+ToObject\([^,]+,[[:space:]]*\"${field}\"" \
+               "$CMD_DIR/dtc_commands.c" 2>/dev/null; then
+            pass "dtc_read code-entry field \"$field\" emitted"
+        else
+            fail "dtc_read code-entry field \"$field\" missing"
+        fi
+    done
+    if grep -qE "cJSON_Add[A-Za-z]+ToObject\([^,]+,[[:space:]]*\"cleared_count\"" \
+           "$CMD_DIR/dtc_commands.c" 2>/dev/null; then
+        pass "dtc_clear response field \"cleared_count\" emitted"
+    else
+        fail "dtc_clear response field \"cleared_count\" missing"
+    fi
+    for cmd in dtc_read dtc_clear; do
+        if grep -qE "^\s*\{[[:space:]]*\"${cmd}\"," "$SRC_ROOT/commands/commands.c"; then
+            pass "$cmd registered in COMMAND_REGISTRY"
+        else
+            fail "$cmd NOT registered in COMMAND_REGISTRY"
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo
