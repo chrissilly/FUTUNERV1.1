@@ -37,7 +37,7 @@ customer-experience column for every in-scope row.
 | 4.1 | VIN pairing + licensing | 🟢 PASS | 🟡 PARTIAL | Cloud confirmed `paid=1` on RS7; UI shows `paired:false` post-reboot (P-58 — persistence suspected broken) |
 | **4.2** | **SBF / FBF live cal switching** | n/a | **🚚 MOVED TO PHASE 3 §6.1** | See `docs/PHASE_3_PREREQUISITES.md` P3-02. |
 | **4.2** | **SBF / FBF builder tool** | n/a | **🚚 MOVED TO PHASE 3 §6.1** | See `docs/PHASE_3_PREREQUISITES.md` P3-01. |
-| 4.3 | Live gauges (WebSocket streaming) | 🟢 PASS | 🔴 BROKEN | Logger surface alive, UI callback routing broken (P-57 BLOCKER), values scale-corrupted (P-55) |
+| 4.3 | Live gauges (WebSocket streaming) | 🟢 PASS | 🟢 PASS | P-55 parser bugs fixed (commit `f916b04`); KOEO HIL re-verify shows nmot_w=0 rpm, tmot=25.5 °C ambient. P-57 routing fix applied earlier (commit `a54d690`). |
 | 4.3 | Data logging (gzip + cloud sync) | 🟢 PASS | 🔴 BLOCKED | P-28 — `wot_logger_init` runs before profile load, `FEATURE_WOT_LOGGING` never registers |
 | 4.4a | Ethanol BLE bridge (LOGGING-ONLY, Phase 1) | N/A | 🔴 NOT BUILT | `flex_*` commands return "Not yet implemented". Scope: ethanol % logged in WOT rows. |
 | 4.4b | Ethanol BLE live-tune feed | n/a | **🚚 MOVED TO PHASE 3 §4.4b → §6** | See `docs/PHASE_3_PREREQUISITES.md` P3-06. |

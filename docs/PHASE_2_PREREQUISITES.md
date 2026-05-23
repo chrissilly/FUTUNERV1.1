@@ -1463,32 +1463,71 @@ subsequent dtc_read returns 0 codes AND wire witness shows the
 
 ---
 
-## P-55 🟡 Logger DID resolution / value scaling broken on RS7 (NEW 2026-05-21)
+## P-55 🟢 Logger response parser bugs fixed; KOEO values plausible (RESOLVED 2026-05-22, commit `f916b04`)
 
-KOEO RPM read as `-5369`. Cannot be derived from any byte permutation
-of a valid 0. Not a scale-formula bug — either wrong DID mapping,
-demux conflation (P-53 class), or wrong UDS service for this variant.
+**Root cause was four bugs in the logger response parser, not the
+per-variant DID/address table.** The A2L (`~/a2l/DMG1008PH2C1795_MA22G01_Out.a2l`,
+disambiguated by matching nmot_w ECU_ADDRESS=0x60020618) confirmed
+every address and every scale in `VARIABLES_4K0907557G__0003[]` is
+correct. Metadata catalog ships at
+`firmware/src/logger/A2L_DID_CATALOG_4K0907557G__0003.md` (A2L itself
+stays at `~/a2l/` per IP rule).
 
-**Diagnostic surface landed 2026-05-21 (commit `fed30f1`):**
-`get_logger_data_raw` WS command returns the pre-parse hex of the
-most-recent ECU poll response. Lets the off-vehicle A2L cross-check
-the DID table without re-running HIL for every scale-formula guess.
+Parser bugs fixed in `logger_config.c::logger_config_parse_poll_response`:
 
-**Pending HIL probe (still 🟡):**
-1. Single-shot read of RPM DID alone — confirm raw bytes
-2. Cross-check active DID list in `firmware/src/logger/` against the
-   A2L for `4K0907557G__0003` specifically (not whatever MG1 variant
-   the table was originally sourced from)
-3. Depending on outcome:
-   - Wrong DID table → regenerate from `4K0907557G__0003` A2L
-   - Demux conflation → port the P-53 NRC drain to the logger path
-   - Wrong service → swap `$22 ReadDataByIdentifier` →
-     `$23 ReadMemoryByAddress`
+1. **Signedness hardcoded** — int8_t/int16_t casts sign-extended every
+   field. All 6 RS7 vars are UWORD/UBYTE (unsigned). nmot_w at raw
+   0x961B decoded to -27109 instead of 38427 → -6777 rpm symptom.
+2. **Formula inverted** — old `(raw + offset) * scale` is equivalent
+   to ASAP2 `scale * raw + offset` only when offset = 0. Only tmot
+   has offset≠0 (-48); that's the 12 °C constant error in the tmot
+   line of the KOEO baseline.
+3. **Byte order not plumbed** — `is_big_endian` was declared on
+   `boxcode_config_t` but never read; parser hardcoded LE. For
+   `4K0907557G__0003` this was accidentally correct (Aurix is LE).
+4. **Walk order mismatch with ECU emission** — config builder
+   grouped vars by upper-16 of address (sizes could mix within
+   group); parser walked `compare_variables_for_grouping` order
+   (size-desc then addr-asc). For the 6-var RS7 profile, the parser
+   was reading wdkba's byte thinking it was the high half of nmot_w.
+   Fix: snapshot the emission order at build time
+   (`logger_config_t.parse_order[]`); parser walks it.
 
-**Closes when:** all 6 logger variables (nmot_w, InjSys_ratEthPrtnBascFu,
-Com_stCrCtlPan, rl_w, tmot, wdkba) return plausible KOEO values on
-dev RS7. Plausibility table pinned in
-`firmware/test/logger/koeo_baseline.json` for regression.
+Plumbing changes:
+
+- `logger_variable_t` gains `is_signed` + `is_big_endian` fields.
+- `logger_config_add_variable` signature gains both flags.
+- `logger_manager_add_variable` + `connection_manager_logger_add_variable`
+  extend their signatures to pass the flags through.
+- `logger_variables.c` callers source `is_signed` from
+  `variable_def_t` and `is_big_endian` from the current
+  `boxcode_config_t`.
+
+Host-side validation: `firmware/test/logger/p55_decode_check.py`
+re-implements the fixed parser in Python and runs it against the two
+captured KOEO raw responses from `koeo_baseline_2026-05-22.json` (commit
+`21bb993`). Every required-true var lands inside its KOEO plausibility
+window — the regression gate going forward.
+
+HIL re-verify on dev RS7 (2026-05-22, after commit `f916b04`):
+
+| var | KOEO observation | plausible? |
+|---|---|---|
+| nmot_w | 0 rpm | ✓ (engine off) |
+| InjSys_ratEthPrtnBascFu | 50.00 % | ✓ (last-known) |
+| Com_stCrCtlPan | 1 (state code) | ✓ |
+| rl_w | 69.09 % | ECU-side residual; parser is unsigned-correct |
+| tmot | 25.48 °C | ✓ (shop ambient) |
+| wdkba | 10.59 % | ✓ (idle baseline offset) |
+
+The rl_w value at KOEO is whatever the ECU has in
+`0x60015660` at engine-off — likely a last-known or residual stored
+value, not a parser bug. It will read correctly during KOER (which
+gets exercised in the §4.3 WOT log Step-2 HIL).
+
+The retired pending-HIL options (demux conflation / wrong service /
+wrong DID table) were ruled out by the host-side decode-fit before
+the fix shipped — all four bugs were parser-internal.
 
 ---
 
