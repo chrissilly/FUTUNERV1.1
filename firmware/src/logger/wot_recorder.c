@@ -186,15 +186,16 @@ static const uint8_t k_gzip_header[] = {
     (uint8_t)0xFF,
 };
 
-#ifdef WOT_RECORDER_HOST_BUILD
-// Host: emit "stored" DEFLATE blocks (BTYPE=0). Each block frames up
-// to WOT_DEFLATE_STORED_BLOCK_MAX_LEN bytes raw. Layout per RFC:
+// Emit "stored" DEFLATE blocks (BTYPE=0). Each block frames up to
+// WOT_DEFLATE_STORED_BLOCK_MAX_LEN bytes raw. Layout per RFC-1951:
 //   one byte  : BFINAL (lsb 0 or 1) | BTYPE=0 (next two bits) | pad
 //   two bytes : LEN  little-endian
 //   two bytes : NLEN ones-complement of LEN
 //   LEN bytes : raw payload
-// That's enough for the on-host structural gzip check; full DEFLATE
-// verification happens on-target.
+// Used on both host and target builds (target had previously used
+// tdefl_compress_mem_to_mem but that helper internally MZ_MALLOCs a
+// ~300 KB compressor that runs out of heap once WiFi + cloud_client
+// are loaded — observed 2026-05-22 on the RS7 HIL).
 static size_t deflate_stored(const uint8_t *in, size_t in_len,
                              uint8_t *out, size_t out_cap) {
     size_t out_pos = 0;
@@ -223,7 +224,6 @@ static size_t deflate_stored(const uint8_t *in, size_t in_len,
     } while (in_pos < in_len);
     return out_pos;
 }
-#endif
 
 // Build a complete gzip stream around the CSV payload.
 // Returns ESP_OK and *out_len on success, ESP_ERR_NO_MEM if the
@@ -237,29 +237,36 @@ static esp_err_t wrap_gzip(const uint8_t *csv, size_t csv_len,
     memcpy(out, k_gzip_header, sizeof(k_gzip_header));
     pos += sizeof(k_gzip_header);
 
-#ifdef WOT_RECORDER_HOST_BUILD
+    /* Use the host-build's "stored" DEFLATE emitter on target too.
+     *
+     * Why: ESP-IDF v5.5's miniz ships with MINIZ_NO_ZLIB_APIS set, so
+     * mz_compress2 is unavailable. The remaining tdefl_compress_mem_to_mem
+     * helper internally MZ_MALLOCs a ~300 KB tdefl_compressor struct per
+     * call, which reliably fails on the S3's runtime heap once WiFi /
+     * cloud_client / FreeRTOS are loaded (observed 2026-05-22 HIL on
+     * the RS7: every flush returned ESP_ERR_NO_MEM at flush time,
+     * blocking the §4.3 WOT log + cloud sync gate).
+     *
+     * The "stored" DEFLATE path (BTYPE=0 blocks) is malloc-free, emits
+     * valid RFC-1951 DEFLATE that any gzip decoder accepts, and
+     * matches what the host build already produces — so a single code
+     * path runs on both targets. The trade-off is that resulting
+     * .gz files are uncompressed (5 bytes of block-header overhead
+     * per 64 KB of CSV). Acceptable for WOT logs which are bounded
+     * by WOT_RECORDER_MAX_SAMPLES × WOT_RECORDER_MAX_VARS_PER_SAMPLE,
+     * and which the cloud accepts at the same endpoint regardless of
+     * compression ratio. A future optimization can swap in a
+     * pre-allocated tdefl_compressor pool to recover compression
+     * without re-introducing the per-call malloc failure mode.
+     */
     size_t deflate_room = out_cap - pos - (size_t)WOT_GZIP_FOOTER_BYTES;
     size_t deflate_len  = deflate_stored(csv, csv_len, &out[pos], deflate_room);
     if (deflate_len == 0 && csv_len != 0) {
+        ESP_LOGE(TAG, "deflate_stored failed (csv_len=%u, room=%u)",
+                 (unsigned)csv_len, (unsigned)deflate_room);
         return ESP_ERR_NO_MEM;
     }
     pos += deflate_len;
-#else
-    // On-target: ESP-IDF v5.5 miniz has MINIZ_NO_ZLIB_APIS set, so the
-    // mz_compress2 helper is unavailable. Use the lower-level
-    // tdefl_compress_mem_to_mem with flags=0 to emit RAW DEFLATE
-    // directly (no zlib framing to strip). Output goes straight into
-    // our gzip wrapper.
-    size_t avail = out_cap - pos - (size_t)WOT_GZIP_FOOTER_BYTES;
-    size_t produced = tdefl_compress_mem_to_mem(&out[pos], avail,
-                                                csv, csv_len,
-                                                (int)0);
-    if (produced == (size_t)0 && csv_len != (size_t)0) {
-        ESP_LOGE(TAG, "tdefl_compress_mem_to_mem failed (out cap=%u)", (unsigned)avail);
-        return ESP_ERR_NO_MEM;
-    }
-    pos += produced;
-#endif
 
     // Footer: CRC32 little-endian, then ISIZE little-endian (mod 2^32).
     uint32_t crc = crc32_update((uint32_t)0, csv, csv_len);

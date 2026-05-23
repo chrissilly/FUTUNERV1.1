@@ -39,6 +39,12 @@
  * of the part-throttle band typical drivers operate in.
  *
  * Locked 2026-05-05.
+ *
+ * Note 2026-05-22: an in-shop HIL test used a temporary 25% override
+ * on the feature/wot-hil-threshold branch to exercise the capture +
+ * gzip + storage path with the engine in park (where the ECU clamps
+ * throttle-body opening to ~30% via pedal-to-throttle mapping). That
+ * branch never landed on main. Customer firmware always ships 80.
  */
 #define WOT_TRIGGER_THRESHOLD_PERCENT       80
 
@@ -154,8 +160,19 @@
  * Files inside are gzipped CSV, named "wot_<unix_ts>.csv.gz".
  *
  * Locked 2026-05-05.
+ *
+ * Re-pointed 2026-05-22 from /storage/wot → /cal/wot: the dongle
+ * firmware mounts only the `cal` partition at `/cal/` (see
+ * fs_manager.c partition_configs[]). The `/storage/` mount was
+ * referenced here and in sbf_config.h but no partition was ever
+ * registered against it, so every fopen under WOT_QUEUE_DIR_PATH
+ * silently failed at runtime — the WOT log + cloud sync pipeline
+ * never wrote a byte to flash. Cal partition is 10.5 MB; the wot/
+ * subdir co-exists comfortably with future /cal/profiles/ and
+ * /cal/sbf/ subtrees. A separate /storage mount (data0/data1) is
+ * planned as part of the Phase 2 storage architecture cleanup.
  */
-#define WOT_QUEUE_DIR_PATH                  "/storage/wot"
+#define WOT_QUEUE_DIR_PATH                  "/cal/wot"
 
 /*
  * NVS namespace and keys for runtime overrides.

@@ -107,6 +107,11 @@ bool logger_manager_needs_reconfigure(void) {
     return logger_config.needs_reconfigure && logger_config.variable_count > 0;
 }
 
+void logger_manager_force_reconfigure(void) {
+    logger_config.needs_reconfigure = true;
+    logger_config.is_configured = false;
+}
+
 void logger_manager_set_data_callback(logger_data_callback_t callback) {
     data_callback = callback;
 }

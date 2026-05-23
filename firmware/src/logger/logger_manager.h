@@ -33,6 +33,13 @@ bool logger_manager_is_configured(void);
 bool logger_manager_needs_reconfigure(void);
 bool logger_manager_has_data(void);
 
+/* P-63: flag the logger config as stale so the state machine sends
+ * a fresh configure on the next iteration. Used when the ECU is
+ * observed returning shorter-than-configured poll responses — most
+ * commonly when the ECU's diagnostic session has been silently
+ * reset (e.g., engine state transitions, inactivity timeout). */
+void logger_manager_force_reconfigure(void);
+
 void logger_manager_set_data_callback(logger_data_callback_t callback);
 
 uint8_t logger_manager_get_variable_count(void);

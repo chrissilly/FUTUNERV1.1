@@ -562,7 +562,15 @@ static void handle_wait_logger_poll_response(void) {
         isotp_coordinator_release(ISOTP_OWNER_LOGGER);
         
         if (!logger_manager_handle_poll_response(rx_buffer, rx_size)) {
-            ESP_LOGW(TAG, "Failed to parse logger response");
+            /* P-63: short / malformed responses most commonly mean the
+             * ECU silently dropped its UDS session (engine-state
+             * transition, inactivity timeout). Flag the logger as
+             * needing reconfigure so the next state-machine tick
+             * rebuilds + re-sends the config. Bounded — once the
+             * fresh configure lands, polls resume. */
+            ESP_LOGW(TAG, "Failed to parse logger response (rx_size=%u) — flagging reconfigure",
+                     (unsigned)rx_size);
+            logger_manager_force_reconfigure();
         }
         
         float nmot = logger_manager_get_variable_value_by_name("nmot_w");
