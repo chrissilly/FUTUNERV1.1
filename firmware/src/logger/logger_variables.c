@@ -164,6 +164,8 @@ bool logger_variables_add_all_required(void) {
                 current_boxcode->variables[i].size,
                 current_boxcode->variables[i].scale,
                 current_boxcode->variables[i].offset,
+                current_boxcode->variables[i].is_signed,
+                current_boxcode->is_big_endian != 0,
                 current_boxcode->variables[i].name)) {
                 added++;
                 ESP_LOGI(TAG, "Added required variable: %s @ 0x%08lX",
@@ -193,6 +195,8 @@ bool logger_variables_add_by_name(const char *name) {
         var->size,
         var->scale,
         var->offset,
+        var->is_signed,
+        current_boxcode->is_big_endian != 0,
         var->name
     );
     

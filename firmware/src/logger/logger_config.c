@@ -39,41 +39,49 @@ void logger_config_init(logger_config_t *config) {
     memset(config, 0, sizeof(logger_config_t));
 }
 
-bool logger_config_add_variable(logger_config_t *config, 
-                                uint32_t address, 
+bool logger_config_add_variable(logger_config_t *config,
+                                uint32_t address,
                                 uint8_t size,
                                 float scale,
                                 float offset,
+                                bool is_signed,
+                                bool is_big_endian,
                                 const char *name) {
     if (config->variable_count >= LOGGER_MAX_VARIABLES) {
         ESP_LOGE(TAG, "Maximum variables reached");
         return false;
     }
-    
+
     if (size != 1 && size != 2 && size != 4) {
         ESP_LOGE(TAG, "Invalid variable size: %d (must be 1, 2, or 4)", size);
         return false;
     }
-    
+
     logger_variable_t *var = &config->variables[config->variable_count];
     var->address = address;
     var->size = size;
     var->scale = scale;
     var->offset = offset;
+    var->is_signed = is_signed;
+    var->is_big_endian = is_big_endian;
     strncpy(var->name, name, sizeof(var->name) - 1);
     var->name[sizeof(var->name) - 1] = '\0';
-    
+
     config->variable_count++;
     config->needs_reconfigure = true;
     config->is_configured = false;
-    
-    ESP_LOGI(TAG, "Added variable: %s @ 0x%08lX (size=%d)", name, address, size);
+
+    ESP_LOGI(TAG, "Added variable: %s @ 0x%08lX (size=%d, %s, %s)",
+             name, address, size,
+             is_signed ? "signed" : "unsigned",
+             is_big_endian ? "BE" : "LE");
     return true;
 }
 
 void logger_config_clear_variables(logger_config_t *config) {
     config->variable_count = 0;
     config->config_data_size = 0;
+    config->parse_order_len = 0;
     config->is_configured = false;
     config->needs_reconfigure = true;
     ESP_LOGI(TAG, "Cleared all variables");
@@ -152,12 +160,21 @@ bool logger_config_build_configuration(logger_config_t *config,
         config->config_data[offset++] = 0x00;
     }
     config->config_data_size = offset;
-    
+
+    /* P-55: snapshot the emission order so the parser can walk
+     * variables in the same sequence the ECU returns them. */
+    config->parse_order_len = 0;
+    for (uint8_t g = 0; g < group_count; g++) {
+        for (uint8_t v = 0; v < groups[g].var_count; v++) {
+            config->parse_order[config->parse_order_len++] = groups[g].var_indices[v];
+        }
+    }
+
     config->memory_pointer = buffer_base + buffer_size - config->config_data_size - 1;
-    
+
     ESP_LOGI(TAG, "Built configuration: %d bytes, %d groups, pointer: 0x%08lX",
              config->config_data_size, group_count, config->memory_pointer);
-    
+
     return true;
 }
 
@@ -228,18 +245,22 @@ bool logger_config_parse_poll_response(logger_config_t *config,
         ESP_LOGE(TAG, "Invalid poll response header");
         return false;
     }
-    
-    uint16_t offset = 1;
-    
-    uint8_t sorted_indices[LOGGER_MAX_VARIABLES];
-    for (uint8_t i = 0; i < config->variable_count; i++) {
-        sorted_indices[i] = i;
+
+    /* P-55: walk variables in the same emission order the config
+     * builder used. parse_order_len is populated by
+     * logger_config_build_configuration; if it's zero (configure
+     * never ran), reject the response — decoding by raw index
+     * order was the historical bug. */
+    if (config->parse_order_len == 0 || config->parse_order_len != config->variable_count) {
+        ESP_LOGE(TAG, "Logger parse_order not built (len=%d, vars=%d); reconfigure required",
+                 config->parse_order_len, config->variable_count);
+        return false;
     }
-    qsort_r(sorted_indices, config->variable_count, sizeof(uint8_t),
-            compare_variables_for_grouping, config);
-    
-    for (uint8_t i = 0; i < config->variable_count; i++) {
-        uint8_t var_idx = sorted_indices[i];
+
+    uint16_t offset = 1;
+
+    for (uint8_t i = 0; i < config->parse_order_len; i++) {
+        uint8_t var_idx = config->parse_order[i];
         logger_variable_t *var = &config->variables[var_idx];
         
         if (offset + var->size > response_len) {
@@ -249,20 +270,38 @@ bool logger_config_parse_poll_response(logger_config_t *config,
         
         int32_t raw_value = 0;
         if (var->size == 1) {
-            raw_value = (int8_t)response[offset];
+            uint8_t b0 = response[offset];
+            raw_value = var->is_signed ? (int32_t)(int8_t)b0
+                                        : (int32_t)b0;
         } else if (var->size == 2) {
-            raw_value = (int16_t)(response[offset] | (response[offset + 1] << 8));
+            uint8_t b0 = response[offset];
+            uint8_t b1 = response[offset + 1];
+            uint16_t u16 = var->is_big_endian
+                ? (uint16_t)((b0 << 8) | b1)
+                : (uint16_t)((b1 << 8) | b0);
+            raw_value = var->is_signed ? (int32_t)(int16_t)u16
+                                        : (int32_t)u16;
         } else if (var->size == 4) {
-            raw_value = (int32_t)(response[offset] | 
-                                 (response[offset + 1] << 8) |
-                                 (response[offset + 2] << 16) |
-                                 (response[offset + 3] << 24));
+            uint8_t b0 = response[offset];
+            uint8_t b1 = response[offset + 1];
+            uint8_t b2 = response[offset + 2];
+            uint8_t b3 = response[offset + 3];
+            uint32_t u32 = var->is_big_endian
+                ? ((uint32_t)b0 << 24) | ((uint32_t)b1 << 16) |
+                  ((uint32_t)b2 << 8)  |  (uint32_t)b3
+                : ((uint32_t)b3 << 24) | ((uint32_t)b2 << 16) |
+                  ((uint32_t)b1 << 8)  |  (uint32_t)b0;
+            raw_value = var->is_signed ? (int32_t)u32 : (int32_t)u32;
         }
-        
-        values_out[var_idx] = (raw_value + var->offset) * var->scale;
+
+        /* ASAP2 RAT_FUNC linear form: phys = scale * raw + offset.
+         * (Old form (raw + offset) * scale was wrong by a constant
+         * offset×(scale-1) for every non-zero-offset variable; for
+         * temp_ub_q0p75_o48 that's a 12 °C constant error.) */
+        values_out[var_idx] = (float)raw_value * var->scale + var->offset;
         offset += var->size;
     }
-    
+
     return true;
 }
 

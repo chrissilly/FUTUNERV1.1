@@ -19,10 +19,12 @@ typedef void (*logger_data_callback_t)(const float *values, uint8_t count);
 
 esp_err_t logger_manager_init(uint32_t buffer_address, uint16_t buffer_size);
 
-bool logger_manager_add_variable(uint32_t address, 
+bool logger_manager_add_variable(uint32_t address,
                                  uint8_t size,
                                  float scale,
                                  float offset,
+                                 bool is_signed,
+                                 bool is_big_endian,
                                  const char *name);
 
 void logger_manager_clear_variables(void);

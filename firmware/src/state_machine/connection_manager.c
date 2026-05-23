@@ -887,16 +887,19 @@ const char* connection_manager_get_vin(void) {
     return current_ecu_info.vin;
 }
 
-bool connection_manager_logger_add_variable(uint32_t address, 
+bool connection_manager_logger_add_variable(uint32_t address,
                                             uint8_t size,
                                             float scale,
                                             float offset,
+                                            bool is_signed,
+                                            bool is_big_endian,
                                             const char *name) {
     if (!is_patched) {
         ESP_LOGW(TAG, "Cannot add logger variables - ECU not patched");
         return false;
     }
-    return logger_manager_add_variable(address, size, scale, offset, name);
+    return logger_manager_add_variable(address, size, scale, offset,
+                                       is_signed, is_big_endian, name);
 }
 
 void connection_manager_logger_clear_variables(void) {

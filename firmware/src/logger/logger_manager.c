@@ -41,12 +41,16 @@ esp_err_t logger_manager_init(uint32_t buf_addr, uint16_t buf_size) {
     return ESP_OK;
 }
 
-bool logger_manager_add_variable(uint32_t address, 
+bool logger_manager_add_variable(uint32_t address,
                                  uint8_t size,
                                  float scale,
                                  float offset,
+                                 bool is_signed,
+                                 bool is_big_endian,
                                  const char *name) {
-    bool result = logger_config_add_variable(&logger_config, address, size, scale, offset, name);
+    bool result = logger_config_add_variable(&logger_config, address, size,
+                                             scale, offset,
+                                             is_signed, is_big_endian, name);
     
     if (result) {
         // Check if this variable existed in the preserved set

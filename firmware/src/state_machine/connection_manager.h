@@ -76,10 +76,12 @@ const char* connection_manager_get_boxcode(void);
  * site is responsible for ISO-3779 normalization (uppercase + trim). */
 const char* connection_manager_get_vin(void);
 
-bool connection_manager_logger_add_variable(uint32_t address, 
+bool connection_manager_logger_add_variable(uint32_t address,
                                             uint8_t size,
                                             float scale,
                                             float offset,
+                                            bool is_signed,
+                                            bool is_big_endian,
                                             const char *name);
 bool connection_manager_logger_add_variable_by_name(const char *name);
 bool connection_manager_logger_add_all_required(void);

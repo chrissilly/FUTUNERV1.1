@@ -12,29 +12,44 @@ typedef struct {
     uint8_t size;
     float scale;
     float offset;
+    bool is_signed;
+    bool is_big_endian;
     char name[32];
 } logger_variable_t;
 
 typedef struct {
     logger_variable_t variables[LOGGER_MAX_VARIABLES];
     uint8_t variable_count;
-    
+
     uint8_t config_data[LOGGER_CONFIG_BUFFER_SIZE];
     uint16_t config_data_size;
-    
+
     uint32_t memory_pointer;
-    
+
+    /* P-55: emission order recorded at build_configuration time.
+     * The parser MUST walk variables in this order because the
+     * ECU emits its response in the same group-then-config order
+     * the dongle declared. Walking sorted_indices alone (as the
+     * old parser did) interleaved differently-sized vars relative
+     * to the actual response layout, producing systematic decode
+     * mismatches for any logger profile that mixed sizes within
+     * the same upper-address group. */
+    uint8_t parse_order[LOGGER_MAX_VARIABLES];
+    uint8_t parse_order_len;
+
     bool is_configured;
     bool needs_reconfigure;
 } logger_config_t;
 
 void logger_config_init(logger_config_t *config);
 
-bool logger_config_add_variable(logger_config_t *config, 
-                                uint32_t address, 
+bool logger_config_add_variable(logger_config_t *config,
+                                uint32_t address,
                                 uint8_t size,
                                 float scale,
                                 float offset,
+                                bool is_signed,
+                                bool is_big_endian,
                                 const char *name);
 
 void logger_config_clear_variables(logger_config_t *config);
