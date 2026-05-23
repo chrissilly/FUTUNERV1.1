@@ -38,8 +38,8 @@ customer-experience column for every in-scope row.
 | **4.2** | **SBF / FBF live cal switching** | n/a | **🚚 MOVED TO PHASE 3 §6.1** | See `docs/PHASE_3_PREREQUISITES.md` P3-02. |
 | **4.2** | **SBF / FBF builder tool** | n/a | **🚚 MOVED TO PHASE 3 §6.1** | See `docs/PHASE_3_PREREQUISITES.md` P3-01. |
 | 4.3 | Live gauges (WebSocket streaming) | 🟢 PASS | 🟢 PASS | P-55 parser bugs fixed (commit `f916b04`); KOEO HIL re-verify shows nmot_w=0 rpm, tmot=25.5 °C ambient. P-57 routing fix applied earlier (commit `a54d690`). |
-| 4.3 | Data logging (gzip + cloud sync) | 🟢 PASS | 🔴 BLOCKED | P-28 — `wot_logger_init` runs before profile load, `FEATURE_WOT_LOGGING` never registers |
-| 4.4a | Ethanol BLE bridge (LOGGING-ONLY, Phase 1) | N/A | 🔴 NOT BUILT | `flex_*` commands return "Not yet implemented". Scope: ethanol % logged in WOT rows. |
+| 4.3 | Data logging (gzip + cloud sync) | 🟢 PASS | 🟡 PARTIAL | P-28 closed; HIL 2026-05-22 proved capture → gzip → fopen path local-side after fixing P-63 (logger reconfigure-on-short-response), P-64 (gzip via deflate_stored on target), P-65 (WOT path `/storage/wot` → `/cal/wot`). Final HTTP-200 upload + cloud ack + local delete legs gate on next on-car session. |
+| 4.4a | Ethanol BLE bridge (LOGGING-ONLY, Phase 1) | N/A | 🟡 DEFERRED-PENDING-HARDWARE | No ethanol sensor on dev RS7 today (owner directive 2026-05-22). Same posture as §4.7 Ethernet. `flex_*` commands return "Not yet implemented"; not a Phase 1 close gate. |
 | 4.4b | Ethanol BLE live-tune feed | n/a | **🚚 MOVED TO PHASE 3 §4.4b → §6** | See `docs/PHASE_3_PREREQUISITES.md` P3-06. |
 | **4.5** | **Ethanol constraints + rev limiter** | n/a | **🚚 MOVED TO PHASE 3 §6.2** | See `docs/PHASE_3_PREREQUISITES.md` P3-03 / P3-04. |
 | 4.6 | OBD fault code read | 🟢 PASS | 🟡 PARTIAL | Read returns 7 DTCs on RS7 wire-witnessed; UI routing prevents display (P-57 downstream) |
@@ -284,6 +284,13 @@ Chip Report.
 
 ### B3 · Ethanol Sensor BLE Bridge Firmware — LOGGING-ONLY (MISSION_SPEC §4.4a)
 
+> **🟡 DEFERRED-PENDING-HARDWARE (owner directive 2026-05-22).**
+> No ethanol sensor on the dev RS7 today, so HIL verification is
+> not possible this phase. Same posture as §4.7 Ethernet — design
+> stays in plan, code can be drafted in parallel, but Phase 1 does
+> NOT block close on this row. When a sensor arrives on the RS7 (or
+> Sean orders one in), this re-opens.
+>
 > **Logging path only.** The live-tune feed for the ethanol value
 > (§4.4b) is Phase 3 work — see `docs/PHASE_3_PREREQUISITES.md` P3-06.
 > Phase 1 ships the read path and the logged column only.
@@ -504,9 +511,10 @@ unblocked from a Phase-1-side correctness standpoint.
       captures, gzip, cloud-uploads, and local-deletes within
       configured window
 - [ ] MISSION_SPEC §4.4a — Ethanol BLE bridge (LOGGING-ONLY, Phase 1):
-      sensor reading appears in WOT log rows; manual fallback
-      functional on RS7. (§4.4b live-tune feed is Phase 3 work — see
-      P3-06, not a Phase 1 exit gate.)
+      🟡 DEFERRED-PENDING-HARDWARE (owner directive 2026-05-22). No
+      sensor on dev RS7 today; same posture as §4.7 Ethernet. Not a
+      Phase 1 close gate. (§4.4b live-tune feed is Phase 3 work — see
+      P3-06.)
 - [ ] ~~MISSION_SPEC §4.5~~ 🚚 MOVED TO PHASE 3 — see
       `docs/PHASE_3_PREREQUISITES.md` (P3-03, P3-04). Not a Phase 1
       exit gate.

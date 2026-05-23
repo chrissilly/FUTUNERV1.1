@@ -130,6 +130,14 @@ All Phase 1 features deploy and validate **before** touching full binary flash. 
 
 #### 4.4a Logging-only (Phase 1)
 
+> **🟡 DEFERRED-PENDING-HARDWARE (owner directive 2026-05-22).** No
+> ethanol sensor on the dev RS7 today, so this section is not
+> currently a Phase 1 close gate. Same posture as §4.7 Ethernet —
+> the design below stays in spec, the firmware module can be
+> drafted, but on-car HIL verification waits until a sensor is
+> physically on the car. Re-opens automatically when the sensor
+> arrives.
+
 **Hardware:**
 - External ethanol content sensor in engine bay.
 - Communicates via BLE to OBD dongle under dash.

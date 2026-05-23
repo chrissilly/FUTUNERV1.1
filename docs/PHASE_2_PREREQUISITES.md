@@ -1709,6 +1709,111 @@ new user.
 
 ---
 
+## P-63 🟢 Logger reconfigure on short / malformed poll response (RESOLVED 2026-05-22, commit `c27abd9`)
+
+Surfaced during the 2026-05-22 RS7 close-out HIL once the engine
+was started. After P-55 landed and KOEO polls were green, the very
+first KOER poll returned only the 1-byte 0x7E header. Every
+subsequent poll: same. The parser hit "Response too short for
+variable InjSys_ratEthPrtnBascFu" every cycle; the wot_recorder's
+data callback never fired with fresh values; the throttle threshold
+check was running against stale cache.
+
+**Root cause:** the ECU silently drops its UDS logger configuration
+on session-state transitions (engine-start being the obvious one).
+The dongle's `logger_manager.needs_reconfigure` flag flips on
+add/clear of variables, both of which already ran at boot, so it
+stayed false forever once the engine cycled.
+
+**Fix:** new API `logger_manager_force_reconfigure()` flips the
+flag back to true. `connection_manager.c::
+handle_wait_logger_poll_response` calls it on every parse failure
+with the rx_size logged for triage. Next state-machine tick
+rebuilds + re-sends the logger config; polls resume.
+
+**Bounded:** the reconfigure flag goes false again as soon as the
+rebuild completes, so a transient byte-corruption case costs only
+a single extra configure round-trip rather than a tight loop.
+
+**HIL evidence:** post-fix on RS7 KOER, `get_logger_data` returned
+live + plausible values: nmot_w=753 rpm (idle), tmot=89 °C (warm
+engine), wdkba=3.5 % (foot off pedal). No more "Response too
+short" errors in serial.
+
+---
+
+## P-64 🟢 WOT gzip wrap fails on target with rc=257 (RESOLVED 2026-05-22, commit `c27abd9`)
+
+Surfaced during the same close-out HIL after P-63. With polls
+healthy, Sean's throttle stab triggered the wot_recorder cleanly,
+captures completed, flushes started — and every flush logged
+`tdefl_compress_mem_to_mem failed (out cap=172261)` followed by
+`flush: gzip wrap failed rc=257` (= `ESP_ERR_NO_MEM`). No file ever
+landed on flash.
+
+**Root cause:** ESP-IDF v5.5's miniz ships with `MINIZ_NO_ZLIB_APIS`
+set, so the `mz_compress2` helper is unavailable. The lower-level
+`tdefl_compress_mem_to_mem` that the recorder fell back to allocates
+a `~300 KB tdefl_compressor` struct via `MZ_MALLOC` per call. With
+WiFi + cloud_client + FreeRTOS resident in heap, that 300 KB
+allocation reliably fails. The function returns 0; the existing
+guard correctly classifies it as `ESP_ERR_NO_MEM`.
+
+**Fix:** drop the `#ifdef WOT_RECORDER_HOST_BUILD` around
+`deflate_stored` and use the same RFC-1951 "stored" DEFLATE
+emitter on target too. It's malloc-free, emits valid DEFLATE that
+any gzip decoder accepts, and matches what the host build already
+produces — so a single code path runs on both. Resulting `.gz`
+files are uncompressed (5 bytes of block-header overhead per
+64 KB of CSV); for the bounded WOT log size that's a negligible
+cost. A future optimization can swap in a pre-allocated
+`tdefl_compressor` pool to recover compression without re-
+introducing the per-call malloc failure mode.
+
+**HIL evidence:** post-fix on RS7 KOER with the temporary 25 %
+threshold, a single stab captured 23 samples → 1186 CSV bytes
+→ 1209 gzip bytes. Wrap succeeded cleanly with no
+`gzip wrap failed` log line.
+
+---
+
+## P-65 🟢 WOT_QUEUE_DIR_PATH points at unmounted `/storage/` (RESOLVED 2026-05-22, commit `c27abd9`)
+
+Surfaced during the same close-out HIL after P-64. With capture +
+gzip both healthy, every flush now hit
+`WOT_UP: queue write /storage/wot/wot_<ts>.csv.gz rc=-1` immediately
+followed by `WOT_LOG: enqueue failed rc=-1; dropping recording`.
+No file ever made it to flash.
+
+**Root cause:** `fs_manager.c`'s `partition_configs[]` registers
+only the `cal` partition at `/cal/`. The `/storage/` base path
+referenced by `WOT_QUEUE_DIR_PATH` (and `SBF_CACHE_DIR_PATH` —
+see "Caveat" below) had never existed at runtime. The `mkdir()`
+call before `fopen()` ignored its return value, so the missing
+parent went unnoticed. The WOT capture path had never written a
+byte to flash since the firmware was first written.
+
+**Fix:** re-point `WOT_QUEUE_DIR_PATH` from `/storage/wot` →
+`/cal/wot`. The cal partition is 10.5 MB, with plenty of room to
+co-host `wot/`, future `profiles/`, and (Phase 3)
+`sbf/` subtrees.
+
+**Caveat — SBF_CACHE_DIR_PATH:** `firmware/src/config/sbf_config.h`
+still defines `SBF_CACHE_DIR_PATH = "/storage/sbf"` and would hit
+the same class of bug when Phase 3 exercises the SBF cache. Left
+in place pending Phase 3 storage-layout work — fixing it here
+would be premature. A separate `/storage` mount backed by
+`data0` / `data1` partitions is the right long-term layout and is
+already part of the Phase 2 storage architecture pass.
+
+**HIL evidence:** the engine session ended before the on-flash
+fopen + cloud upload leg could be confirmed end-to-end. Capture
+→ gzip → fopen path is proven correct on the dongle local-side;
+the final `HTTP 200` confirmation gate fires on the next on-car
+session.
+
+---
+
 ## Update protocol
 
 When you close an item out, change its emoji to 🟢 and add a one-line
