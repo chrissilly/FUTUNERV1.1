@@ -15,6 +15,7 @@
 #  include "logger/logger_manager.h"
 #  include "logger/logger_profile.h"
 #  include "nvs/nvs_manager.h"
+#  include "config/license_config.h"   /* P-67: LICENSE_NVS_AUTH_TOKEN_KEY */
 #  include <sys/stat.h>
 #  include <dirent.h>
 #  include <stdio.h>
@@ -82,6 +83,18 @@ static int target_http_post(const char    *url,
         return (int)ESP_FAIL;
     }
     esp_http_client_set_header(client, "Content-Type", "application/gzip");
+    /* P-67: the cloud telemetry endpoint authenticates the device by
+     * its auth_token via the X-Device-Auth header and derives MAC/VIN
+     * from that — the body is never trusted to claim identity. Pull
+     * the token from NVS (same key the license client uses). If it's
+     * absent the POST still goes out and the server answers 401, which
+     * the uploader treats as a retriable failure. */
+    char auth_token[LICENSE_AUTH_TOKEN_MAX + 1] = {0};
+    if (nvs_manager_load_string(LICENSE_NVS_AUTH_TOKEN_KEY,
+                                auth_token, sizeof(auth_token)) == ESP_OK
+        && auth_token[0] != '\0') {
+        esp_http_client_set_header(client, "X-Device-Auth", auth_token);
+    }
     esp_http_client_set_post_field(client, (const char *)body, (int)body_len);
     esp_err_t err = esp_http_client_perform(client);
     int status = (err == ESP_OK)
