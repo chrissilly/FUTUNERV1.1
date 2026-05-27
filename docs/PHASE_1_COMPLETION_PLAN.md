@@ -34,7 +34,7 @@ customer-experience column for every in-scope row.
 
 | MISSION_SPEC § | Feature | Host gate | Customer experience | Notes |
 |----------------|---------|-----------|---------------------|-------|
-| 4.1 | VIN pairing + licensing | 🟢 PASS | 🟡 PARTIAL | Cloud confirmed `paid=1` on RS7; UI shows `paired:false` post-reboot (P-58 — persistence suspected broken) |
+| 4.1 | VIN pairing + licensing | 🟢 PASS | 🟢 PASS | Cloud `paid=1` on RS7. P-58 NVS persistence + P-62 boxcode re-derive verified across power-cycle 2026-05-22; `paired:true` persists post-reboot. |
 | **4.2** | **SBF / FBF live cal switching** | n/a | **🚚 MOVED TO PHASE 3 §6.1** | See `docs/PHASE_3_PREREQUISITES.md` P3-02. |
 | **4.2** | **SBF / FBF builder tool** | n/a | **🚚 MOVED TO PHASE 3 §6.1** | See `docs/PHASE_3_PREREQUISITES.md` P3-01. |
 | 4.3 | Live gauges (WebSocket streaming) | 🟢 PASS | 🟢 PASS | P-55 parser bugs fixed (commit `f916b04`); KOEO HIL re-verify shows nmot_w=0 rpm, tmot=25.5 °C ambient. P-57 routing fix applied earlier (commit `a54d690`). |
@@ -42,8 +42,8 @@ customer-experience column for every in-scope row.
 | 4.4a | Ethanol BLE bridge (LOGGING-ONLY, Phase 1) | N/A | 🟡 DEFERRED-PENDING-HARDWARE | No ethanol sensor on dev RS7 today (owner directive 2026-05-22). Same posture as §4.7 Ethernet. `flex_*` commands return "Not yet implemented"; not a Phase 1 close gate. |
 | 4.4b | Ethanol BLE live-tune feed | n/a | **🚚 MOVED TO PHASE 3 §4.4b → §6** | See `docs/PHASE_3_PREREQUISITES.md` P3-06. |
 | **4.5** | **Ethanol constraints + rev limiter** | n/a | **🚚 MOVED TO PHASE 3 §6.2** | See `docs/PHASE_3_PREREQUISITES.md` P3-03 / P3-04. |
-| 4.6 | OBD fault code read | 🟢 PASS | 🟡 PARTIAL | Read returns 7 DTCs on RS7 wire-witnessed; UI routing prevents display (P-57 downstream) |
-| 4.6 | OBD fault code clear | 🟢 PASS | 🔴 BROKEN | Demux fixed (P-53 RESOLVED); ECU returns NRC 0x11 — needs session-state fix (P-54) |
+| 4.6 | OBD fault code read | 🟢 PASS | 🟢 PASS | Read returns 7 DTCs on RS7 wire-witnessed; P-57 callback routing closed — codes now render in UI table. |
+| 4.6 | OBD fault code clear | 🟢 PASS | 🔴 BROKEN | Demux fixed (P-53 RESOLVED); ECU returns NRC 0x11 — needs session-state fix (P-54). **Owner-held pending sign-off; not blocking Phase 1 close.** |
 | 4.7 | Transport — CAN | 🟢 PASS | 🟢 PASS | Production driver in use |
 | 4.7 | Transport — Ethernet skeleton | 🟡 PARTIAL | DEFERRED-PENDING-HARDWARE | Hardware "arriving soon" per spec |
 
