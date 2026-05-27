@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src ./src
 
 # State directories — persist these as volumes in production
-RUN mkdir -p /app/data /app/firmware /app/calibrations
+RUN mkdir -p /app/data /app/firmware /app/calibrations /app/wot_logs
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000

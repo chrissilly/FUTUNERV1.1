@@ -11,3 +11,4 @@ services:
       - ./data:/app/data
       - ./firmware:/app/firmware
       - ./calibrations:/app/calibrations
+      - ./wot_logs:/app/wot_logs        # P-67: persist uploaded WOT telemetry logs
