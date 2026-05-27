@@ -381,3 +381,18 @@ esp_err_t wot_logger_stop(void) {
 bool wot_logger_is_running(void) {
     return s_running;
 }
+
+/* P-66: drive the uploader's periodic tick. wot_uploader_tick() is the
+ * only thing that actually attempts a queued-log upload, and nothing
+ * in production was calling it (the "call at 1 Hz" contract in
+ * wot_uploader.h had no caller — the tick was exercised only by the
+ * host unit test). Wire this into the main can_task loop so the
+ * uploader can drain the queue while the WOT feature is active.
+ * Safe to call unconditionally: wot_uploader_tick() no-ops when the
+ * uploader is not running and self-rate-limits to
+ * WOT_UPLOAD_RETRY_INTERVAL_MS internally. */
+void wot_logger_tick(void) {
+#ifndef WOT_LOGGER_HOST_BUILD
+    wot_uploader_tick(target_clock_now_ms());
+#endif
+}

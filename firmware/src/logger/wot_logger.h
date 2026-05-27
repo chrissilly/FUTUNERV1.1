@@ -65,6 +65,15 @@ esp_err_t wot_logger_stop(void);
  */
 bool      wot_logger_is_running(void);
 
+/*
+ * P-66: pump the uploader's periodic retry tick. Must be called
+ * regularly (≈1 Hz is plenty) from a long-running task so queued WOT
+ * logs actually get uploaded — wot_uploader_tick() is the only path
+ * that attempts an upload, and it had no production caller. Safe to
+ * call unconditionally; no-ops when the uploader isn't running.
+ */
+void      wot_logger_tick(void);
+
 #ifdef __cplusplus
 }
 #endif

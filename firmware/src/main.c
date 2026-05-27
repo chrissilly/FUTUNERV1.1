@@ -29,6 +29,13 @@ static const char *TAG = "MAIN";
 #define CAN_TASK_PRIORITY   5
 #define CAN_TASK_CORE       1
 
+/* P-66: cadence at which can_task pumps wot_logger_tick() (the WOT
+ * uploader's retry driver). 1 Hz matches the "≈1 Hz is plenty"
+ * contract in wot_uploader.h; the uploader self-rate-limits to
+ * WOT_UPLOAD_RETRY_INTERVAL_MS internally, so this only needs to be
+ * frequent enough not to add latency to that interval. */
+#define MAIN_WOT_TICK_INTERVAL_MS 1000
+
 /**
  * CAN + connection manager task.
  * Runs on a dedicated task with its own stack so the blocking CAN
@@ -41,6 +48,7 @@ static void can_task(void *arg) {
     connection_manager_start_connection();
 
     uint32_t last_log_ticks = xTaskGetTickCount();
+    uint32_t last_wot_tick_ticks = xTaskGetTickCount();
     int log_counter = 0;
 
     while (1) {
@@ -50,6 +58,15 @@ static void can_task(void *arg) {
         flex_fuel_update();
 
         uint32_t now_ticks = xTaskGetTickCount();
+
+        /* P-66: pump the WOT uploader's retry tick at ~1 Hz so queued
+         * logs actually upload. wot_logger_tick() no-ops when the
+         * uploader isn't running. */
+        if ((now_ticks - last_wot_tick_ticks) >= pdMS_TO_TICKS(MAIN_WOT_TICK_INTERVAL_MS)) {
+            wot_logger_tick();
+            last_wot_tick_ticks = now_ticks;
+        }
+
         if ((now_ticks - last_log_ticks) >= pdMS_TO_TICKS(5000)) {
             ESP_LOGI(TAG, "Heartbeat: System running... count=%d", log_counter++);
             last_log_ticks = now_ticks;
