@@ -58,9 +58,22 @@ CAL_DIR       = ROOT / "calibrations"
 DB_PATH       = DATA_DIR / "srm.db"
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")  # MUST be set in production
 
+# P-67: WOT telemetry-log ingest storage. The dongle uploads gzipped
+# CSV WOT logs; we store one file per upload under WOT_LOG_DIR/<mac>/.
+# Kept ROOT-relative (like FW_DIR / CAL_DIR) so it lives inside the
+# container's mounted data volume — a literal host path like
+# /cal/wot_logs would not exist inside the FastAPI container. Override
+# with the WOT_LOG_DIR env var if the deployment wants an external
+# mount. (The dongle's own /cal/wot path is unrelated — that's the
+# dongle's flash partition.)
+WOT_LOG_DIR        = Path(os.environ.get("WOT_LOG_DIR", str(ROOT / "wot_logs")))
+WOT_LOG_MAX_BYTES  = 64 * 1024          # 64 KB cap per WOT spec (logs are ~3-4 KB)
+GZIP_MAGIC         = b"\x1f\x8b"        # RFC-1952 gzip stream magic
+
 DATA_DIR.mkdir(exist_ok=True)
 FW_DIR.mkdir(exist_ok=True)
 CAL_DIR.mkdir(exist_ok=True)
+WOT_LOG_DIR.mkdir(exist_ok=True)
 
 # ===========================================================================
 # Database (SQLite — one file, no service to run)
@@ -119,6 +132,20 @@ def init_db():
         event            TEXT,
         detail           TEXT
     );
+
+    -- P-67: WOT telemetry log uploads. One row per uploaded gzip CSV.
+    -- file_path is relative to WOT_LOG_DIR. mac/vin copied from the
+    -- authenticating device row at upload time (NOT client-claimed).
+    CREATE TABLE IF NOT EXISTS wot_logs (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        mac              TEXT NOT NULL,
+        vin              TEXT,
+        uploaded_at      INTEGER NOT NULL,
+        file_path        TEXT NOT NULL,
+        byte_count       INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_wot_logs_mac_ts
+        ON wot_logs (mac, uploaded_at DESC);
     """)
     # Idempotent license-column migrations. SCALE_ARCHITECTURE §6 adds
     # paid / revoked / revoked_reason to the devices table. SQLite's
@@ -165,6 +192,26 @@ def device_for_token(authorization: Optional[str]) -> sqlite3.Row:
     conn.close()
     if not row:
         raise HTTPException(401, "Unknown token")
+    return row
+
+def device_for_x_device_auth(x_device_auth: Optional[str]) -> sqlite3.Row:
+    """P-67: resolve a device row from the X-Device-Auth header.
+
+    Same lookup as device_for_token (token → devices.auth_token row)
+    but for the bare-token X-Device-Auth header the dongle's telemetry
+    uploader sends (no 'Bearer ' prefix). The MAC/VIN we trust come
+    from THIS row — never from anything the client puts in the body.
+    """
+    if not x_device_auth or not x_device_auth.strip():
+        raise HTTPException(401, "Missing X-Device-Auth header")
+    token = x_device_auth.strip()
+    conn = db()
+    row = conn.execute(
+        "SELECT * FROM devices WHERE auth_token = ?", (token,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(401, "Unknown device token")
     return row
 
 def require_admin(api_key: Optional[str]):
@@ -299,6 +346,89 @@ async def get_license(authorization: Optional[str] = Header(None)):
         "revoked": bool((dev["revoked"] if "revoked" in dev.keys() else 0) or 0),
         "revoked_reason": (dev["revoked_reason"] if "revoked_reason" in dev.keys() else None),
     }
+
+
+@app.post("/api/v1/telemetry/log")
+async def telemetry_log(
+    request: Request,
+    x_device_auth: Optional[str] = Header(None),
+):
+    """
+    P-67: WOT telemetry log ingest. The dongle POSTs a gzip-compressed
+    CSV WOT log here after a wide-open-throttle pull.
+
+    Auth:    X-Device-Auth: <auth_token>  (bare token, no Bearer prefix).
+             MAC + VIN are taken from the resolved device row — the
+             request body is never trusted to claim its own identity.
+    Body:    raw gzip bytes (Content-Type application/gzip; we also
+             verify the 1F 8B gzip magic regardless of Content-Type).
+    Gate:    device must be paid (and not revoked) — free tier doesn't
+             upload telemetry.
+    Limits:  body must be 1..WOT_LOG_MAX_BYTES (64 KB).
+
+    Returns 200 {ok:true, log_id:N} on success; 401 bad/missing auth;
+    403 unpaid/revoked; 400 empty or non-gzip body; 413 oversized.
+
+    Storage is atomic from the client's view: a 200 is returned only
+    if BOTH the file write and the DB row insert succeeded. On any
+    failure after the file is written, the file is removed so no
+    orphan is left without a row.
+    """
+    dev = device_for_x_device_auth(x_device_auth)
+
+    paid    = bool((dev["paid"]    if "paid"    in dev.keys() else 0) or 0)
+    revoked = bool((dev["revoked"] if "revoked" in dev.keys() else 0) or 0)
+    if not paid or revoked:
+        raise HTTPException(403, "telemetry upload requires an active (non-revoked) license")
+
+    body = await request.body()
+    if not body:
+        raise HTTPException(400, "empty body")
+    if len(body) > WOT_LOG_MAX_BYTES:
+        raise HTTPException(413, f"log exceeds {WOT_LOG_MAX_BYTES} byte cap")
+    if body[:2] != GZIP_MAGIC:
+        raise HTTPException(400, "body is not a gzip stream (missing 1F 8B magic)")
+
+    mac = dev["mac"]
+    vin = dev["vin"]
+    now = int(time.time())
+
+    # Per-device subdir; unique server-timestamped filename (short hex
+    # suffix avoids same-second collisions on one device).
+    dev_dir = WOT_LOG_DIR / mac.replace(":", "")
+    dev_dir.mkdir(parents=True, exist_ok=True)
+    fname = f"{now}_{secrets.token_hex(4)}.csv.gz"
+    fpath = dev_dir / fname
+    rel_path = str(fpath.relative_to(WOT_LOG_DIR))
+
+    # Write file first, then insert the row. If the insert fails,
+    # unlink the file so we never leave a file without a tracking row.
+    try:
+        fpath.write_bytes(body)
+    except OSError as e:
+        raise HTTPException(500, f"storage write failed: {e}")
+
+    conn = db()
+    try:
+        cur = conn.execute(
+            "INSERT INTO wot_logs (mac, vin, uploaded_at, file_path, byte_count) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (mac, vin, now, rel_path, len(body))
+        )
+        log_id = cur.lastrowid
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        # roll back the file so file + row stay consistent
+        try:
+            fpath.unlink()
+        except OSError:
+            pass
+        raise HTTPException(500, f"storage index failed: {e}")
+    conn.close()
+
+    log(mac, "wot_upload", f"log_id={log_id} bytes={len(body)} path={rel_path}")
+    return {"ok": True, "log_id": log_id}
 
 
 @app.get("/api/v1/device/update_available")
@@ -645,6 +775,7 @@ async def root():
         "version":  "0.1.0",
         "endpoints": [
             "POST /api/v1/device/register",
+            "POST /api/v1/telemetry/log",
             "GET  /api/v1/device/update_available",
             "GET  /api/v1/device/download_update/{filename}",
             "GET  /api/v1/device/calibration",

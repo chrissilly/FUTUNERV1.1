@@ -1856,7 +1856,7 @@ an always-on background drainer; out of scope for Phase 1 close.
 
 ---
 
-## P-67 🔴 Cloud has no `/api/v1/telemetry/log` upload endpoint (NEW 2026-05-26)
+## P-67 🟡 Cloud `/api/v1/telemetry/log` upload endpoint — CODE LANDED, PENDING-DEPLOY-VERIFY (NEW 2026-05-26, code 2026-05-27)
 
 The dongle uploads WOT logs via `POST` to
 `WOT_UPLOAD_DEFAULT_HOST + WOT_UPLOAD_ENDPOINT_PATH` =
@@ -1877,22 +1877,51 @@ telemetry-log POST route. Its POST routes are
 (ts / event / detail — an EVENT log, not WOT telemetry). There is
 no ingest endpoint for the gzipped WOT CSV the dongle uploads.
 
-**What's needed:**
-1. Build `POST /api/v1/telemetry/log` in `cloud/src/main.py`:
-   accepts the gzip body, validates the device auth header
-   (`X-Device-Auth` — the 32-hex token from `set_auth_token`),
-   associates it with the device MAC / VIN, stores it (filesystem
-   or table), returns 2xx on success.
-2. Mirror the §7a per-VIN 10 MB retention policy server-side.
-3. Decide read-back surface (extend `GET /admin/log/{mac}` or a
-   new telemetry-retrieval route) so the uploaded log can be
-   pulled + parsed.
-4. Deploy (rsync + docker rebuild) — same deploy gap as P-43.
+**Code landed 2026-05-27 (PENDING-DEPLOY-VERIFY).** Cloud + firmware
+companion both written + host-tested; awaiting Sean's rsync + docker
+rebuild (bundled with the P-43 deploy — see below).
 
-**Closes when:** the dongle's retained `wot_<ts>.csv.gz` uploads
-and returns 2xx, the dongle deletes its local copy on ack, and the
-log is retrievable + parseable from the cloud. The dongle side is
-already proven — this is purely cloud-side build + deploy. Blocks
+Cloud side (`cloud/src/main.py`):
+- `POST /api/v1/telemetry/log` — auth via `X-Device-Auth` header
+  (bare auth_token, resolved against `devices.auth_token` by the new
+  `device_for_x_device_auth()` helper). MAC + VIN come from the
+  resolved device row, never the body.
+- Paid gate: rejects with 403 unless the device is paid AND not
+  revoked (free tier / revoked devices don't upload).
+- Body: raw gzip; verified by the 1F 8B magic regardless of
+  Content-Type. 64 KB cap → 413; empty/non-gzip → 400.
+- Storage: gzip file under `WOT_LOG_DIR/<mac>/<ts>_<hex>.csv.gz`
+  (ROOT-relative dir, env-overridable — NOT a literal `/cal/` host
+  path, which wouldn't exist inside the container; the dongle's own
+  `/cal/wot` is unrelated). New `wot_logs` table row
+  (id, mac, vin, uploaded_at, file_path, byte_count). Atomic from
+  the client's view: 200 only if both file write + row insert
+  succeed; on index failure the file is unlinked.
+- `wot_logs` schema: in `init_db()` (fresh deploys) + as
+  `cloud/migrations/20260527_add_wot_logs.sql` (existing prod DB).
+- Tests: `cloud/tests/test_telemetry_log.py` — happy path, 401
+  (missing + bad token), 403 (unpaid + revoked), 413 (oversized),
+  400 (non-gzip + empty). 22/22 cloud tests green.
+
+Firmware companion (`firmware/src/logger/wot_logger.c`,
+`target_http_post`): the uploader now sends `X-Device-Auth:
+<auth_token>` (token read from NVS `LICENSE_NVS_AUTH_TOKEN_KEY`).
+**This was a real gap** — the upload POST previously sent only
+`Content-Type`, no auth header at all, so the spec'd endpoint would
+have 401'd every upload. Needs a dongle reflash alongside the cloud
+deploy.
+
+**Still TODO (not blocking the upload-200 close):**
+- §7a per-VIN 10 MB server-side retention policy (the dongle already
+  caps its own queue at WOT_UPLOAD_MAX_QUEUE_BYTES).
+- Admin read-back surface (extend `GET /admin/log/{mac}` or a new
+  telemetry-retrieval route) so an uploaded log can be pulled +
+  parsed off the server.
+
+**Closes when:** Sean deploys (rsync + docker rebuild) AND the
+dongle (reflashed with the X-Device-Auth companion) retries its
+retained `wot_<ts>.csv.gz`, gets a 2xx, and deletes the local copy
+on ack. Dongle-side chain is already proven (P-63/64/65/66). Blocks
 the §4.3 logging customer-experience row from going 🟢.
 
 ---
