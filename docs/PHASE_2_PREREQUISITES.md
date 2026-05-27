@@ -1814,6 +1814,89 @@ session.
 
 ---
 
+## P-66 🟢 WOT uploader tick had no production caller (RESOLVED 2026-05-26, commit `2874999`)
+
+Surfaced during the 2026-05-26 RS7 KOEO §4.3 close-out HIL, once
+Seanwifi was restored and the dongle had internet. A pedal stab
+(wdkba tracks the accelerator at KOEO; hit 99.6 % when floored)
+triggered a clean capture → gzip → `/cal/wot/wot_<ts>.csv.gz` write
+(`flush: 6 samples, 361 csv bytes, 384 gzip bytes; enqueued ...`).
+But the file then sat on flash and never uploaded.
+
+**Root cause:** `wot_uploader_tick()` — the ONLY code path that
+attempts a queued-log upload — had no production caller. The
+"call wot_uploader_tick(now_ms) periodically (1 Hz is plenty)"
+contract in `wot_uploader.h` was documented but never wired. The
+tick was exercised only by the host unit test
+(`test_wot_logger.c`). `git log -S wot_uploader_tick -- firmware/src/`
+confirms it was never called from production since the function
+landed in the 2026-05-05 snapshot — a never-worked gap, not a
+regression. This is the last of the four §4.3-upload bugs
+(P-63/64/65/66), and the reason the cloud-sync leg had never run
+end-to-end.
+
+**Fix:**
+- `wot_logger.{c,h}`: new `wot_logger_tick()` wrapper →
+  `wot_uploader_tick(target_clock_now_ms())`. Safe to call
+  unconditionally; no-ops when the uploader isn't running and
+  self-rate-limits to `WOT_UPLOAD_RETRY_INTERVAL_MS`.
+- `main.c`: `can_task` pumps `wot_logger_tick()` at
+  `MAIN_WOT_TICK_INTERVAL_MS` (1000 ms, new named constant). The
+  existing 100 Hz loop is the natural home.
+
+**HIL evidence post-fix:** with the tick wired, the uploader fired
+on schedule and POSTed the retained log to the cloud (see P-67 for
+the result — the POST reached the server and returned a definitive
+status, proving the entire dongle-side chain works end-to-end).
+
+**Architecture note:** `wot_uploader_start/stop` are tied to the
+wot_logger feature lifecycle, so the queue drains only while WOT
+logging is active. A future enhancement could run the uploader as
+an always-on background drainer; out of scope for Phase 1 close.
+
+---
+
+## P-67 🔴 Cloud has no `/api/v1/telemetry/log` upload endpoint (NEW 2026-05-26)
+
+The dongle uploads WOT logs via `POST` to
+`WOT_UPLOAD_DEFAULT_HOST + WOT_UPLOAD_ENDPOINT_PATH` =
+`https://sillyrabbitmotorsport.com/fut/api/v1/telemetry/log`. With
+P-63/64/65/66 all fixed, the 2026-05-26 HIL drove a real upload —
+the POST reached the cloud and returned **HTTP 404**:
+`WOT_UP: upload failed (status=404) — retaining wot_3268000.csv.gz
+for retry`.
+
+**Root cause:** the FastAPI app (`cloud/src/main.py`) has no
+telemetry-log POST route. Its POST routes are
+`/api/v1/device/register`, `/admin/devices`,
+`/admin/devices/{mac}/assign_firmware`,
+`/admin/calibrations/{filename}`,
+`/admin/devices/{mac}/assign_calibration`,
+`/admin/devices/{mac}/license`. The only log-related route is
+`GET /admin/log/{mac}`, which reads the `device_log` SQLite table
+(ts / event / detail — an EVENT log, not WOT telemetry). There is
+no ingest endpoint for the gzipped WOT CSV the dongle uploads.
+
+**What's needed:**
+1. Build `POST /api/v1/telemetry/log` in `cloud/src/main.py`:
+   accepts the gzip body, validates the device auth header
+   (`X-Device-Auth` — the 32-hex token from `set_auth_token`),
+   associates it with the device MAC / VIN, stores it (filesystem
+   or table), returns 2xx on success.
+2. Mirror the §7a per-VIN 10 MB retention policy server-side.
+3. Decide read-back surface (extend `GET /admin/log/{mac}` or a
+   new telemetry-retrieval route) so the uploaded log can be
+   pulled + parsed.
+4. Deploy (rsync + docker rebuild) — same deploy gap as P-43.
+
+**Closes when:** the dongle's retained `wot_<ts>.csv.gz` uploads
+and returns 2xx, the dongle deletes its local copy on ack, and the
+log is retrievable + parseable from the cloud. The dongle side is
+already proven — this is purely cloud-side build + deploy. Blocks
+the §4.3 logging customer-experience row from going 🟢.
+
+---
+
 ## Update protocol
 
 When you close an item out, change its emoji to 🟢 and add a one-line
