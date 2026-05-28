@@ -101,6 +101,23 @@ Cross-reference with every command name the doc invokes via `ws_driver.py --scri
 
 Today's incident (2026-05-19): pre-HIL gate caught `uds_tester_present` in Phase 1b and `sbf_load` in Phase 3 of `handoffs/PHASE1_HIL_VALIDATION.md` — both vapor. Same class as REG-1..7 but on the WS-command surface instead of CLI flags. Fixes: `uds_tester_present` → `dtc_read` (provokes session, wire-witnesses identically); `sbf_load` → `live_tune_start` (the actual registered command name).
 
+### 10. UI changes ship with Playwright browser tests
+
+Any commit that touches `ui/control_panel.{html,css,js}` (or the bundled `firmware/futuner_control_panel.html`) MUST include or update tests in `tools/ui_tests/` that exercise the customer-visible behavior in a real browser. Host-gate static analysis (`firmware/test/ui/eval.sh` golden contracts) and WS-read verification (`ws_driver.py` probes) are NOT sufficient for customer-experience close gates — they catch only the registry shape and the WS-side payload, not the actual rendered DOM the user looks at.
+
+Mechanical check:
+
+```bash
+cd tools/ui_tests
+npx playwright test --reporter=line
+```
+
+Must exit 0 (excluding `NIGHTLY=1`-gated tests) before a UI commit is declared "done." Add a new `*.test.js` file per UI surface — Dashboard has `ui_dashboard_spec.test.js`; future Diagnostics/Live-Tune/WOT panels each get their own test file driving the visible flows.
+
+The rule sits next to Rule 9 because the same pattern applies: Rule 9 catches WS-command vapor at the doc/code boundary; Rule 10 catches UI vapor at the JS/DOM boundary. Both close a gap where the surface "exists" on one side but does not work on the other.
+
+Today's incident (2026-05-28): the P-69 Dashboard close was declared green based on `eval.sh` (golden-contract grep) + WS probes (`license_status` returned paid:true on the wire). Cowork's browser validation found the top-bar lock still rendered "License: unpaid · VIN (unpaired)". Root cause: the WS `command_handler` wraps every payload in a `data:{}` envelope, but `onLicenseStatusResp`, `updateDash`, and the active-feature dispatch all read top-level `msg.paid` / `msg.nmot_w` / `msg.active_feature`. Those reads silently returned undefined for every response, hiding behind `|| 0` fallbacks in the gauge code. The prototype dashboard appeared to "work" only because engine-off vars are 0, which is also the fallback. Playwright caught all four customer-visible failures (license lock, gauge updates, WOT banner, localStorage persistence) on the first run.
+
 ---
 
 ## Repository layout

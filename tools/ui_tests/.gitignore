@@ -1,0 +1,8 @@
+# P-69 followup — Playwright test workspace.
+# node_modules and test artifacts are not source.
+
+node_modules/
+test-results/
+playwright-report/
+.last-run.json
+*.log
