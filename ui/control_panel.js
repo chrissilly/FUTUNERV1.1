@@ -680,6 +680,32 @@ function dashboardLoadSelectionToUI(){
   });
 }
 
+function dashboardMigrateOrphanNone(realVin){
+  /* P-69 followup: one-shot migration for selections that were
+   * stored under the '(none)' bucket due to the license-binding bug.
+   * If the real VIN already has its own non-empty selection, that
+   * wins — we just delete the orphan. Otherwise we copy the orphan
+   * into the real VIN's bucket. Either way the (none) key is gone
+   * after this runs. Safe to call repeatedly: a missing orphan key
+   * is a no-op. */
+  if (!realVin || realVin === '(none)') return;
+  try {
+    const noneKey = UI_CONST.DASHBOARD_LOCALSTORAGE_KEY_PREFIX + '(none)';
+    const orphan = localStorage.getItem(noneKey);
+    if (!orphan) return;
+    const realKey = UI_CONST.DASHBOARD_LOCALSTORAGE_KEY_PREFIX + realVin;
+    const existing = localStorage.getItem(realKey);
+    let existingArr = [];
+    try { existingArr = existing ? JSON.parse(existing) : []; } catch (_) { existingArr = []; }
+    if (!Array.isArray(existingArr) || existingArr.length === 0){
+      localStorage.setItem(realKey, orphan);
+    }
+    localStorage.removeItem(noneKey);
+  } catch (e){
+    console.error('dashboardMigrateOrphanNone', e);
+  }
+}
+
 /* =========================================================================
  * Tab switching
  * ========================================================================= */
@@ -791,9 +817,15 @@ function handleMsg(msg){
     return;
   }
 
-  /* Track active feature whenever a successful command response carries it. */
+  /* Track active feature whenever a successful command response
+   * carries it. The WS command_handler wraps the firmware payload
+   * under msg.data, so wot_log_start / wot_log_stop / get_status all
+   * deliver active_feature as msg.data.active_feature, NOT top-level.
+   * Honour both for forward-compat. */
   if (msg.active_feature !== undefined && msg.active_feature !== null){
     setActiveFeature(msg.active_feature);
+  } else if (msg.data && msg.data.active_feature !== undefined && msg.data.active_feature !== null){
+    setActiveFeature(msg.data.active_feature);
   }
 
   /* Command-response routing. */
@@ -871,7 +903,26 @@ function startPolling(){
 }
 function stopPolling(){ if (pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
 
-function updateDash(d){
+function updateDash(payload){
+  /* The WS command_handler wraps every response in a
+   *   { command, success, message, data: <inner> }
+   * envelope, and the get_logger_data handler in turn delivers
+   *   { success, command, data: { nmot_w:..., tmot:..., ... }, count }
+   * as its inner payload. handleMsg routes the inner envelope here,
+   * so the variable map is at `.data` — NOT at the top level.
+   *
+   * Earlier prototype reads of `d.nmot_w` / etc. silently returned
+   * undefined and fell back to 0 via `|| 0`, hiding the bug behind
+   * "engine off shows zero" appearances. Caught by P-69 followup
+   * Playwright (CLAUDE.md Rule 10).
+   *
+   * Be tolerant of a future shape change: if the input already looks
+   * like a flat var map (no nested .data of object type), use it. */
+  let d = payload;
+  if (d && typeof d === 'object' && d.data && typeof d.data === 'object' && !Array.isArray(d.data)){
+    d = d.data;
+  }
+
   /* The Logger Config "current value" column always tracks fresh
    * samples, regardless of which tab is active. Cheap; runs on every
    * poll response. */
@@ -1165,20 +1216,26 @@ function onListCmdsResp(msg){
 function refreshLicense(){ wsSend({command:'license_status'}); }
 
 function onLicenseStatusResp(msg){
-  /* Shape from vin_pair_commands.c:
-   * {ok:true, present, paid, revoked, vin, revoked_reason, last_sync_ms} */
+  /* P-69 followup: the firmware's license payload lives at msg.data
+   * because the WS command_handler wraps every response in a
+   * {command, success, message, data} envelope. The previous reads
+   * (msg.paid, msg.vin) were undefined for EVERY response — so the
+   * header lock stayed at "unpaid · VIN (unpaired)" even when the
+   * cloud said paid:true. Fall back to msg for backward-compat with
+   * any older firmware that delivered the fields un-wrapped. */
   if (msg.ok === false || msg.success === false){
     setLicense({paid:false, revoked:false, reason:msg.error || 'license read failed', vin:''});
     return;
   }
+  const d = (msg.data && typeof msg.data === 'object') ? msg.data : msg;
   setLicense({
-    paid:    !!msg.paid,
-    revoked: !!msg.revoked,
-    reason:  msg.revoked_reason || '',
-    vin:     msg.vin || '',
+    paid:    !!d.paid,
+    revoked: !!d.revoked,
+    reason:  d.revoked_reason || '',
+    vin:     d.vin || '',
   });
   /* Refresh the panel grid if it's visible. */
-  renderVinPairPanel(msg);
+  renderVinPairPanel(d);
 }
 
 function vinPairNow(){
@@ -1512,6 +1569,15 @@ subscribeAppState((state) => {
    * VIN's localStorage bucket and re-render the gauge layout. */
   const vin = state.license && state.license.vin ? state.license.vin : '(none)';
   if (vin !== _lastVinForDashboard){
+    /* P-69 followup: migrate any orphan dashboard_vars_(none) entries
+     * left over from the license-binding bug. If the user ticked
+     * Show-on-Dashboard boxes before the real VIN arrived, those
+     * selections were stored under '(none)'. On first transition to
+     * a real VIN, copy them across (without overwriting an existing
+     * real-VIN selection), then drop the (none) key. */
+    if (vin !== '(none)' && typeof dashboardMigrateOrphanNone === 'function'){
+      dashboardMigrateOrphanNone(vin);
+    }
     _lastVinForDashboard = vin;
     if (typeof dashboardLoadSelectionToUI === 'function') dashboardLoadSelectionToUI();
     if (dashState && dashState.active && typeof dashboardRenderGauges === 'function') dashboardRenderGauges();
