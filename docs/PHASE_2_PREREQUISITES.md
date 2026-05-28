@@ -1958,6 +1958,33 @@ the §4.3 logging customer-experience row from going 🟢.
 
 ---
 
+## P-68 🟡 P-54 ClearDTC owner sign-off pending — sole remaining Phase 1 gate (NEW 2026-05-28)
+
+Phase 1 closed 2026-05-28 with `§4.6 OBD fault code CLEAR` row as
+the only 🔴 in the snapshot. The technical investigation lives in
+**P-54** (`ECU returns NRC 0x11`; the fix is a session-state
+preamble before `0x14 ClearDiagnosticInformation`). P-54 has been
+held since 2026-05-21 pending Sean's explicit sign-off — the fix
+touches the ECU wire surface and the project's HARD RULE forbids
+unauthorized ECU-wire-surface code changes.
+
+This entry tracks the **organizational** side: nothing technical
+is blocking; the gate is purely "owner authorization to land the
+fix on the ECU-wire-surface path."
+
+**Closes when:** Sean explicitly authorizes the session-state
+preamble approach (or names an alternate fix) and the P-54 work
+ships + HIL-verifies on RS7. At that point both P-54 and P-68
+flip 🟢 and the §4.6 clear row goes 🟢, completing the Phase 1
+PERFECT state.
+
+**Not blocking:** Phase 1 close declaration (2026-05-28) explicitly
+notes §4.6 clear as the sole owner-held exception. Phase 2 + Phase 3
+build gates (`FUTUNER_PHASE2_ENABLED` / `FUTUNER_PHASE3_ENABLED`)
+stay 0 regardless — they're not auto-flipped by Phase 1 close.
+
+---
+
 ## Update protocol
 
 When you close an item out, change its emoji to 🟢 and add a one-line

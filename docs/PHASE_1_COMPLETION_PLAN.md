@@ -535,6 +535,36 @@ unblocked from a Phase-1-side correctness standpoint.
 
 ---
 
+## 🟢 Phase 1 CLOSE declaration — 2026-05-28
+
+**Phase 1 customer-experience gates are 🟢** on dev RS7 with two
+explicit exceptions:
+
+- **§4.6 OBD fault code CLEAR** stays 🔴 owner-held pending P-54
+  sign-off (ECU returns NRC 0x11; the session-state preamble that
+  would fix it is an ECU-wire-surface change requiring Sean's
+  explicit authorization). Tracked as P-68 in
+  `docs/PHASE_2_PREREQUISITES.md`.
+- **§4.4a Ethanol BLE bridge** + **§4.7 Ethernet transport** are
+  🟡 DEFERRED-PENDING-HARDWARE — no sensor on the RS7, no Ethernet
+  hardware yet. Neither is a Phase 1 close gate.
+
+Everything else closed end-to-end on RS7 across the 2026-05-19 →
+2026-05-28 cycle: §4.1 VIN pair + license (P-58 / P-62 persistence
+verified), §4.3 live gauges (P-55 / P-57 closed), §4.3 WOT log +
+cloud sync (P-28 / P-63 / P-64 / P-65 / P-66 firmware fixes +
+P-67 cloud endpoint + X-Device-Auth companion — HTTP 200 verified
+2026-05-28), §4.6 DTC read (4 codes returned to UI), §4.7 CAN
+transport (the entire stack rides on it).
+
+**FUTUNER_PHASE2_ENABLED and FUTUNER_PHASE3_ENABLED stay 0.**
+Phase 1 close does **NOT** auto-enable either. Flipping each is a
+separate, explicit owner-signed action — Phase 2 (destructive 8 MB
+binary reflash) and Phase 3 (live RAM-write tuning) are independent
+gates beyond this close.
+
+---
+
 ## Out of scope for Phase 1 PERFECT
 
 These exist and matter but do NOT block Phase 1 close. Listed here
