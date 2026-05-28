@@ -1856,7 +1856,39 @@ an always-on background drainer; out of scope for Phase 1 close.
 
 ---
 
-## P-67 🟡 Cloud `/api/v1/telemetry/log` upload endpoint — CODE LANDED, PENDING-DEPLOY-VERIFY (NEW 2026-05-26, code 2026-05-27)
+## P-67 🟢 Cloud `/api/v1/telemetry/log` upload endpoint (RESOLVED 2026-05-28, code 2026-05-27, deployed + verified 2026-05-28)
+
+**End-to-end verified 2026-05-28.** After Sean rsync'd the cloud
+bundle + ran `~/reload.sh` (sudo docker compose up -d --build, the
+plain non-sudo run had been aborting on a root-owned `/opt/srm-cloud/.env`
+permission denied), the deployed endpoint was probed live:
+
+- `POST /fut/api/v1/telemetry/log` unauthenticated → **HTTP 401**
+  `{"detail":"Missing X-Device-Auth header"}` (endpoint live;
+  `device_for_x_device_auth()` reached).
+- `GET /fut/admin/devices/30EDA0B63540` no admin key → **HTTP 403**
+  `{"detail":"Bad admin key"}` (P-43 rode along in the same deploy).
+- Root `/fut/` endpoint list now includes `POST /api/v1/telemetry/log`.
+
+HIL retest on dev RS7 (10.188.195.232, on Seanwifi, reflashed with
+the X-Device-Auth firmware companion):
+
+  I (52669725) WOT_UP: uploader started
+  I (52731575) WOT_UP: upload OK (status=200) — deleting wot_3268000.csv.gz
+
+The retained `wot_3268000.csv.gz` (384 bytes, captured 2026-05-26)
+uploaded with the auth header, the cloud returned **HTTP 200**, and
+the dongle deleted its local copy on ack — closing the §4.3 logging
+chain end-to-end.
+
+Remaining (non-blocking, NEW work, not §4.3 close gates):
+- §7a per-VIN 10 MB server retention policy.
+- Admin read-back surface for pulling an uploaded WOT log off the
+  server (extend `GET /admin/log/{mac}` or new route).
+
+---
+
+
 
 The dongle uploads WOT logs via `POST` to
 `WOT_UPLOAD_DEFAULT_HOST + WOT_UPLOAD_ENDPOINT_PATH` =
