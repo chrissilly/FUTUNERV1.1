@@ -161,6 +161,21 @@ textarea{resize:vertical}
 .dash-empty-state p{font-size:.9em;color:var(--text-dim)}
 .dash-empty-state a{color:var(--accent);text-decoration:underline}
 
+/* P-69 #3: "not in logger profile" placeholder + Enable-polling link. */
+.dash-gauge-notpolled{opacity:0.78;border-style:dashed}
+.dash-gauge-placeholder{font-size:1.0em;color:var(--text-dim);font-style:italic;min-height:1.6em}
+.dash-gauge-enable-row{font-size:.8em}
+.dash-gauge-enable-link{color:var(--accent);text-decoration:underline;cursor:pointer}
+
+/* P-69 #3: brief highlight pulse when Enable-polling link jumps the
+ * Log Config row into view. */
+@keyframes logcfgRowFlash {
+  0%   { background: rgba(0,170,255,0.25); }
+  60%  { background: rgba(0,170,255,0.10); }
+  100% { background: transparent; }
+}
+.logcfg-var-row.logcfg-highlight{animation: logcfgRowFlash 2s ease-out}
+
 /* Knock indicators */
 .knock-row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px}
 .knock-row .knock-title{font-size:.8em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;width:100%;text-align:center;margin-bottom:4px}

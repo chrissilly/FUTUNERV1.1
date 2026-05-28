@@ -294,6 +294,53 @@ test.describe('UI Dashboard v1 (P-69 acceptance §7)', () => {
     await expect(page.locator('.dash-gauge')).toHaveCount(4);
   });
 
+  test('AC11: not-in-profile placeholder + Enable-polling link', async ({ page }) => {
+    /* P-69 #3: with 10 Show-on-Dashboard ticks but only 6 actually
+     * polled by the firmware logger profile, expect 6 populated
+     * gauges + 4 placeholder gauges with the Enable-polling link.
+     *
+     * The 6 default-polled vars on RS7 are nmot_w + the other 5
+     * from logger_variables.c::VARIABLES_4K0907557G__0003[].
+     * Tick Show on those 6 + 4 additional vars (not in the profile)
+     * and assert the placeholder count. */
+    await bootClean(page);
+    const polled = [
+      'nmot_w', 'InjSys_ratEthPrtnBascFu', 'Com_stCrCtlPan',
+      'rl_w', 'tmot', 'wdkba',
+    ];
+    /* 4 vars known NOT to be in the default firmware profile. */
+    const notPolled = ['zwoutzyl_w', 'frm_w', 'pvdg_w', 'lamsbg_w'];
+
+    for (const v of polled) await tickVar(page, v);
+    /* For the not-polled vars we only need Show-on-Dashboard ticked
+     * (no Logged needed; the whole point is that the var isn't in
+     * the firmware profile). Open all categories first so the
+     * checkboxes are visible. */
+    await page.evaluate(() => switchTab('logconfig'));
+    await page.evaluate(() => {
+      document.querySelectorAll('.logcfg-cat-body').forEach(b => b.classList.add('open'));
+    });
+    for (const v of notPolled){
+      await page.locator(`#show_${v}`).check();
+    }
+
+    await page.evaluate(() => switchTab('dashboard'));
+    /* The dashboard should refresh its polled-set knowledge on tab
+     * enter via get_logger_profile. Wait for the placeholder gauges
+     * to appear. */
+    await expect(page.locator('.dash-gauge')).toHaveCount(10, { timeout: 5000 });
+    await expect(page.locator('.dash-gauge-notpolled')).toHaveCount(4, { timeout: 5000 });
+
+    /* Each placeholder must carry the Enable-polling link. */
+    const links = page.locator('.dash-gauge-notpolled .dash-gauge-enable-link');
+    await expect(links).toHaveCount(4);
+    await expect(links.first()).toContainText(/Enable polling/);
+
+    /* Clicking the link must switch to the Log Config tab. */
+    await links.first().click();
+    await expect(page.locator('#panel-logconfig')).toHaveClass(/active/);
+  });
+
   /* AC10 is the long-running soak. Skipped by default; run with
    * NIGHTLY=1 npx playwright test once it's wanted in CI. */
   test('AC10: 60min run, no memory growth, no duplicate timers', async ({ page }) => {

@@ -168,6 +168,21 @@ textarea{resize:vertical}
 .dash-empty-state p{font-size:.9em;color:var(--text-dim)}
 .dash-empty-state a{color:var(--accent);text-decoration:underline}
 
+/* P-69 #3: "not in logger profile" placeholder + Enable-polling link. */
+.dash-gauge-notpolled{opacity:0.78;border-style:dashed}
+.dash-gauge-placeholder{font-size:1.0em;color:var(--text-dim);font-style:italic;min-height:1.6em}
+.dash-gauge-enable-row{font-size:.8em}
+.dash-gauge-enable-link{color:var(--accent);text-decoration:underline;cursor:pointer}
+
+/* P-69 #3: brief highlight pulse when Enable-polling link jumps the
+ * Log Config row into view. */
+@keyframes logcfgRowFlash {
+  0%   { background: rgba(0,170,255,0.25); }
+  60%  { background: rgba(0,170,255,0.10); }
+  100% { background: transparent; }
+}
+.logcfg-var-row.logcfg-highlight{animation: logcfgRowFlash 2s ease-out}
+
 /* Knock indicators */
 .knock-row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px}
 .knock-row .knock-title{font-size:.8em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;width:100%;text-align:center;margin-bottom:4px}
@@ -1323,6 +1338,13 @@ function logcfgSaveProfile(){
   selected.forEach(v => { profile[v.key] = v.rate; });
   wsSend({command:'set_logger_profile', profile:profile}, msg => {
     toast(msg && msg.success ? 'Profile saved on dongle' : 'Save failed: ' + (msg && msg.error || 'unknown'), msg && msg.success ? '' : 'error');
+    /* P-69 #3: a successful save changes the polled set on the
+     * dongle, so re-fetch it now. The Dashboard's "not in logger
+     * profile" placeholders disappear for newly-Logged vars and
+     * appear for newly-Unlogged ones the next render. */
+    if (msg && msg.success && typeof dashboardRefreshPolledSet === 'function'){
+      dashboardRefreshPolledSet();
+    }
   });
   /* Also offer download for backup. */
   const blob = new Blob([JSON.stringify(profile, null, 2)], {type:'application/json'});
@@ -1589,6 +1611,9 @@ function wsConnect(){
     /* On connect, prime cross-cutting state. */
     refreshLicense();
     getStatus();
+    /* P-69 #3: prime the polled-set knowledge so the dashboard knows
+     * which Show-on-Dashboard selections will actually receive data. */
+    dashboardRefreshPolledSet();
     /* If the Dashboard was Started before the WS drop, restart its
      * intent now (spec §5.6: reconnect resumes the Started intent). */
     if (dashState && dashState.startedIntent) dashboardStart();
@@ -2905,12 +2930,36 @@ function dashboardInit(){
     values:        {},                            /* name → latest value */
     lastUpdateMs:  {},                            /* name → wall-clock ms of last sample */
     renderedSet:   new Set(),                     /* gauge names currently in the DOM */
+    polledSet:    new Set(),                      /* P-69 #3: vars currently in the firmware logger profile */
+    polledSetLoaded: false,                       /* false until get_logger_profile returns once */
     licenseTimer:  null,                          /* always-on license_status poll */
     statusTimer:   null,                          /* always-on get_status poll */
     staleTimer:    null,                          /* periodic stale-fade tick */
     wotActive:     false,                         /* banner state */
   };
   return dashState;
+}
+
+/* P-69 #3: fetch the firmware's active logger profile so the
+ * Dashboard knows which of the user's Show-on-Dashboard selections
+ * are actually being polled. Vars NOT in this set render with a
+ * "(not in logger profile)" placeholder + an Enable-polling link
+ * that jumps to Log Config rather than auto-mutating the profile
+ * (per spec §3 Architecture decisions + §5.5 — Dashboard MUST NOT
+ * call set_logger_profile, especially during WOT capture). */
+function dashboardRefreshPolledSet(){
+  if (!ws || ws.readyState !== 1) return;
+  wsSend({command:'get_logger_profile'}, msg => {
+    if (!msg.success) return;
+    const d = (msg.data && typeof msg.data === 'object') ? msg.data : msg;
+    const polled = new Set();
+    (d.required || []).forEach(n => polled.add(n));
+    (d.selected || []).forEach(n => polled.add(n));
+    if (!dashState) dashboardInit();
+    dashState.polledSet = polled;
+    dashState.polledSetLoaded = true;
+    if (dashState.active) dashboardRenderGauges();
+  });
 }
 
 /* Render the gauge grid from the user's current Show-on-Dashboard
@@ -2936,7 +2985,13 @@ function dashboardRenderGauges(){
   wantedArr.forEach(name => {
     const v = DASHBOARD_VAR_INDEX[name];
     if (!v) return;  /* unknown var — silently skip */
-    const type = dashboardInferType(v);
+    /* P-69 #3: once the polled set has loaded, mark gauges whose var
+     * isn't polled so they render with the "(not in logger profile)"
+     * placeholder + Enable-polling link. Before the first
+     * get_logger_profile reply, treat every var as polled (avoids a
+     * flicker of placeholders during boot). */
+    const notPolled = dashState.polledSetLoaded && !dashState.polledSet.has(name);
+    const type = notPolled ? 'notpolled' : dashboardInferType(v);
     const card = document.createElement('div');
     card.className = 'dash-gauge dash-gauge-' + type;
     card.dataset.var = name;
@@ -2957,6 +3012,20 @@ function dashboardRenderGauges(){
 function dashboardGaugeMarkup(v, type){
   const lbl = esc(v.display);
   const unit = v.unit ? ' <span class="dash-gauge-unit">' + esc(v.unit) + '</span>' : '';
+  if (type === 'notpolled'){
+    /* P-69 #3: var is on the Show-on-Dashboard set but NOT in the
+     * firmware's active logger profile. Show a placeholder + an
+     * Enable-polling link that scrolls to the matching Log Config
+     * row. Dashboard never auto-modifies the logger profile (spec
+     * §3 + §5.5). */
+    return `
+      <div class="dash-gauge-title">${lbl}</div>
+      <div class="dash-gauge-placeholder">(not in logger profile)</div>
+      <div class="dash-gauge-enable-row">
+        <a href="#" class="dash-gauge-enable-link" onclick="dashboardEnableForVar('${v.name}');return false;">Enable polling &rarr;</a>
+      </div>
+      <div class="dash-gauge-unit-row">${unit}<span class="dash-gauge-name">${esc(v.name)}</span></div>`;
+  }
   if (type === 'numeric'){
     return `
       <div class="dash-gauge-title">${lbl}</div>
@@ -2982,6 +3051,25 @@ function dashboardGaugeMarkup(v, type){
     <div class="dash-gauge-unit-row"><span class="dash-gauge-name">${esc(v.name)} [${v.array}]</span></div>`;
 }
 
+/* P-69 #3: Enable-polling link target. Switch to Log Config, open
+ * the parent category, scroll to the row, briefly highlight it.
+ * Does NOT mutate the profile — that's the user's call via the
+ * existing Save Profile button. */
+function dashboardEnableForVar(name){
+  switchTab('logconfig');
+  const row = document.querySelector('.logcfg-var-row[data-varname="' + name + '"]');
+  if (!row) return;
+  const body = row.closest('.logcfg-cat-body');
+  if (body && !body.classList.contains('open')){
+    body.classList.add('open');
+    const arrow = body.previousElementSibling && body.previousElementSibling.querySelector('.arrow');
+    if (arrow) arrow.classList.add('open');
+  }
+  try { row.scrollIntoView({behavior:'smooth', block:'center'}); } catch (_) { row.scrollIntoView(); }
+  row.classList.add('logcfg-highlight');
+  setTimeout(() => row.classList.remove('logcfg-highlight'), 2200);
+}
+
 /* Push the latest cached values into the existing gauge DOM. Called
  * from updateDash() on every successful get_logger_data response and
  * from the stale tick. */
@@ -2993,6 +3081,8 @@ function dashboardApplyValuesToGauges(){
     if (!v) return;
     const card = document.querySelector('.dash-gauge[data-var="' + name + '"]');
     if (!card) return;
+    /* P-69 #3: not-polled gauges have no data to apply; skip. */
+    if (card.dataset.type === 'notpolled') return;
     const val = dashState.values[name];
     const ageMs = now - (dashState.lastUpdateMs[name] || 0);
     const havePoll = (dashState.lastUpdateMs[name] || 0) > 0;
@@ -3092,6 +3182,9 @@ function dashboardRenderButton(){
 function dashboardOnPanelEnter(){
   if (!dashState) dashboardInit();
   dashState.active = true;
+  /* P-69 #3: refresh the polled set on every enter so a Save Profile
+   * elsewhere in the session is reflected immediately. */
+  dashboardRefreshPolledSet();
   dashboardRenderGauges();
   dashboardRenderButton();
   dashboardStaleTickEnsure();
