@@ -397,16 +397,16 @@ function logcfgOnCheck(cb){
 
 function logcfgUsedSlots(){
   let total = 0;
-  document.querySelectorAll('#logcfgCategories input[type=checkbox]:checked').forEach(cb => {
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:not(.logcfg-show-dash):checked').forEach(cb => {
     total += parseInt(cb.dataset.slots) || 1;
   });
   return total;
 }
 
 function logcfgSelectAll(){
-  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:not(.logcfg-show-dash)').forEach(cb => cb.checked = false);
   let used = 0;
-  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => {
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:not(.logcfg-show-dash)').forEach(cb => {
     const slots = parseInt(cb.dataset.slots) || 1;
     if (used + slots <= UI_CONST.LOGGER_MAX_SLOTS){
       cb.checked = true;
@@ -420,7 +420,7 @@ function logcfgSelectAll(){
 }
 
 function logcfgDeselectAll(){
-  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:not(.logcfg-show-dash)').forEach(cb => cb.checked = false);
   logcfgUpdateStats();
 }
 
@@ -431,7 +431,7 @@ function logcfgExpandAll(){
 
 function logcfgGetSelected(){
   const selected = [];
-  document.querySelectorAll('#logcfgCategories input[type=checkbox]:checked').forEach(cb => {
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:not(.logcfg-show-dash):checked').forEach(cb => {
     const key = cb.dataset.key;
     const bytes = parseInt(cb.dataset.bytes);
     const slots = parseInt(cb.dataset.slots) || 1;
@@ -456,7 +456,7 @@ function logcfgUpdateStats(){
   const warnEl = document.getElementById('logcfgLimitWarn');
   if (warnEl) warnEl.classList.toggle('show', atLimit);
 
-  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => {
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:not(.logcfg-show-dash)').forEach(cb => {
     if (!cb.checked){
       const slots = parseInt(cb.dataset.slots) || 1;
       const wouldExceed = usedSlots + slots > UI_CONST.LOGGER_MAX_SLOTS;
@@ -493,21 +493,53 @@ function logcfgUpdateStats(){
 }
 
 function logcfgSaveProfile(){
+  /* P1.A: firmware expects { variables: ["name1","name2",...] } — an
+   * ARRAY of variable names. The UI previously sent
+   * { profile: { name: rate } } and the firmware bailed with
+   * "Missing parameters" because it couldn't find the `variables`
+   * field. The per-var rate selector is UI-only for now (firmware
+   * doesn't store rates); just send the names. Required vars
+   * (nmot_w, eth, cruise) are always included by firmware — sending
+   * them is harmless (silently skipped). */
   const selected = logcfgGetSelected();
-  const profile = {};
-  selected.forEach(v => { profile[v.key] = v.rate; });
-  wsSend({command:'set_logger_profile', profile:profile}, msg => {
-    toast(msg && msg.success ? 'Profile saved on dongle' : 'Save failed: ' + (msg && msg.error || 'unknown'), msg && msg.success ? '' : 'error');
-    /* P-69 #3: a successful save changes the polled set on the
-     * dongle, so re-fetch it now. The Dashboard's "not in logger
-     * profile" placeholders disappear for newly-Logged vars and
-     * appear for newly-Unlogged ones the next render. */
-    if (msg && msg.success && typeof dashboardRefreshPolledSet === 'function'){
+  const variables = selected.map(v => v.key);
+
+  /* P1.E: Save commits Logged AND Show-on-Dashboard atomically.
+   * Capture the current Show-on-Dashboard set BEFORE the wsSend so
+   * we can compare on the callback and roll back if the firmware
+   * save fails. */
+  const vin       = dashboardGetCurrentVin();
+  const showSet   = dashboardSelectedSet();
+  const priorVars = dashboardLoadVars(vin);
+
+  /* Optimistically persist Show-on-Dashboard now (the user already
+   * saw it ticked in the UI). On firmware failure, restore the
+   * prior set so the two columns remain consistent. */
+  dashboardSaveVars(vin, showSet);
+
+  wsSend({command:'set_logger_profile', params:{variables: variables}}, msg => {
+    const ok = !!(msg && msg.success);
+    /* P1.B: explicit success / failure banner in the Log Config tab. */
+    logcfgSetSaveBanner(ok, ok
+      ? `Profile saved — ${(msg && msg.saved_count != null) ? msg.saved_count : variables.length} optional var(s)`
+        + ((msg && msg.invalid_count) ? `; ${msg.invalid_count} unknown ignored` : '')
+      : 'Save failed: ' + ((msg && (msg.message || msg.error)) || 'unknown error'));
+
+    if (!ok){
+      /* Roll back Show-on-Dashboard so the two columns stay in lockstep. */
+      dashboardSaveVars(vin, priorVars);
+      dashboardLoadSelectionToUI();
+      return;
+    }
+    /* P-69 #3: refresh the polled set so Dashboard placeholders flip
+     * for newly-Logged or newly-Unlogged vars. */
+    if (typeof dashboardRefreshPolledSet === 'function'){
       dashboardRefreshPolledSet();
     }
   });
+
   /* Also offer download for backup. */
-  const blob = new Blob([JSON.stringify(profile, null, 2)], {type:'application/json'});
+  const blob = new Blob([JSON.stringify({variables, dashboard_vars: Array.from(showSet)}, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'futuner_log_profile.json';
@@ -515,16 +547,44 @@ function logcfgSaveProfile(){
   URL.revokeObjectURL(a.href);
 }
 
+/* P1.B: success/error banner above the variable table. The element
+ * is added by logcfgSetSaveBanner on first call (no HTML change
+ * required beyond the toolbar position). */
+function logcfgSetSaveBanner(ok, text){
+  let b = document.getElementById('logcfgSaveBanner');
+  if (!b){
+    b = document.createElement('div');
+    b.id = 'logcfgSaveBanner';
+    b.className = 'logcfg-save-banner';
+    const toolbar = document.querySelector('#panel-logconfig .logcfg-toolbar');
+    if (toolbar && toolbar.parentNode) toolbar.parentNode.insertBefore(b, toolbar.nextSibling);
+  }
+  b.textContent = text;
+  b.className = 'logcfg-save-banner show ' + (ok ? 'ok' : 'err');
+  /* Self-clear after 5 s to keep the surface clean. */
+  clearTimeout(logcfgSetSaveBanner._t);
+  logcfgSetSaveBanner._t = setTimeout(() => { b.classList.remove('show'); }, 5000);
+}
+
 function logcfgLoadProfile(){
-  /* Try the device first; fall back to local file picker on failure. */
+  /* P1.F: firmware emits {required:[...], selected:[...]} via
+   * get_logger_profile. After the centralized envelope unwrap in
+   * handleMsg, both arrays land at the top level of msg. Translate
+   * the union into the same {name: rate} shape logcfgApplyProfile
+   * expects (rate defaults to 1 — firmware doesn't store rates). */
   wsSend({command:'get_logger_profile'}, msg => {
-    if (msg && msg.success && (msg.profile || msg.data)){
-      const profile = msg.profile || msg.data || {};
-      logcfgApplyProfile(profile);
-      toast('Profile loaded from dongle');
-    } else {
+    if (!(msg && msg.success)){
+      /* Fall back to local file picker on transport failure. */
       document.getElementById('logcfgFileInput').click();
+      return;
     }
+    const required = Array.isArray(msg.required) ? msg.required : [];
+    const selected = Array.isArray(msg.selected) ? msg.selected : [];
+    const profile = {};
+    required.concat(selected).forEach(name => { profile[name] = 1; });
+    logcfgApplyProfile(profile);
+    logcfgSetSaveBanner(true, 'Profile loaded from dongle (' +
+        (required.length + selected.length) + ' variables)');
   });
 }
 
@@ -545,7 +605,7 @@ function logcfgDoLoad(ev){
 }
 
 function logcfgApplyProfile(profile){
-  document.querySelectorAll('#logcfgCategories input[type=checkbox]').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#logcfgCategories input[type=checkbox]:not(.logcfg-show-dash)').forEach(cb => cb.checked = false);
   let used = 0;
   let skipped = 0;
   Object.keys(profile).forEach(key => {
@@ -687,6 +747,47 @@ function dashboardLoadSelectionToUI(){
   });
 }
 
+/* P1.D: list_available_vars filter. The UI's catalog (ECU_VAR_DB)
+ * spans ~55 variables across ECU families; the firmware's per-
+ * boxcode parser only knows 6 today for 4K0907557G__0003 (per
+ * logger_variables.c::VARIABLES_4K0907557G__0003). Vars the firmware
+ * doesn't know would silently be ignored on Save (invalid_count
+ * goes up but the user just sees the row tick green). Cross-check
+ * against list_available_vars and visually gray out unsupported
+ * rows so the catalog doesn't lie. */
+function logcfgRefreshSupportedVars(){
+  if (!ws || ws.readyState !== 1) return;
+  wsSend({command:'list_available_vars'}, msg => {
+    if (!msg || !msg.success) return;
+    const arr = Array.isArray(msg.variables) ? msg.variables : [];
+    const supported = new Set(arr.map(v => v && v.name).filter(Boolean));
+    document.querySelectorAll('.logcfg-var-row').forEach(row => {
+      const name = row.dataset.varname;
+      const isSupported = supported.has(name);
+      row.classList.toggle('var-unsupported', !isSupported);
+      const logged = row.querySelector('input[type=checkbox]:not(.logcfg-show-dash)');
+      const show   = row.querySelector('.logcfg-show-dash');
+      /* Logged checkbox: gated on firmware support — firmware can't
+       * log what it can't parse. Show-on-Dashboard is intentionally
+       * NOT gated: it's a pure UI selection. The dashboard renders
+       * a placeholder gauge for any Show-ticked var that has no
+       * polled data; the user still sees the picker work. */
+      if (logged) logged.disabled = !isSupported;
+      /* Add an inline "(not supported)" badge once per row. */
+      let badge = row.querySelector('.logcfg-unsupported-badge');
+      if (!isSupported && !badge){
+        badge = document.createElement('span');
+        badge.className = 'logcfg-unsupported-badge';
+        badge.textContent = '(not supported on this ECU)';
+        const desc = row.querySelector('.logcfg-var-desc');
+        if (desc) desc.appendChild(badge);
+      } else if (isSupported && badge){
+        badge.remove();
+      }
+    });
+  });
+}
+
 function dashboardMigrateOrphanNone(realVin){
   /* P-69 followup: one-shot migration for selections that were
    * stored under the '(none)' bucket due to the license-binding bug.
@@ -774,6 +875,9 @@ function wsConnect(){
     /* P-69 #3: prime the polled-set knowledge so the dashboard knows
      * which Show-on-Dashboard selections will actually receive data. */
     dashboardRefreshPolledSet();
+    /* P1.D: cross-check the UI catalog against the firmware's
+     * per-boxcode supported-vars list and gray out unsupported rows. */
+    if (typeof logcfgRefreshSupportedVars === 'function') logcfgRefreshSupportedVars();
     /* If the Dashboard was Started before the WS drop, restart its
      * intent now (spec §5.6: reconnect resumes the Started intent). */
     if (dashState && dashState.startedIntent) dashboardStart();
@@ -808,6 +912,37 @@ function wsSend(obj, cb){
 }
 
 function handleMsg(msg){
+  /* P-69 followup #2: centralized envelope unwrap.
+   *
+   * The firmware's command_handler.c::send_response wraps every
+   * command response as:
+   *   { command, success, message, data: <handler-emitted-JSON> }
+   * Historically each per-handler UI function read msg.<field>
+   * expecting handler-emitted fields at the top level — they were
+   * actually at msg.data.<field>. That was the same bug class as
+   * P-69's license/dash/WOT issues. ~14 handlers had the bug; the
+   * audit on 2026-05-28 turned up a systemic pattern (every handler
+   * that emits its own JSON).
+   *
+   * Hoist the inner-data fields ONCE here so every downstream
+   * handler — pendingCb callbacks, the active_feature dispatch, and
+   * the per-command routing below — sees a flat msg object with all
+   * fields available at top level. Preserve msg.data unchanged so
+   * handlers that already check `msg.data || msg` keep working, and
+   * so get_logger_data's two-level nested var map remains reachable
+   * via updateDash's existing second unwrap.
+   *
+   * Event messages (msg.event without msg.command) bypass naturally
+   * — the conditional only fires for command responses. */
+  if (msg.command && msg.data && typeof msg.data === 'object' && !Array.isArray(msg.data)){
+    msg = Object.assign({}, msg.data, {
+      command: msg.command,
+      success: msg.success,
+      message: msg.message,
+      data:    msg.data,
+    });
+  }
+
   /* P-57: cb routing now keyed by command name (FIFO per command).
    * See pendingCb declaration + wsSend rationale. */
   if (msg.command && pendingCb[msg.command] && pendingCb[msg.command].length){
@@ -828,14 +963,9 @@ function handleMsg(msg){
   }
 
   /* Track active feature whenever a successful command response
-   * carries it. The WS command_handler wraps the firmware payload
-   * under msg.data, so wot_log_start / wot_log_stop / get_status all
-   * deliver active_feature as msg.data.active_feature, NOT top-level.
-   * Honour both for forward-compat. */
+   * carries it. Post-unwrap (above) the field is at top level. */
   if (msg.active_feature !== undefined && msg.active_feature !== null){
     setActiveFeature(msg.active_feature);
-  } else if (msg.data && msg.data.active_feature !== undefined && msg.data.active_feature !== null){
-    setActiveFeature(msg.data.active_feature);
   }
 
   /* Command-response routing. */
@@ -955,8 +1085,27 @@ function updateDash(payload){
 /* =========================================================================
  * CAN Sniffer
  * ========================================================================= */
-function sniffStart(){ wsSend({command:'can_sniff_start'}); sniffing = true; }
-function sniffStop(){ wsSend({command:'can_sniff_stop'}); sniffing = false; }
+function sniffStart(){
+  /* P5: can_sniff_start is admin-gated server-side. The button used
+   * to fire without checking auth, so the firmware silently
+   * returned "Authentication required" and the frame count stayed
+   * at 0 — looked like a sniffer bug. Guard at the UI; if not
+   * authenticated, prompt the user instead of issuing a doomed
+   * command. */
+  if (!authenticated){ toast('Authenticate first (System tab → Unlock)','error'); return; }
+  wsSend({command:'can_sniff_start'}, msg => {
+    if (msg && msg.success === false){
+      toast('CAN sniffer start failed: ' + (msg.message || msg.error || 'unknown'), 'error');
+      sniffing = false;
+      return;
+    }
+    sniffing = true;
+  });
+}
+function sniffStop(){
+  wsSend({command:'can_sniff_stop'});
+  sniffing = false;
+}
 function clearSniff(){ document.getElementById('sniffBody').innerHTML = ''; sniffFrames = 0; document.getElementById('sniffCount').textContent = '0'; }
 
 setInterval(() => {

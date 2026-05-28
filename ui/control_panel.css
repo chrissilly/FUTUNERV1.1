@@ -307,6 +307,17 @@ tr:hover td{background:var(--bg-hover)}
 .logcfg-show-warn{font-size:.75em;color:var(--yellow);white-space:nowrap}
 .logcfg-show-warn a{color:var(--yellow);text-decoration:underline;cursor:pointer}
 
+/* P1.B: Save Profile feedback banner. */
+.logcfg-save-banner{display:none;padding:8px 14px;border-radius:6px;margin:8px 0;font-size:.9em}
+.logcfg-save-banner.show{display:block}
+.logcfg-save-banner.ok{background:rgba(0,200,80,.15);border:1px solid var(--green);color:var(--green)}
+.logcfg-save-banner.err{background:rgba(255,51,51,.15);border:1px solid var(--red);color:var(--red)}
+
+/* P1.D: rows whose var isn't in list_available_vars for this boxcode. */
+.logcfg-var-row.var-unsupported{opacity:.45}
+.logcfg-var-row.var-unsupported input[type=checkbox]{cursor:not-allowed}
+.logcfg-unsupported-badge{font-size:.7em;color:var(--text-dim);background:#222;padding:1px 6px;border-radius:3px;margin-left:6px;white-space:nowrap}
+
 .toast{position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--accent);color:var(--text);padding:10px 16px;border-radius:6px;font-size:.85em;z-index:1000;opacity:0;transition:opacity .3s;pointer-events:none}
 .toast.show{opacity:1}
 .toast.error{border-color:var(--red)}
