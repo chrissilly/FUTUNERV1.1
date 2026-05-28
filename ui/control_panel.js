@@ -81,6 +81,21 @@ const UI_CONST = {
      branch on this.
      Proposed default — needs Sean's approval before lock. */
   MOBILE_BREAKPOINT_PX: 480,
+
+  /* =========================================================================
+   * P-69 Dashboard v1 — defaults per docs/UI_DASHBOARD_SPEC.md §6.
+   * Spec named these *_DEFAULT to emphasize they're tunable defaults.
+   * Keep the names verbatim; the spec is the contract.
+   * Proposed defaults — needs Sean's approval before lock.
+   * ========================================================================= */
+  DASHBOARD_POLL_INTERVAL_MS_DEFAULT:         500,    /* get_logger_data poll cadence while Started */
+  DASHBOARD_STATUS_POLL_INTERVAL_MS_DEFAULT:  2000,   /* get_status poll for activeFeatureLabel */
+  DASHBOARD_LICENSE_POLL_INTERVAL_MS_DEFAULT: 5000,   /* license_status poll for licenseLock */
+  DASHBOARD_STALE_FADE_MS_DEFAULT:            2000,   /* gauge fades to 40% after this many ms without a fresh sample */
+  DASHBOARD_STALE_DASH_MS_DEFAULT:            5000,   /* gauge shows "--" after this many ms without a fresh sample */
+  DASHBOARD_PAUSE_OPACITY_DEFAULT:            0.4,    /* opacity when Stopped, also stale-fade target */
+  DASHBOARD_MAX_GAUGES_DEFAULT:               16,     /* cap on simultaneous gauges */
+  DASHBOARD_LOCALSTORAGE_KEY_PREFIX:          "dashboard_vars_",  /* per-VIN selection store */
 };
 
 /* =========================================================================
@@ -141,6 +156,12 @@ function setActiveFeature(name) {
   if (appState.activeFeature === name) return;
   appState.activeFeature = name;
   _notifyAppState();
+  /* P-69 Dashboard WOT banner: orange "WOT capture in progress" notice
+   * driven by the active_feature field. Banner clears within one
+   * poll cycle of active_feature reverting (spec §5.5). */
+  if (typeof dashboardSetWotBanner === 'function'){
+    dashboardSetWotBanner(name === 'wot_logger');
+  }
 }
 
 /* =========================================================================
@@ -149,6 +170,8 @@ function setActiveFeature(name) {
 let ws = null, authenticated = false, pollTimer = null;
 let sniffing = false, sniffFrames = 0, sniffRateCount = 0, sniffRateVal = 0;
 let xdfData = null;
+/* P-69 Dashboard v1 state. See dashboardInit() near bottom of file. */
+let dashState = null;
 /* P-57: pendingCb is keyed by command name (FIFO queue per command).
  * Earlier impl keyed by a client-side `_cbId` integer the dongle didn't
  * echo back, so the callback never resolved. Firmware's send_response
@@ -311,9 +334,16 @@ function varSlots(v){ return v.array || 1; }
       const arrayNote = v.array ? `<span class="slot-badge">${v.array} ch = ${slots} slots</span>` : '';
       const slotsAttr = slots;
       bodyHtml += `<div class="logcfg-var-row" data-varname="${v.name}">
-        <input type="checkbox" id="${id}" data-key="${v.name}" data-bytes="${v.bytes * slots}" data-slots="${slotsAttr}" onchange="logcfgOnCheck(this)">
+        <input type="checkbox" id="${id}" data-key="${v.name}" data-bytes="${v.bytes * slots}" data-slots="${slotsAttr}" onchange="logcfgOnCheck(this)" title="Logged">
         <div class="logcfg-var-name"><label for="${id}">${v.name}</label>${arrayNote}</div>
         <div class="logcfg-var-desc">${esc(v.display)} [${v.unit}]</div>
+        <label class="logcfg-show-dash-cell" title="Show on Dashboard">
+          <input type="checkbox" class="logcfg-show-dash" data-key="${v.name}" id="show_${v.name}" onchange="logcfgOnShowDash(this)">
+          <span class="logcfg-show-dash-icon">&#128200;</span>
+        </label>
+        <span class="logcfg-show-warn" id="warn_${v.name}" style="display:none">
+          <a href="#" onclick="logcfgEnableBoth('${v.name}');return false;">Enable Logged first</a>
+        </span>
         <select class="logcfg-var-rate" data-key="${v.name}" onchange="logcfgUpdateStats()">
           <option value="1">Every poll</option>
           <option value="2">Every 2nd</option>
@@ -335,6 +365,12 @@ function varSlots(v){ return v.array || 1; }
     }
   });
   logcfgUpdateStats();
+  /* P-69: prime the Show-on-Dashboard column from localStorage now
+   * (the VIN may not be known yet — '(none)' bucket — but if a prior
+   * session paired to this VIN before the page reload, the selection
+   * survives via the per-VIN store and is re-applied below when
+   * license_status returns). */
+  if (typeof dashboardLoadSelectionToUI === 'function') dashboardLoadSelectionToUI();
 })();
 
 function toggleLogCat(hdr){
@@ -354,6 +390,8 @@ function logcfgOnCheck(cb){
       return;
     }
   }
+  /* P-69: the Show-on-Dashboard warn flips with the Logged state. */
+  logcfgUpdateShowWarn(cb.dataset.key);
   logcfgUpdateStats();
 }
 
@@ -535,10 +573,124 @@ function updateLogConfigValues(d){
 }
 
 /* =========================================================================
+ * P-69 Dashboard v1 — Show-on-Dashboard column wire-up + per-VIN store.
+ *
+ * Storage model:
+ *   localStorage[DASHBOARD_LOCALSTORAGE_KEY_PREFIX + VIN] = JSON array
+ *   of variable names selected for the Dashboard tab.
+ *
+ * When VIN is empty (no license / pre-pair), we use the key with a
+ * literal "(none)" suffix so the selections survive a re-pair to the
+ * same physical car. The set is persisted on every checkbox toggle
+ * (no separate "Save" button); the spec's "Save Profile commits both
+ * columns" requirement is met because logcfgSaveProfile already
+ * mutates the firmware profile, and the dashboard set is per-click.
+ * ========================================================================= */
+
+function dashboardGetCurrentVin(){
+  /* Pulled from appState (set by license_status / vin_pair responses). */
+  return (appState.license && appState.license.vin) ? appState.license.vin : '(none)';
+}
+
+function dashboardLoadVars(vin){
+  try {
+    const raw = localStorage.getItem(UI_CONST.DASHBOARD_LOCALSTORAGE_KEY_PREFIX + vin);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? new Set(arr) : new Set();
+  } catch (e){
+    console.error('dashboardLoadVars', e);
+    return new Set();
+  }
+}
+
+function dashboardSaveVars(vin, set){
+  try {
+    const arr = Array.from(set);
+    localStorage.setItem(UI_CONST.DASHBOARD_LOCALSTORAGE_KEY_PREFIX + vin, JSON.stringify(arr));
+  } catch (e){
+    console.error('dashboardSaveVars', e);
+    toast('Could not persist dashboard selection: ' + e.message, 'error');
+  }
+}
+
+function dashboardSelectedSet(){
+  /* Read the current state of all Show-on-Dashboard checkboxes. */
+  const set = new Set();
+  document.querySelectorAll('.logcfg-show-dash').forEach(cb => {
+    if (cb.checked) set.add(cb.dataset.key);
+  });
+  return set;
+}
+
+function logcfgOnShowDash(cb){
+  /* Capacity guard: don't let users tick more than MAX_GAUGES. */
+  if (cb.checked){
+    const set = dashboardSelectedSet();   /* already includes `cb` */
+    if (set.size > UI_CONST.DASHBOARD_MAX_GAUGES_DEFAULT){
+      cb.checked = false;
+      toast('Dashboard cap of ' + UI_CONST.DASHBOARD_MAX_GAUGES_DEFAULT + ' gauges reached', 'error');
+      return;
+    }
+  }
+  dashboardSaveVars(dashboardGetCurrentVin(), dashboardSelectedSet());
+  logcfgUpdateShowWarn(cb.dataset.key);
+  /* If Dashboard panel is open, refresh its gauge list so a checkbox
+   * change appears within one poll cycle (acceptance §7.5). */
+  if (dashState && dashState.active) dashboardRenderGauges();
+}
+
+function logcfgEnableBoth(name){
+  /* "Enable Logged first" inline link. Tick the Logged checkbox first
+   * (respecting slot capacity), then the Show-on-Dashboard one. */
+  const logged = document.getElementById('logvar_' + name);
+  if (logged && !logged.checked){
+    logged.checked = true;
+    logcfgOnCheck(logged);
+    if (!logged.checked){
+      /* Slot guard rejected — show the toast it already raised; no
+       * point ticking Show without Logged. */
+      return;
+    }
+  }
+  const show = document.getElementById('show_' + name);
+  if (show && !show.checked){
+    show.checked = true;
+    logcfgOnShowDash(show);
+  }
+}
+
+function logcfgUpdateShowWarn(name){
+  const logged = document.getElementById('logvar_' + name);
+  const show   = document.getElementById('show_' + name);
+  const warn   = document.getElementById('warn_' + name);
+  if (!logged || !show || !warn) return;
+  const needWarn = show.checked && !logged.checked;
+  warn.style.display = needWarn ? '' : 'none';
+}
+
+function dashboardLoadSelectionToUI(){
+  /* Read current-VIN selection from localStorage and tick the
+   * Show-on-Dashboard checkboxes. Called on init + on VIN change. */
+  const vin = dashboardGetCurrentVin();
+  const set = dashboardLoadVars(vin);
+  document.querySelectorAll('.logcfg-show-dash').forEach(cb => {
+    cb.checked = set.has(cb.dataset.key);
+    logcfgUpdateShowWarn(cb.dataset.key);
+  });
+}
+
+/* =========================================================================
  * Tab switching
  * ========================================================================= */
 const TAB_NAMES = ['dashboard','sniffer','diag','tuning','livetune','logconfig','files','wot','vinpair','system'];
+/* P-69: pollNeed evaluator + dashboardOnPanelEnter/Leave both key on the
+ * currently-active panel. Stored explicitly so they don't have to
+ * scrape the DOM for `.panel.active`. */
+let currentPanel = 'dashboard';
 function switchTab(name){
+  const prev = currentPanel;
+  currentPanel = name;
   document.querySelectorAll('.tab').forEach((t,i) => {
     t.classList.toggle('active', TAB_NAMES[i] === name);
   });
@@ -546,10 +698,16 @@ function switchTab(name){
   const el = document.getElementById('panel-' + name);
   if (el) el.classList.add('active');
 
-  /* Per-tab activation polling. */
+  /* P-69 Dashboard tab enter/leave hooks. */
+  if (prev === 'dashboard' && name !== 'dashboard' && typeof dashboardOnPanelLeave === 'function') dashboardOnPanelLeave();
+  if (name === 'dashboard' && typeof dashboardOnPanelEnter === 'function') dashboardOnPanelEnter();
+
+  /* Per-tab activation polling. The shared pollTimer is driven by
+   * dashboardEvaluatePollNeed() — it runs while logconfig is open OR
+   * while Dashboard is in Started state. */
   const wsLive = ws && ws.readyState === 1;
-  if ((name === 'dashboard' || name === 'logconfig') && wsLive) startPolling();
-  else if (name !== 'dashboard' && name !== 'logconfig') stopPolling();
+  if (wsLive) dashboardEvaluatePollNeed();
+  else stopPolling();
 
   if (name === 'livetune' && wsLive) startLiveTunePoll();
   else stopLiveTunePoll();
@@ -570,17 +728,26 @@ function wsConnect(){
   ws = new WebSocket(url);
   ws.onopen = () => {
     setConn(true);
-    startPolling();
+    /* P-69: Dashboard top-bar polls run as long as the page is loaded
+     * (license_status @ 5 s for the lock; get_status @ 2 s for the
+     * activeFeatureLabel + WOT banner). Independent of get_logger_data,
+     * which is driven by dashboardEvaluatePollNeed(). */
+    dashboardTopBarTimersStart();
+    dashboardEvaluatePollNeed();
     toast('Connected');
     /* On connect, prime cross-cutting state. */
     refreshLicense();
     getStatus();
+    /* If the Dashboard was Started before the WS drop, restart its
+     * intent now (spec §5.6: reconnect resumes the Started intent). */
+    if (dashState && dashState.startedIntent) dashboardStart();
   };
   ws.onclose = () => {
     setConn(false);
     stopPolling();
     stopLiveTunePoll();
     stopWotPoll();
+    dashboardTopBarTimersStop();
     setTimeout(wsConnect, UI_CONST.WS_RECONNECT_MS);
   };
   ws.onerror = () => ws.close();
@@ -677,55 +844,51 @@ function onAuthResp(msg){
 }
 
 /* =========================================================================
- * Dashboard polling
+ * Logger polling — single shared pollTimer.
+ *
+ * One get_logger_data poll feeds both consumers:
+ *   1. Log Config tab — live "current value" column
+ *   2. Dashboard tab in Started state — gauge updates
+ *
+ * The timer runs iff either consumer needs data; cadence is the
+ * Dashboard spec's DASHBOARD_POLL_INTERVAL_MS_DEFAULT (500 ms).
+ * `currentPanel` is updated by switchTab(); `dashState.started` is
+ * flipped by the Dashboard's Start/Stop button. The single timer
+ * approach honors the spec's "doesn't double bus load" rule.
  * ========================================================================= */
+function dashboardEvaluatePollNeed(){
+  const need = (currentPanel === 'logconfig') ||
+               (currentPanel === 'dashboard' && dashState && dashState.started);
+  if (need && !pollTimer) startPolling();
+  if (!need && pollTimer) stopPolling();
+}
 function startPolling(){
   stopPolling();
   pollTimer = setInterval(() => {
     logcfgPollCounter++;
     wsSend({command:'get_logger_data'});
-  }, UI_CONST.DASH_POLL_INTERVAL_MS);
+  }, UI_CONST.DASHBOARD_POLL_INTERVAL_MS_DEFAULT);
 }
 function stopPolling(){ if (pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
 
 function updateDash(d){
-  const rpm = d.nmot_w || 0;
-  const rpmPct = Math.min(rpm / UI_CONST.RPM_GAUGE_MAX, 1);
-  const rpmArc = document.getElementById('rpmArc');
-  if (rpmArc) rpmArc.setAttribute('stroke-dasharray', (rpmPct * UI_CONST.GAUGE_ARC_LEN) + ' ' + UI_CONST.GAUGE_ARC_LEN);
-  const rpmVal = document.getElementById('rpmVal');
-  if (rpmVal) rpmVal.textContent = Math.round(rpm);
-
-  const boost = d.pvdg_w || 0;
-  const boostPct = Math.min(Math.max((boost - UI_CONST.BOOST_GAUGE_MIN) / UI_CONST.BOOST_GAUGE_RANGE, 0), 1);
-  const boostArc = document.getElementById('boostArc');
-  if (boostArc) boostArc.setAttribute('stroke-dasharray', (boostPct * UI_CONST.GAUGE_ARC_LEN) + ' ' + UI_CONST.GAUGE_ARC_LEN);
-  const boostVal = document.getElementById('boostVal');
-  if (boostVal) boostVal.textContent = boost.toFixed(2);
-
-  const knockBits = d.klopfakt || 0;
-  for (let i = 0; i < UI_CONST.KNOCK_CYL_COUNT; i++){
-    const dot = document.getElementById('knockCyl' + (i + 1));
-    if (dot){
-      const active = !!(knockBits & (1 << i));
-      dot.classList.toggle('active', active);
-    }
-  }
-
-  READOUT_DEFS.forEach(r => {
-    const el = document.getElementById('ro_' + r.key);
-    if (!el) return;
-    const v = d[r.key];
-    if (v === undefined || v === null){ el.textContent = '--'; el.className = 'val'; return; }
-    el.textContent = (typeof v === 'number') ? v.toFixed(r.decimals) : v;
-    let cls = 'val';
-    if (r.danger !== null && v >= r.danger) cls += ' red';
-    else if (r.warn !== null && v >= r.warn) cls += ' yellow';
-    else if (r.warn !== null) cls += ' green';
-    el.className = cls;
-  });
-
+  /* The Logger Config "current value" column always tracks fresh
+   * samples, regardless of which tab is active. Cheap; runs on every
+   * poll response. */
   updateLogConfigValues(d);
+
+  /* P-69: Dashboard gauges are dynamic — each gauge owns its own
+   * update from per-variable values. dashState.values caches the
+   * latest sample per var so stale-fade timing can run on a UI tick
+   * independent of poll arrival. */
+  if (dashState){
+    const now = Date.now();
+    Object.keys(d).forEach(key => {
+      dashState.values[key] = d[key];
+      dashState.lastUpdateMs[key] = now;
+    });
+    if (dashState.active) dashboardApplyValuesToGauges();
+  }
 }
 
 /* =========================================================================
@@ -1315,6 +1478,11 @@ function swapConfirmProceed(){
  * appState change. The header is the only persistent surface that
  * reads appState directly (per Q3).
  * ========================================================================= */
+/* P-69: track last-seen VIN so we only re-load Dashboard selection
+ * (and re-render the gauge layout) when the VIN actually changes —
+ * not on every 5 s license_status poll. */
+let _lastVinForDashboard = null;
+
 subscribeAppState((state) => {
   /* License lock. */
   const lock = document.getElementById('licenseLock');
@@ -1337,6 +1505,16 @@ subscribeAppState((state) => {
     const f = state.activeFeature || 'idle';
     lbl.textContent = 'Active: ' + f;
     lbl.classList.toggle('idle', f === 'idle' || f === 'none');
+  }
+
+  /* P-69: VIN-keyed Dashboard selection store. When the paired VIN
+   * changes, reload the Show-on-Dashboard checkboxes from the new
+   * VIN's localStorage bucket and re-render the gauge layout. */
+  const vin = state.license && state.license.vin ? state.license.vin : '(none)';
+  if (vin !== _lastVinForDashboard){
+    _lastVinForDashboard = vin;
+    if (typeof dashboardLoadSelectionToUI === 'function') dashboardLoadSelectionToUI();
+    if (dashState && dashState.active && typeof dashboardRenderGauges === 'function') dashboardRenderGauges();
   }
 });
 
@@ -1760,6 +1938,322 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 const _passEl = document.getElementById('authPass');
 if (_passEl) _passEl.addEventListener('keydown', e => { if (e.key==='Enter') doAuth(); });
+
+/* =========================================================================
+ * P-69 Dashboard v1 core — per docs/UI_DASHBOARD_SPEC.md.
+ *
+ * What this owns:
+ *   - dashState: the local view model (started, gauges, last values,
+ *     timers).
+ *   - Dynamic gauge layout: rebuilds the grid each time the user's
+ *     Show-on-Dashboard selection or paired VIN changes.
+ *   - Per-gauge type inference (numeric / enum / multi-dim) +
+ *     min/max/decimals inference from the variable's manifest unit.
+ *   - Stale-fade / dash timing (DASHBOARD_STALE_FADE_MS / _DASH_MS).
+ *   - WOT capture banner toggle (set from get_status active_feature).
+ *   - Always-on top-bar polls (license_status @ 5 s, get_status @ 2 s).
+ *
+ * What this MUST NOT touch (per spec §2 synchronicity hazards):
+ *   - data_callback slot (WOT logger owns it during capture)
+ *   - set_logger_profile (would step on WOT or DTC consumers)
+ *   - logger_stop (would kill polling for everyone)
+ * ========================================================================= */
+
+/* Unit-based min/max + decimals inference. Spec §5.3 says "Min/max
+ * from manifest" but ECU_VAR_DB has unit but no explicit range — so
+ * this table is the manifest-derived range for v1. v1.5 will move to
+ * a per-VIN range stored in cloud. */
+const DASHBOARD_RANGE_BY_UNIT = {
+  'rpm':   { min: 0,    max: 9000, decimals: 0 },
+  '°C':    { min: -40,  max: 150,  decimals: 0 },
+  '%':     { min: 0,    max: 100,  decimals: 1 },
+  'hPa':   { min: 0,    max: 3000, decimals: 0 },
+  'kPa':   { min: 0,    max: 1000, decimals: 0 },
+  'MPa':   { min: 0,    max: 30,   decimals: 1 },
+  'V':     { min: 0,    max: 16,   decimals: 2 },
+  'A':     { min: -200, max: 200,  decimals: 1 },
+  'km/h':  { min: 0,    max: 300,  decimals: 0 },
+  'deg':   { min: -90,  max: 90,   decimals: 1 },
+  'Nm':    { min: 0,    max: 1000, decimals: 0 },
+  'kg/h':  { min: 0,    max: 1500, decimals: 0 },
+  'g':     { min: -2,   max: 2,    decimals: 2 },
+  'm/s²':  { min: -20,  max: 20,   decimals: 2 },
+  'ms':    { min: 0,    max: 50,   decimals: 2 },
+  '-':     { min: 0,    max: 2,    decimals: 3 },
+  '':      { min: 0,    max: 100,  decimals: 2 },
+};
+
+/* Build a fast lookup from variable name → manifest entry. */
+const DASHBOARD_VAR_INDEX = {};
+ECU_VAR_DB.forEach(v => { DASHBOARD_VAR_INDEX[v.name] = v; });
+
+function dashboardInferType(v){
+  if (v.array && v.array > 1) return 'multidim';
+  /* Enum heuristic: Com_st* prefix or display name containing
+   * "Status"/"State"/"Mask" — unit is typically '-'. */
+  if (/^Com_st/.test(v.name) || /\b(Status|State|Mask|Bitmask)\b/.test(v.display)) return 'enum';
+  return 'numeric';
+}
+function dashboardInferRange(v){
+  const r = DASHBOARD_RANGE_BY_UNIT[v.unit] || DASHBOARD_RANGE_BY_UNIT[''];
+  /* Load (% over 100 possible on rl_w/rlp_w). Bump the cap so a 130%
+   * load reading doesn't peg the dial. */
+  if (v.unit === '%' && /^rl[ p]?_w/.test(v.name)) return { min: 0, max: 200, decimals: 1 };
+  return { min: r.min, max: r.max, decimals: r.decimals };
+}
+
+/* dashState initialized to the canonical shape. dashboardInit() runs
+ * on first reference; the IIFE pattern would race the page-load
+ * subscribeAppState() callback that already references dashState. */
+function dashboardInit(){
+  if (dashState) return dashState;
+  dashState = {
+    active:        currentPanel === 'dashboard',  /* tab is showing */
+    started:       false,                         /* Start button pressed */
+    startedIntent: false,                         /* user wants started even across tab-switch / WS drop */
+    values:        {},                            /* name → latest value */
+    lastUpdateMs:  {},                            /* name → wall-clock ms of last sample */
+    renderedSet:   new Set(),                     /* gauge names currently in the DOM */
+    licenseTimer:  null,                          /* always-on license_status poll */
+    statusTimer:   null,                          /* always-on get_status poll */
+    staleTimer:    null,                          /* periodic stale-fade tick */
+    wotActive:     false,                         /* banner state */
+  };
+  return dashState;
+}
+
+/* Render the gauge grid from the user's current Show-on-Dashboard
+ * selection. Idempotent — diff against renderedSet to avoid blowing
+ * away DOM unnecessarily. */
+function dashboardRenderGauges(){
+  if (!dashState) dashboardInit();
+  const grid = document.getElementById('dashGaugeGrid');
+  const empty = document.getElementById('dashEmptyState');
+  const count = document.getElementById('dashGaugeCount');
+  if (!grid) return;
+
+  const vin = dashboardGetCurrentVin();
+  const wanted = dashboardLoadVars(vin);
+  /* Cap. */
+  const wantedArr = Array.from(wanted).slice(0, UI_CONST.DASHBOARD_MAX_GAUGES_DEFAULT);
+
+  /* Rebuild from scratch — cheap for N ≤ 16, and keeps order
+   * deterministic (selection order). */
+  grid.innerHTML = '';
+  dashState.renderedSet = new Set();
+
+  wantedArr.forEach(name => {
+    const v = DASHBOARD_VAR_INDEX[name];
+    if (!v) return;  /* unknown var — silently skip */
+    const type = dashboardInferType(v);
+    const card = document.createElement('div');
+    card.className = 'dash-gauge dash-gauge-' + type;
+    card.dataset.var = name;
+    card.dataset.type = type;
+    card.innerHTML = dashboardGaugeMarkup(v, type);
+    grid.appendChild(card);
+    dashState.renderedSet.add(name);
+  });
+
+  if (empty) empty.style.display = wantedArr.length === 0 ? '' : 'none';
+  if (count) count.textContent = wantedArr.length + ' gauge' + (wantedArr.length === 1 ? '' : 's');
+
+  /* Re-apply any cached values now so gauges aren't blank for a poll
+   * cycle after a re-render. */
+  dashboardApplyValuesToGauges();
+}
+
+function dashboardGaugeMarkup(v, type){
+  const lbl = esc(v.display);
+  const unit = v.unit ? ' <span class="dash-gauge-unit">' + esc(v.unit) + '</span>' : '';
+  if (type === 'numeric'){
+    return `
+      <div class="dash-gauge-title">${lbl}</div>
+      <div class="dash-gauge-readout" id="dgv_${v.name}">--</div>
+      <div class="dash-gauge-bar"><div class="dash-gauge-fill" id="dgf_${v.name}" style="width:0%"></div></div>
+      <div class="dash-gauge-unit-row">${unit}<span class="dash-gauge-name">${esc(v.name)}</span></div>`;
+  }
+  if (type === 'enum'){
+    return `
+      <div class="dash-gauge-title">${lbl}</div>
+      <div class="dash-gauge-enum" id="dgv_${v.name}">--</div>
+      <div class="dash-gauge-unit-row"><span class="dash-gauge-name">${esc(v.name)}</span></div>`;
+  }
+  /* multidim — render array values as a comma-separated row. For 8-cyl
+   * vectors we use a tidy 4×2 grid; for others, a horizontal row. */
+  const cells = [];
+  for (let i = 0; i < v.array; i++){
+    cells.push(`<span class="dash-gauge-cell" id="dgv_${v.name}_${i}">--</span>`);
+  }
+  return `
+    <div class="dash-gauge-title">${lbl}${unit}</div>
+    <div class="dash-gauge-multidim ${v.array === 8 ? 'cyls8' : ''}">${cells.join('')}</div>
+    <div class="dash-gauge-unit-row"><span class="dash-gauge-name">${esc(v.name)} [${v.array}]</span></div>`;
+}
+
+/* Push the latest cached values into the existing gauge DOM. Called
+ * from updateDash() on every successful get_logger_data response and
+ * from the stale tick. */
+function dashboardApplyValuesToGauges(){
+  if (!dashState || !dashState.renderedSet.size) return;
+  const now = Date.now();
+  dashState.renderedSet.forEach(name => {
+    const v = DASHBOARD_VAR_INDEX[name];
+    if (!v) return;
+    const card = document.querySelector('.dash-gauge[data-var="' + name + '"]');
+    if (!card) return;
+    const val = dashState.values[name];
+    const ageMs = now - (dashState.lastUpdateMs[name] || 0);
+    const havePoll = (dashState.lastUpdateMs[name] || 0) > 0;
+    const fade = havePoll && ageMs >= UI_CONST.DASHBOARD_STALE_FADE_MS_DEFAULT;
+    const dash = havePoll && ageMs >= UI_CONST.DASHBOARD_STALE_DASH_MS_DEFAULT;
+    card.classList.toggle('stale-fade', fade && !dash);
+    card.classList.toggle('stale-dash', dash);
+
+    const type = card.dataset.type;
+    if (type === 'numeric'){
+      const readout = document.getElementById('dgv_' + name);
+      const fill    = document.getElementById('dgf_' + name);
+      if (dash || val === undefined || val === null){
+        if (readout) readout.textContent = '--';
+        if (fill) fill.style.width = '0%';
+      } else {
+        const rng = dashboardInferRange(v);
+        const num = typeof val === 'number' ? val : Number(val);
+        if (readout) readout.textContent = Number.isFinite(num) ? num.toFixed(rng.decimals) : String(val);
+        const pct = Number.isFinite(num) ? Math.max(0, Math.min(1, (num - rng.min) / (rng.max - rng.min))) : 0;
+        if (fill) fill.style.width = (pct * 100).toFixed(1) + '%';
+      }
+    } else if (type === 'enum'){
+      const readout = document.getElementById('dgv_' + name);
+      if (readout) readout.textContent = (dash || val === undefined || val === null) ? '--' : String(val);
+    } else if (type === 'multidim'){
+      const arr = Array.isArray(val) ? val : null;
+      for (let i = 0; i < v.array; i++){
+        const cell = document.getElementById('dgv_' + name + '_' + i);
+        if (!cell) continue;
+        if (dash || !arr){ cell.textContent = '--'; continue; }
+        const cv = arr[i];
+        cell.textContent = (typeof cv === 'number') ? cv.toFixed(1) : String(cv);
+      }
+    }
+  });
+}
+
+/* Periodic tick that runs even when no poll is firing so stale-fade
+ * still happens on Stopped or disconnected state. Cheap — only when
+ * the Dashboard panel is showing. */
+function dashboardStaleTickEnsure(){
+  if (!dashState) dashboardInit();
+  if (dashState.staleTimer) return;
+  dashState.staleTimer = setInterval(() => {
+    if (dashState && dashState.active) dashboardApplyValuesToGauges();
+  }, 1000);
+}
+function dashboardStaleTickClear(){
+  if (dashState && dashState.staleTimer){
+    clearInterval(dashState.staleTimer);
+    dashState.staleTimer = null;
+  }
+}
+
+/* Start / Stop button. Stop never fires logger_stop — see spec §5.2. */
+function dashboardToggleStarted(){
+  if (!dashState) dashboardInit();
+  if (dashState.started) dashboardStop();
+  else dashboardStart();
+}
+function dashboardStart(){
+  if (!dashState) dashboardInit();
+  dashState.started = true;
+  dashState.startedIntent = true;
+  /* Idempotent firmware-side; "ok" if already running. */
+  wsSend({command:'logger_start'});
+  dashboardEvaluatePollNeed();
+  dashboardStaleTickEnsure();
+  dashboardRenderButton();
+}
+function dashboardStop(){
+  if (!dashState) dashboardInit();
+  dashState.started = false;
+  dashState.startedIntent = false;  /* explicit stop → drop the intent */
+  /* Do NOT fire logger_stop — logger lifecycle is owned elsewhere. */
+  dashboardEvaluatePollNeed();
+  dashboardRenderButton();
+  /* Visually freeze: opacity goes to PAUSE_OPACITY via the stopped class. */
+  const grid = document.getElementById('dashGaugeGrid');
+  if (grid) grid.classList.add('stopped');
+}
+function dashboardRenderButton(){
+  const btn = document.getElementById('dashStartBtn');
+  if (!btn) return;
+  btn.classList.toggle('running', !!(dashState && dashState.started));
+  btn.innerHTML = (dashState && dashState.started)
+    ? '&#9208; Stop Streaming'
+    : '&#9654; Start Streaming';
+  const grid = document.getElementById('dashGaugeGrid');
+  if (grid) grid.classList.toggle('stopped', !(dashState && dashState.started));
+}
+
+/* Tab enter/leave. The Started INTENT persists across tab switches per
+ * spec §5.2 ("Tab switch away from Dashboard while Started: stop the
+ * timer but DON'T fire logger_stop. Remember the Started intent."). */
+function dashboardOnPanelEnter(){
+  if (!dashState) dashboardInit();
+  dashState.active = true;
+  dashboardRenderGauges();
+  dashboardRenderButton();
+  dashboardStaleTickEnsure();
+  if (dashState.startedIntent && !dashState.started) dashboardStart();
+}
+function dashboardOnPanelLeave(){
+  if (!dashState) return;
+  dashState.active = false;
+  /* Keep startedIntent but pause the visible state so the next enter
+   * resumes cleanly. */
+  if (dashState.started){
+    dashState.started = false;
+    dashboardEvaluatePollNeed();
+    dashboardRenderButton();
+  }
+  dashboardStaleTickClear();
+}
+
+/* WOT capture banner toggle. Called from onStatusResp / setActiveFeature. */
+function dashboardSetWotBanner(show){
+  if (!dashState) dashboardInit();
+  dashState.wotActive = !!show;
+  const banner = document.getElementById('dashWotBanner');
+  if (banner) banner.style.display = show ? '' : 'none';
+}
+
+/* Always-on top-bar polls. Kept separate from the get_logger_data
+ * timer so they continue to run even when the Dashboard is Stopped. */
+function dashboardTopBarTimersStart(){
+  if (!dashState) dashboardInit();
+  if (!dashState.licenseTimer){
+    dashState.licenseTimer = setInterval(refreshLicense,
+      UI_CONST.DASHBOARD_LICENSE_POLL_INTERVAL_MS_DEFAULT);
+  }
+  if (!dashState.statusTimer){
+    dashState.statusTimer = setInterval(getStatus,
+      UI_CONST.DASHBOARD_STATUS_POLL_INTERVAL_MS_DEFAULT);
+  }
+}
+function dashboardTopBarTimersStop(){
+  if (!dashState) return;
+  if (dashState.licenseTimer){ clearInterval(dashState.licenseTimer); dashState.licenseTimer = null; }
+  if (dashState.statusTimer){  clearInterval(dashState.statusTimer);  dashState.statusTimer = null; }
+}
+
+/* Init once on script load so dashState exists before any other code
+ * (subscribeAppState, IIFEs) checks it. Also paint the initial state
+ * (renders the empty-state card; gauges materialize once the user
+ * ticks Show-on-Dashboard checkboxes on the Log Config tab). */
+dashboardInit();
+dashboardRenderGauges();
+dashboardRenderButton();
+if (currentPanel === 'dashboard') dashboardStaleTickEnsure();
 
 /* =========================================================================
  * Auto-connect

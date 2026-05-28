@@ -125,6 +125,42 @@ textarea{resize:vertical}
 .readout .unit{font-size:.7em;color:var(--text-dim)}
 .val.green{color:var(--green)}.val.yellow{color:var(--yellow)}.val.red{color:var(--red)}
 
+/* P-69 Dashboard v1 ============================================ */
+.dash-wot-banner{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:12px;background:rgba(255,170,0,.15);border:1px solid var(--yellow);border-radius:6px;color:var(--yellow);font-size:.9em;font-weight:600}
+.dash-wot-icon{font-size:1.1em}
+
+.dash-control-bar{display:flex;align-items:center;gap:14px;padding:12px 16px;margin-bottom:12px;flex-wrap:wrap}
+.dash-start-btn{background:#333;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 18px;font-size:1em;font-weight:600;cursor:pointer;transition:background .15s,box-shadow .15s}
+.dash-start-btn:hover{background:#444}
+.dash-start-btn.running{background:var(--green);color:#000;box-shadow:0 0 6px rgba(0,200,80,.4)}
+.dash-gauge-count{font-size:.85em;color:var(--text-dim);font-variant-numeric:tabular-nums}
+.dash-config-hint{font-size:.8em;color:var(--text-dim);margin-left:auto}
+.dash-config-hint a{color:var(--accent);text-decoration:underline}
+
+.dash-gauge-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px;transition:opacity .25s}
+.dash-gauge-grid.stopped{opacity:0.4}
+
+.dash-gauge{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;transition:opacity .25s}
+.dash-gauge.stale-fade{opacity:0.4}
+.dash-gauge.stale-dash{opacity:0.3}
+.dash-gauge-title{font-size:.75em;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
+.dash-gauge-readout{font-size:1.6em;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
+.dash-gauge-enum{font-size:1.1em;font-weight:600;color:var(--green);min-height:1.6em}
+.dash-gauge-bar{height:6px;background:#222;border-radius:3px;overflow:hidden}
+.dash-gauge-fill{height:100%;background:linear-gradient(to right, var(--green), var(--yellow) 70%, var(--red));transition:width .25s}
+.dash-gauge-unit-row{display:flex;justify-content:space-between;align-items:center;font-size:.7em;color:var(--text-dim);font-family:'Cascadia Code','Fira Code',monospace}
+.dash-gauge-unit{color:var(--text-dim)}
+.dash-gauge-name{opacity:.7}
+
+.dash-gauge-multidim{display:flex;flex-wrap:wrap;gap:4px;font-family:'Cascadia Code','Fira Code',monospace;font-size:.85em;font-variant-numeric:tabular-nums;color:var(--green)}
+.dash-gauge-multidim.cyls8{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.dash-gauge-cell{background:#222;padding:3px 6px;border-radius:3px;text-align:center;min-width:36px}
+
+.dash-empty-state{text-align:center;padding:24px}
+.dash-empty-state h3{margin-top:0;color:var(--text-dim);font-weight:500}
+.dash-empty-state p{font-size:.9em;color:var(--text-dim)}
+.dash-empty-state a{color:var(--accent);text-decoration:underline}
+
 /* Knock indicators */
 .knock-row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px}
 .knock-row .knock-title{font-size:.8em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;width:100%;text-align:center;margin-bottom:4px}
@@ -246,6 +282,15 @@ tr:hover td{background:var(--bg-hover)}
 .logcfg-var-row .slot-badge{font-size:.7em;color:var(--yellow);background:#332200;padding:1px 6px;border-radius:3px;margin-left:4px;white-space:nowrap}
 .logcfg-limit-warning{display:none;background:rgba(255,51,51,.15);border:1px solid var(--red);border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:.85em;color:var(--red)}
 .logcfg-limit-warning.show{display:block}
+
+/* P-69: Show-on-Dashboard column. The label wraps the checkbox so the
+ * 📈 icon and the checkbox act as a single clickable target. */
+.logcfg-show-dash-cell{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.logcfg-show-dash-cell input{margin:0}
+.logcfg-show-dash-icon{font-size:.9em;color:var(--text-dim)}
+.logcfg-show-dash:checked + .logcfg-show-dash-icon{color:var(--green)}
+.logcfg-show-warn{font-size:.75em;color:var(--yellow);white-space:nowrap}
+.logcfg-show-warn a{color:var(--yellow);text-decoration:underline;cursor:pointer}
 
 .toast{position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--accent);color:var(--text);padding:10px 16px;border-radius:6px;font-size:.85em;z-index:1000;opacity:0;transition:opacity .3s;pointer-events:none}
 .toast.show{opacity:1}

@@ -42,63 +42,36 @@
   <div class="tab" onclick="switchTab('system')">System</div>
 </div>
 
-<!-- ===== DASHBOARD ===== -->
+<!-- ===== DASHBOARD ===== (P-69 v1 — see docs/UI_DASHBOARD_SPEC.md) -->
 <div class="panel active" id="panel-dashboard">
-  <div class="dash-top">
-    <div class="card gauge-wrap">
-      <svg viewBox="0 0 200 120" id="rpmGauge">
-        <defs>
-          <linearGradient id="gRpm" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="var(--green)"/>
-            <stop offset="70%" stop-color="var(--yellow)"/>
-            <stop offset="100%" stop-color="var(--red)"/>
-          </linearGradient>
-        </defs>
-        <path d="M20,100 A80,80 0 0,1 180,100" fill="none" stroke="#333" stroke-width="10" stroke-linecap="round"/>
-        <path d="M20,100 A80,80 0 0,1 180,100" fill="none" stroke="url(#gRpm)" stroke-width="10" stroke-linecap="round" id="rpmArc" stroke-dasharray="0 251.33"/>
-        <text x="100" y="78" text-anchor="middle" fill="var(--text-dim)" font-size="8">RPM</text>
-        <text x="20" y="115" text-anchor="middle" fill="var(--text-dim)" font-size="7">0</text>
-        <text x="180" y="115" text-anchor="middle" fill="var(--text-dim)" font-size="7">9000</text>
-      </svg>
-      <div class="gauge-label" id="rpmVal">0</div>
-      <div class="gauge-title">Engine RPM</div>
-    </div>
-    <div class="card gauge-wrap">
-      <svg viewBox="0 0 200 120" id="boostGauge">
-        <defs>
-          <linearGradient id="gBoost" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="var(--blue)"/>
-            <stop offset="25%" stop-color="var(--green)"/>
-            <stop offset="75%" stop-color="var(--yellow)"/>
-            <stop offset="100%" stop-color="var(--red)"/>
-          </linearGradient>
-        </defs>
-        <path d="M20,100 A80,80 0 0,1 180,100" fill="none" stroke="#333" stroke-width="10" stroke-linecap="round"/>
-        <path d="M20,100 A80,80 0 0,1 180,100" fill="none" stroke="url(#gBoost)" stroke-width="10" stroke-linecap="round" id="boostArc" stroke-dasharray="0 251.33"/>
-        <text x="100" y="78" text-anchor="middle" fill="var(--text-dim)" font-size="8">BOOST</text>
-        <text x="20" y="115" text-anchor="middle" fill="var(--text-dim)" font-size="7">-1</text>
-        <text x="180" y="115" text-anchor="middle" fill="var(--text-dim)" font-size="7">3</text>
-      </svg>
-      <div class="gauge-label" id="boostVal">0.00</div>
-      <div class="gauge-title">Boost (bar)</div>
-    </div>
+  <!-- WOT capture coexistence banner. Shown when active_feature == "wot_logger".
+       Gauges keep updating beneath it; this is a passive notice. -->
+  <div class="dash-wot-banner" id="dashWotBanner" style="display:none">
+    <span class="dash-wot-icon">&#9888;</span>
+    <span class="dash-wot-msg">WOT capture in progress</span>
   </div>
 
-  <!-- Per-cylinder knock indicators -->
-  <div class="card">
-    <div class="knock-row">
-      <div class="knock-title">Per-Cylinder Knock Detection</div>
-      <div class="knock-cyl"><div class="knock-dot" id="knockCyl1"></div><div class="knock-cyl-label">Cyl 1</div></div>
-      <div class="knock-cyl"><div class="knock-dot" id="knockCyl2"></div><div class="knock-cyl-label">Cyl 2</div></div>
-      <div class="knock-cyl"><div class="knock-dot" id="knockCyl3"></div><div class="knock-cyl-label">Cyl 3</div></div>
-      <div class="knock-cyl"><div class="knock-dot" id="knockCyl4"></div><div class="knock-cyl-label">Cyl 4</div></div>
-      <div class="knock-cyl"><div class="knock-dot" id="knockCyl5"></div><div class="knock-cyl-label">Cyl 5</div></div>
-      <div class="knock-cyl"><div class="knock-dot" id="knockCyl6"></div><div class="knock-cyl-label">Cyl 6</div></div>
-      <div class="knock-cyl"><div class="knock-dot" id="knockCyl7"></div><div class="knock-cyl-label">Cyl 7</div></div>
-      <div class="knock-cyl"><div class="knock-dot" id="knockCyl8"></div><div class="knock-cyl-label">Cyl 8</div></div>
-    </div>
+  <!-- Control bar: Start/Stop the local 500 ms poll. Logger lifecycle on the
+       firmware side is NOT toggled by Stop (idempotent start; never stop). -->
+  <div class="card dash-control-bar">
+    <button class="dash-start-btn" id="dashStartBtn" onclick="dashboardToggleStarted()">&#9654; Start Streaming</button>
+    <span class="dash-gauge-count" id="dashGaugeCount">0 gauges</span>
+    <span class="dash-config-hint">
+      Configure which variables appear here on the
+      <a href="#" onclick="switchTab('logconfig');return false;">Log Config</a> tab.
+    </span>
   </div>
-  <div class="readouts" id="readouts"></div>
+
+  <!-- Dynamic gauge grid. Cards added by dashboardRenderGauges() based on
+       the user's per-VIN dashboard_vars_<VIN> selection. -->
+  <div class="dash-gauge-grid" id="dashGaugeGrid"></div>
+
+  <!-- Empty-state message when no gauges configured. -->
+  <div class="card dash-empty-state" id="dashEmptyState">
+    <h3>No gauges configured</h3>
+    <p>Open the <a href="#" onclick="switchTab('logconfig');return false;">Log Config</a> tab and tick the
+       <b>&#128200; Show on Dashboard</b> column next to the variables you want here.</p>
+  </div>
 
   <!-- WOT Logger teaser card → links to the dedicated panel-wot tab. -->
   <div class="card">
