@@ -70,6 +70,13 @@ WOT_LOG_DIR        = Path(os.environ.get("WOT_LOG_DIR", str(ROOT / "wot_logs")))
 WOT_LOG_MAX_BYTES  = 64 * 1024          # 64 KB cap per WOT spec (logs are ~3-4 KB)
 GZIP_MAGIC         = b"\x1f\x8b"        # RFC-1952 gzip stream magic
 
+# AUDIT C10: single-file SQLite serializes writes. PHASE 1 adds the first
+# write-heavy customer tables (sessions on every login, license churn), so
+# a connection that hits a held write-lock should wait, not fail instantly
+# with "database is locked". busy_timeout makes SQLite block up to N ms for
+# the lock. Env-overridable per Rule 3 (no magic literals).
+DB_BUSY_TIMEOUT_MS = int(os.environ.get("DB_BUSY_TIMEOUT_MS", "5000"))
+
 DATA_DIR.mkdir(exist_ok=True)
 FW_DIR.mkdir(exist_ok=True)
 CAL_DIR.mkdir(exist_ok=True)
@@ -83,6 +90,7 @@ def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute(f"PRAGMA busy_timeout = {DB_BUSY_TIMEOUT_MS}")
     return conn
 
 def init_db():
@@ -146,6 +154,69 @@ def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_wot_logs_mac_ts
         ON wot_logs (mac, uploaded_at DESC);
+
+    -- ===================================================================
+    -- PHASE 1 customer model (users / sessions / vehicles / licenses /
+    -- stripe_events). Kept in LOCKSTEP with
+    -- migrations/20260529_user_vehicle_license.sql — that file is the
+    -- auditable record + already-live-DB apply path; this block is the
+    -- fresh-deploy path (Dockerfile copies only src/, so the container
+    -- never sees migrations/). Edit BOTH or neither. New tables use
+    -- ISO-8601 UTC TEXT timestamps (legacy device tables use INTEGER
+    -- unix; no cross-type comparison occurs between them).
+    -- ===================================================================
+    CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        email         TEXT    NOT NULL UNIQUE,
+        password_hash TEXT    NOT NULL,
+        verified      INTEGER NOT NULL DEFAULT 0,
+        created_at    TEXT    NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+        token      TEXT    PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TEXT    NOT NULL,
+        created_at TEXT    NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+    CREATE TABLE IF NOT EXISTS vehicles (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
+        vin         TEXT    NOT NULL,
+        dongle_mac  TEXT    NOT NULL REFERENCES devices(mac) ON DELETE RESTRICT,
+        ecu_boxcode TEXT,
+        nickname    TEXT,
+        created_at  TEXT    NOT NULL,
+        deleted_at  TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_vin_active
+        ON vehicles(vin) WHERE deleted_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_vehicles_user ON vehicles(user_id);
+    CREATE INDEX IF NOT EXISTS idx_vehicles_mac  ON vehicles(dongle_mac);
+
+    CREATE TABLE IF NOT EXISTS licenses (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        vehicle_id  INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE RESTRICT,
+        tier        TEXT    NOT NULL,
+        state       TEXT    NOT NULL,
+        valid_from  TEXT,
+        valid_until TEXT,
+        token       TEXT    UNIQUE,
+        created_at  TEXT    NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_licenses_vehicle     ON licenses(vehicle_id);
+    CREATE INDEX IF NOT EXISTS idx_licenses_state_until ON licenses(state, valid_until);
+
+    CREATE TABLE IF NOT EXISTS stripe_events (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id     TEXT    UNIQUE,
+        payload_json TEXT    NOT NULL,
+        received_at  TEXT    NOT NULL,
+        processed_at TEXT
+    );
     """)
     # Idempotent license-column migrations. SCALE_ARCHITECTURE §6 adds
     # paid / revoked / revoked_reason to the devices table. SQLite's

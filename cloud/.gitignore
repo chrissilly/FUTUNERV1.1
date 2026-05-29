@@ -1,0 +1,20 @@
+# Runtime state — NEVER commit. Holds proprietary + customer data (project Rule 5 / handoff R3):
+#   data/        SQLite DB (srm.db) — after PHASE 2 contains customer emails + password hashes
+#   wot_logs/    uploaded customer telemetry (gzipped CSV WOT logs)
+#   firmware/    uploaded firmware binaries (proprietary)
+#   calibrations/ uploaded base SBFs (proprietary tune IP)
+data/
+wot_logs/
+firmware/
+calibrations/
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
