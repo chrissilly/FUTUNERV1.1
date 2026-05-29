@@ -1,5 +1,8 @@
 # VCDS Clear-All-Modules Capture — 2026-05-29
 
+> **Process note (Rule 12 retrospective):** this markdown was the diagnostic Sean's dispatch (PHASE 5) required *before* any firmware patch. It was written, but the firmware patch (commit `a0319e0`) shipped before he read it. The fix turned out to be correct (`$14`→`$04`, NRC 0x22 + empty-table mapping, ISO-TP acquire bump), but the workflow violated the diagnostic-then-signoff-then-patch gate. Rule 12 was added (commit `a6aa5f2`) to make that gate explicit and binding for future wire-surface changes. The fix stays in place per owner sign-off retrospectively; this note is the audit trail.
+
+
 Source: `firmware/test/can_capture/dev_session/obd_clear.log`
 Captured: 2026-05-29 ~11:46 PT, can_tail running as root
 Dongle state: POWERED DOWN — zero `0x7E0` outbound frames in the
