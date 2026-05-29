@@ -116,6 +116,22 @@ esp_err_t dtc_uds_read_dtcs_by_status_mask(uint8_t       status_mask,
 esp_err_t dtc_uds_clear_diagnostic_information(uint32_t timeout_ms);
 
 /*
+ * P-54: issue UDS 0x10 (DiagnosticSessionControl) with a session
+ * sub-function (0x01 default, 0x03 extended). Required before
+ * $14 ClearDTC on Bosch MG1/MDG1 — the ECU rejects $14 in the
+ * default session with NRC 0x11.
+ *
+ * timeout_ms:  transport deadline. Activation can be slow; use the
+ *              caller's discretion (50 ms is the spec default but
+ *              NRC 0x78 drain may push it out).
+ *
+ * Returns ESP_OK on positive response, ESP_ERR_INVALID_RESPONSE on
+ * NRC (dtc_uds_last_nrc() carries the NRC byte), ESP_ERR_TIMEOUT
+ * on no response, ESP_FAIL on transport error.
+ */
+esp_err_t dtc_uds_session_control(uint8_t session_id, uint32_t timeout_ms);
+
+/*
  * NRC byte from the most recent negative response, if the prior call
  * returned ESP_ERR_INVALID_RESPONSE. 0 if the prior call did not
  * surface a negative response.

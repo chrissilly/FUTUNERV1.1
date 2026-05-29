@@ -32,10 +32,44 @@
  */
 #define DTC_UDS_SID_READ                      0x19
 #define DTC_UDS_SUBFUNC_REPORT_BY_STATUS      0x02
-#define DTC_UDS_SID_CLEAR                     0x14
+
+/* P-54 phase 2: bus-contention wait must cover one full logger
+ * poll cycle (~1 Hz = 1000 ms) so brief contention with the
+ * connection-manager's polling doesn't surface as a transport
+ * error to the user. The logger holds the ISO-TP coordinator
+ * for ~80-100 ms per poll; before this bump, the 200 ms acquire
+ * window missed roughly 1-in-3 polls. */
+/* DTC_TARGET_ISOTP_REQUEST_TIMEOUT_MS overridden below. */
+
+/* P-54 phase 2: clear-DTC service is OBD-II legacy Mode 04 ($04),
+ * NOT UDS $14. SRM patch on the engine ECU strips $14 from the
+ * service table (silent on broadcast, NRC 0x11 on physical) but
+ * preserves $04 (OBD-II compliance). VCDS clear-all-modules
+ * capture 2026-05-29 (firmware/test/dtc/vcds_clear_capture_2026-
+ * 05-29.md) confirms engine ECU responds to $04 with positive
+ * $44 ACK after ~430ms (one NRC 0x78 pending in between).
+ *
+ * Old $14 + group-bytes constants kept in case a non-patched ECU
+ * variant is encountered later — but the active clear path uses
+ * $04. */
+#define DTC_UDS_SID_CLEAR_LEGACY              0x04  /* OBD-II Mode 04 — what we send */
+#define DTC_UDS_SID_CLEAR                     0x14  /* UDS — unused on patched ECU */
 #define DTC_UDS_CLEAR_GROUP_ALL_BYTE_HI       0xFF
 #define DTC_UDS_CLEAR_GROUP_ALL_BYTE_MID      0xFF
 #define DTC_UDS_CLEAR_GROUP_ALL_BYTE_LO       0xFF
+
+/* P-54: session control. ECU rejects $14 (ClearDTC) in the default
+ * diagnostic session with NRC 0x11 (serviceNotSupported) on Bosch
+ * MG1/MDG1. ClearDTC requires non-default session — start with
+ * extended ($10 0x03) and return to default ($10 0x01) on completion.
+ * Wire trace confirms: no $10 0xNN frames in 3200 s of capture
+ * before the fix; $14 fired in default session, $7F 14 11 returned.
+ */
+#define DTC_UDS_SID_SESSION_CTRL              0x10
+#define DTC_UDS_SESSION_DEFAULT               0x01
+#define DTC_UDS_SESSION_EXTENDED              0x03
+/* Positive-response SID for session control — 0x10 + 0x40 = 0x50. */
+#define DTC_UDS_SESSION_POSITIVE_SID          0x50
 
 /* Positive-response bit (UDS-wide: response SID == request SID + 0x40). */
 #define DTC_UDS_POSITIVE_OFFSET               0x40
@@ -51,9 +85,13 @@
  * Used to bound the pending-skip loop in target_uds_request. */
 #define DTC_UDS_P2_STAR_SERVER_MS             5000
 
-/* Expected positive responses. Proposed default — needs approval from Sean. */
+/* Expected positive responses. */
 #define DTC_UDS_READ_POSITIVE_SID             0x59  /* 0x19 + 0x40 */
-#define DTC_UDS_CLEAR_POSITIVE_SID            0x54  /* 0x14 + 0x40 */
+#define DTC_UDS_CLEAR_POSITIVE_SID            0x44  /* P-54: $04 + $40
+                                                     (was 0x54 for $14;
+                                                     SRM-patched ECU uses
+                                                     Mode 04 — see VCDS
+                                                     capture report). */
 
 /* CAN ID for physical addressing of the engine ECU.
  * CLAUDE.md §1: 0x7E0 is the ONLY allowed TX address. Never 0x7DF /
@@ -168,7 +206,7 @@
  * coexist with the 1 Hz tester-present keepalive without serializing
  * behind a stuck logger poll. Proposed default — needs approval from
  * Sean before lock. */
-#define DTC_TARGET_ISOTP_REQUEST_TIMEOUT_MS   200
+#define DTC_TARGET_ISOTP_REQUEST_TIMEOUT_MS   1500
 
 /*
  * Maximum size (bytes) of an outbound DTC UDS request frame. The two

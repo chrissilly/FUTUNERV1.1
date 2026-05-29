@@ -493,6 +493,26 @@ esp_err_t dtc_clear(uint16_t *cleared_count_out,
      * does not support 0x19 0x02): ignore and proceed to clear with
      * cleared_count = 0. */
 
+    /* P-54: $14 ClearDTC requires non-default session on Bosch
+     * MG1/MDG1 — ECU returns NRC 0x11 (serviceNotSupported) in
+     * default session. Preamble with $10 0x03 (extended), clear,
+     * then return to $10 0x01 (default). Atomic from the WS
+     * caller's perspective: any step failing produces one
+     * error string, not three. */
+    esp_err_t sess_rc = dtc_uds_session_control((uint8_t)DTC_UDS_SESSION_EXTENDED,
+                                                 (uint32_t)DTC_CLEAR_TIMEOUT_MS);
+    if (sess_rc != ESP_OK) {
+        if (sess_rc == ESP_ERR_INVALID_RESPONSE) {
+            format_nrc_err(err_out, err_cap, "DTC session-extended", dtc_uds_last_nrc());
+        } else if (sess_rc == ESP_ERR_TIMEOUT) {
+            copy_err(err_out, err_cap, "DTC session-extended transport timeout");
+        } else {
+            copy_err(err_out, err_cap, "DTC session-extended transport error");
+        }
+        feature_manager_request_stop(FEATURE_DTC);
+        return sess_rc;
+    }
+
     esp_err_t clr_rc = dtc_uds_clear_diagnostic_information((uint32_t)DTC_CLEAR_TIMEOUT_MS);
     if (clr_rc == ESP_OK) {
         if (cleared_count_out != NULL) {
@@ -502,12 +522,35 @@ esp_err_t dtc_clear(uint16_t *cleared_count_out,
         }
         ESP_LOGI(TAG, "DTC clear complete; cleared_count=%u",
                  (unsigned)pre_count);
+    } else if (clr_rc == ESP_ERR_INVALID_RESPONSE
+               && dtc_uds_last_nrc() == (uint8_t)0x22
+               && pre_count == (size_t)0) {
+        /* P-54 phase 2: ECU returns NRC 0x22 (conditionsNotCorrect)
+         * on Mode 04 clear when its DTC table is already empty.
+         * Pre-clear read saw 0 codes — there was nothing to clear.
+         * Treat as success with cleared_count=0; this is the
+         * "no-op clear" path the user-facing UI experiences as
+         * "Clear DTCs" → "cleared 0 DTC(s)" rather than an error. */
+        ESP_LOGI(TAG, "DTC clear no-op (empty table, NRC 0x22 = "
+                      "conditionsNotCorrect interpreted as success)");
+        clr_rc = ESP_OK;
+        if (cleared_count_out != NULL) *cleared_count_out = (uint16_t)0;
     } else if (clr_rc == ESP_ERR_INVALID_RESPONSE) {
         format_nrc_err(err_out, err_cap, "DTC clear", dtc_uds_last_nrc());
     } else if (clr_rc == ESP_ERR_TIMEOUT) {
         copy_err(err_out, err_cap, "DTC clear transport timeout");
     } else {
         copy_err(err_out, err_cap, "DTC clear transport error");
+    }
+
+    /* Return to default session. Best-effort — clear already
+     * succeeded (or failed and the caller knows); a stuck-in-
+     * extended state is recoverable on next reconnect and not
+     * worth shadowing the primary error. */
+    esp_err_t back_rc = dtc_uds_session_control((uint8_t)DTC_UDS_SESSION_DEFAULT,
+                                                 (uint32_t)DTC_CLEAR_TIMEOUT_MS);
+    if (back_rc != ESP_OK) {
+        ESP_LOGW(TAG, "DTC session-default return rc=%d (best-effort)", (int)back_rc);
     }
 
     esp_err_t stop_rc = feature_manager_request_stop(FEATURE_DTC);

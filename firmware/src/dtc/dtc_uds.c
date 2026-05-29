@@ -221,12 +221,13 @@ esp_err_t dtc_uds_clear_diagnostic_information(uint32_t timeout_ms) {
     }
     s_ctx.last_nrc = (uint8_t)0;
 
-    uint8_t req[DTC_UDS_REQUEST_BUFFER_BYTES];
-    req[0] = (uint8_t)DTC_UDS_SID_CLEAR;
-    req[DTC_UDS_CLEAR_REQ_GROUP_HI_OFFSET]  = (uint8_t)DTC_UDS_CLEAR_GROUP_ALL_BYTE_HI;
-    req[DTC_UDS_CLEAR_REQ_GROUP_MID_OFFSET] = (uint8_t)DTC_UDS_CLEAR_GROUP_ALL_BYTE_MID;
-    req[DTC_UDS_CLEAR_REQ_GROUP_LO_OFFSET]  = (uint8_t)DTC_UDS_CLEAR_GROUP_ALL_BYTE_LO;
-    static const size_t k_req_len = (size_t)DTC_UDS_CLEAR_REQUEST_BYTES;
+    /* P-54 phase 2: SRM-patched ECU uses OBD-II Mode 04 (single-byte
+     * $04 request, no group selector). UDS $14 returns NRC 0x11 —
+     * stripped from the patch's service table. VCDS capture
+     * 2026-05-29 confirmed Mode 04 works. */
+    uint8_t req[1];
+    req[0] = (uint8_t)DTC_UDS_SID_CLEAR_LEGACY;
+    static const size_t k_req_len = (size_t)1;
 
     uint8_t resp[DTC_CLEAR_RESPONSE_BUFFER_BYTES];
     int rc = s_ctx.request_fn(req, k_req_len, resp, sizeof(resp),
@@ -252,5 +253,53 @@ esp_err_t dtc_uds_clear_diagnostic_information(uint32_t timeout_ms) {
         return ESP_ERR_INVALID_RESPONSE;
     }
     ESP_LOGI(TAG, "clear positive response received");
+    return ESP_OK;
+}
+
+/* P-54: DiagnosticSessionControl ($10 <sub>). ECU rejects $14
+ * ClearDTC in the default session with NRC 0x11; the clear path
+ * preambles with $10 0x03 (extended) and returns to $10 0x01
+ * (default) after. */
+esp_err_t dtc_uds_session_control(uint8_t session_id, uint32_t timeout_ms) {
+    if (!s_ctx.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    s_ctx.last_nrc = (uint8_t)0;
+
+    uint8_t req[2];
+    req[0] = (uint8_t)DTC_UDS_SID_SESSION_CTRL;
+    req[1] = session_id;
+
+    uint8_t resp[DTC_CLEAR_RESPONSE_BUFFER_BYTES];
+    int rc = s_ctx.request_fn(req, sizeof(req), resp, sizeof(resp),
+                              timeout_ms, s_ctx.user_ctx);
+    if (rc < 0) {
+        ESP_LOGE(TAG, "session_ctrl transport error rc=%d", rc);
+        return ESP_FAIL;
+    }
+    if (rc == 0) {
+        ESP_LOGW(TAG, "session_ctrl transport returned 0 bytes (timeout)");
+        return ESP_ERR_TIMEOUT;
+    }
+    size_t resp_len = (size_t)rc;
+
+    if (response_is_negative(resp, resp_len)) {
+        ESP_LOGW(TAG, "session_ctrl NRC 0x%02X (session 0x%02X)",
+                 (unsigned)s_ctx.last_nrc, (unsigned)session_id);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    /* Positive response: 0x50 <sub> [<P2 timing bytes...>]. We
+     * only verify the SID + sub-function echo; the timing bytes
+     * are advisory for the client to honor and we don't use them. */
+    if (resp_len < (size_t)2
+        || resp[0] != (uint8_t)DTC_UDS_SESSION_POSITIVE_SID
+        || resp[1] != session_id) {
+        ESP_LOGE(TAG, "session_ctrl malformed (len=%u sid=0x%02X sub=0x%02X)",
+                 (unsigned)resp_len,
+                 resp_len > 0 ? (unsigned)resp[0] : 0,
+                 resp_len > 1 ? (unsigned)resp[1] : 0);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    ESP_LOGI(TAG, "session_ctrl 0x%02X positive", (unsigned)session_id);
     return ESP_OK;
 }
