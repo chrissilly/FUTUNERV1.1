@@ -304,6 +304,19 @@ test.describe('UI Dashboard v1 (P-69 acceptance §7)', () => {
      * Tick Show on those 6 + 4 additional vars (not in the profile)
      * and assert the placeholder count. */
     await bootClean(page);
+    /* P-75: prior tests may have left the dongle on a sparse named
+     * profile, so the polled-set isn't guaranteed to match RS7's
+     * 3-required + 3-saved baseline. Reset the active profile to
+     * the AC11 baseline before exercising the placeholder UX. */
+    await page.evaluate(() => new Promise(resolve => {
+      wsSend({command:'set_logger_profile',
+              params:{name:'ac11_baseline',
+                      variables:['rl_w','tmot','wdkba']}}, resolve);
+    }));
+    /* Wait for can_task to reconfigure + the polled-set refresh to
+     * land in the UI before the test proceeds. */
+    await page.waitForTimeout(1500);
+
     const polled = [
       'nmot_w', 'InjSys_ratEthPrtnBascFu', 'Com_stCrCtlPan',
       'rl_w', 'tmot', 'wdkba',

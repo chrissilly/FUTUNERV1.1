@@ -37,20 +37,45 @@ async function openLogConfig(page) {
   });
 }
 
-test.describe('Log Config tab (PRIORITY 1)', () => {
+/* P-75: clean up any leftover named profiles from prior runs so
+ * overwrite-confirm dialogs + rename-already-exists errors don't
+ * leak across runs. Safe — only touches names this suite creates. */
+const LC_TEST_PROFILES = [
+  'ac_lc1_test', 'ac_lc4_alpha', 'ac_lc9_test',
+  'ac_lc10_demo', 'ac_lc11_a', 'ac_lc11_b',
+  'ac_lc12_doomed',
+  'ac_lc13_orig', 'ac_lc13_renamed',
+];
+async function cleanLogConfigProfiles(page) {
+  await page.evaluate((names) => Promise.all(names.map(n => new Promise(resolve => {
+    wsSend({command:'delete_logger_profile', params:{name:n}}, () => resolve());
+  }))), LC_TEST_PROFILES);
+}
 
-  test('AC-LC1: Save Profile success → green banner + firmware accepts {variables:[]}', async ({ page }) => {
+test.describe('Log Config tab (PRIORITY 1)', () => {
+  /* Auto-accept any confirm()/prompt() dialogs so tests that
+   * trigger overwrite or rename UI flows don't deadlock.
+   * Bootstrap a clean WS context THEN nuke any leftover profiles
+   * this suite uses, so re-runs don't trip overwrite / rename
+   * collisions. */
+  test.beforeEach(async ({ page }) => {
+    page.on('dialog', d => d.accept(''));
+    await page.goto('/?cb=playwright-prelude');
+    await expect(page.locator('#connLabel')).toHaveText('Connected', { timeout: 12_000 });
+    await cleanLogConfigProfiles(page);
+  });
+
+  test('AC-LC1: Save to Dongle with name → green banner + firmware accepts {name, variables[]}', async ({ page }) => {
+    /* P-75 redesign: save requires a name. UI gates locally;
+     * firmware re-validates. Wire envelope:
+     *   {command:'set_logger_profile', params:{name, variables:[...]}}
+     */
     await bootClean(page);
     await openLogConfig(page);
-    /* Tick rl_w, tmot, wdkba (all in the firmware catalog → save
-     * should accept all three and the banner should show "Profile
-     * saved — 3 optional var(s)"). */
     for (const v of ['rl_w', 'tmot', 'wdkba']){
       await page.locator(`#logvar_${v}`).check();
     }
-    /* Snapshot the outgoing frame so we can assert the wire shape.
-     * `ws` is module-scoped (not on window), so wrap `wsSend` —
-     * top-level function declarations attach to window. */
+    await page.locator('#logcfgProfileName').fill('ac_lc1_test');
     await page.evaluate(() => {
       window.__sentFrames = [];
       const orig = window.wsSend;
@@ -59,23 +84,16 @@ test.describe('Log Config tab (PRIORITY 1)', () => {
         return orig(obj, cb);
       };
     });
-    await page.locator('#panel-logconfig button:has-text("Save Profile")').click();
-    /* Banner appears within a few seconds. */
-    await expect(page.locator('#logcfgSaveBanner')).toHaveClass(/show/, { timeout: 6000 });
-    await expect(page.locator('#logcfgSaveBanner')).toHaveClass(/ok/);
-    await expect(page.locator('#logcfgSaveBanner')).toContainText(/Profile saved/);
-    /* The wire frame must use the firmware-expected envelope:
-     *   {command:'set_logger_profile', params:{variables:[names]}}
-     * Old UI sent {profile:{...}} at top level — firmware bailed with
-     * "Missing parameters" because the command_handler reads params
-     * from the nested `params` object. */
+    await page.locator('#panel-logconfig button:has-text("Save to Dongle")').click();
+    await expect(page.locator('#logcfgSaveBanner')).toHaveClass(/show ok/, { timeout: 6000 });
+    await expect(page.locator('#logcfgSaveBanner')).toContainText(/Saved "ac_lc1_test"/);
     const frames = await page.evaluate(() => window.__sentFrames || []);
-    const setProfileFrame = frames.find(s => s.includes('set_logger_profile'));
-    expect(setProfileFrame).toBeDefined();
-    const parsed = JSON.parse(setProfileFrame);
+    const setFrame = frames.find(s => s.includes('set_logger_profile'));
+    expect(setFrame).toBeDefined();
+    const parsed = JSON.parse(setFrame);
     expect(parsed.params).toBeDefined();
+    expect(parsed.params.name).toBe('ac_lc1_test');
     expect(parsed.params.variables).toEqual(expect.arrayContaining(['rl_w', 'tmot', 'wdkba']));
-    expect(parsed.profile).toBeUndefined();
   });
 
   test('AC-LC3: Slot counter doesn\'t double-count Show-on-Dashboard ticks', async ({ page }) => {
@@ -94,18 +112,36 @@ test.describe('Log Config tab (PRIORITY 1)', () => {
     await expect(page.locator('#logcfgLimitWarn')).not.toHaveClass(/show/);
   });
 
-  test('AC-LC4: Load Profile populates Logged checkboxes from get_logger_profile', async ({ page }) => {
-    /* The firmware reports its current profile (required ∪ selected);
-     * Load Profile should tick those checkboxes. The default RS7
-     * profile is required:[nmot_w, InjSys_ratEthPrtnBascFu,
-     * Com_stCrCtlPan] + selected:[rl_w, tmot, wdkba]. */
+  test('AC-LC4: Load from dropdown populates Logged checkboxes', async ({ page }) => {
+    /* P-75: Load Profile button replaced by dropdown + Load button.
+     * Save a known profile first, then pick from dropdown + click
+     * Load, then assert checkboxes match what was saved. */
     await bootClean(page);
     await openLogConfig(page);
-    await page.click('button:has-text("Load Profile")');
-    await expect(page.locator('#logcfgSaveBanner')).toContainText(/loaded from dongle/i, { timeout: 6000 });
-    for (const v of ['nmot_w', 'InjSys_ratEthPrtnBascFu', 'Com_stCrCtlPan', 'rl_w', 'tmot', 'wdkba']){
+    /* Save "ac_lc4_alpha" with {rl_w, wdkba}. */
+    await page.locator('#logvar_rl_w').check();
+    await page.locator('#logvar_wdkba').check();
+    await page.locator('#logcfgProfileName').fill('ac_lc4_alpha');
+    await page.locator('#panel-logconfig button:has-text("Save to Dongle")').click();
+    await expect(page.locator('#logcfgSaveBanner')).toHaveClass(/show ok/, { timeout: 6000 });
+    /* Deselect everything, then load via dropdown. */
+    await page.locator('button:has-text("Deselect All")').click();
+    await expect(page.locator('#logvar_rl_w')).not.toBeChecked();
+    /* Wait for dropdown to populate (refresh fires after save). */
+    await expect(page.locator('#logcfgProfileSelect option[value="ac_lc4_alpha"]')).toHaveCount(1, { timeout: 6000 });
+    await page.locator('#logcfgProfileSelect').selectOption('ac_lc4_alpha');
+    await page.locator('#panel-logconfig button:has-text("Load")').first().click();
+    /* Wait for the Load round-trip to complete — banner shows
+     * "Loaded ..." once load_logger_profile + get_logger_profile
+     * both come back. */
+    await expect(page.locator('#logcfgSaveBanner'))
+      .toContainText(/Loaded "ac_lc4_alpha"/, { timeout: 8000 });
+    /* Required + saved both come back checked. */
+    for (const v of ['nmot_w', 'InjSys_ratEthPrtnBascFu', 'Com_stCrCtlPan', 'rl_w', 'wdkba']){
       await expect(page.locator(`#logvar_${v}`)).toBeChecked();
     }
+    /* tmot was not in this profile — should NOT be checked. */
+    await expect(page.locator('#logvar_tmot')).not.toBeChecked();
   });
 
   test('AC-LC5: "Enable Logged first" warn link ticks both', async ({ page }) => {
@@ -179,7 +215,7 @@ test.describe('Log Config tab (PRIORITY 1)', () => {
     /* Snoop the save response shape. */
     const saveResp = await page.evaluate(() => new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject('timeout'), 6000);
-      wsSend({command:'set_logger_profile', params:{variables:['wdkba']}}, msg => {
+      wsSend({command:'set_logger_profile', params:{name:'ac_lc9_test', variables:['wdkba']}}, msg => {
         clearTimeout(timer);
         resolve({
           success: msg.success === true,
@@ -217,6 +253,125 @@ test.describe('Log Config tab (PRIORITY 1)', () => {
       probe();
     }));
     expect(duplicates).toEqual([]);
+  });
+
+  test('AC-LC10: Save appends to dropdown + list_logger_profiles returns it', async ({ page }) => {
+    /* P-75: saved name shows up in the dropdown options + on the
+     * wire via list_logger_profiles within the refresh window. */
+    await bootClean(page);
+    await openLogConfig(page);
+    await page.locator('#logvar_rl_w').check();
+    await page.locator('#logcfgProfileName').fill('ac_lc10_demo');
+    await page.locator('#panel-logconfig button:has-text("Save to Dongle")').click();
+    await expect(page.locator('#logcfgSaveBanner')).toHaveClass(/show ok/, { timeout: 6000 });
+    /* Dropdown picks up the new name. */
+    await expect(page.locator('#logcfgProfileSelect option[value="ac_lc10_demo"]')).toHaveCount(1, { timeout: 6000 });
+    /* Active tag updates. */
+    await expect(page.locator('#logcfgActiveTag')).toContainText(/ac_lc10_demo/);
+    /* Direct probe: list_logger_profiles also returns it. */
+    const listResp = await page.evaluate(() => new Promise(resolve => {
+      wsSend({command:'list_logger_profiles'}, msg => resolve(msg));
+    }));
+    expect(listResp.success).toBe(true);
+    const names = (listResp.profiles || []).map(p => p.name);
+    expect(names).toContain('ac_lc10_demo');
+    expect(listResp.active).toBe('ac_lc10_demo');
+  });
+
+  test('AC-LC11: Load swaps active to the picked profile', async ({ page }) => {
+    /* Save two named profiles, then Load the first one and verify
+     * the firmware-side active flips. */
+    await bootClean(page);
+    await openLogConfig(page);
+    /* Profile A: rl_w only */
+    await page.locator('#logvar_rl_w').check();
+    await page.locator('#logcfgProfileName').fill('ac_lc11_a');
+    await page.locator('#panel-logconfig button:has-text("Save to Dongle")').click();
+    await expect(page.locator('#logcfgSaveBanner')).toHaveClass(/show ok/, { timeout: 6000 });
+    /* Profile B: tmot only */
+    await page.locator('button:has-text("Deselect All")').click();
+    await page.locator('#logvar_tmot').check();
+    await page.locator('#logcfgProfileName').fill('ac_lc11_b');
+    await page.locator('#panel-logconfig button:has-text("Save to Dongle")').click();
+    await expect(page.locator('#logcfgSaveBanner')).toHaveClass(/show ok/, { timeout: 6000 });
+    /* B is the most-recently-saved → active. Now Load A. */
+    await expect(page.locator('#logcfgActiveTag')).toContainText(/ac_lc11_b/);
+    await page.locator('#logcfgProfileSelect').selectOption('ac_lc11_a');
+    await page.locator('#panel-logconfig button:has-text("Load")').first().click();
+    await expect(page.locator('#logcfgSaveBanner')).toContainText(/Loaded "ac_lc11_a"/, { timeout: 6000 });
+    /* Probe — active marker on the dongle now points at A. */
+    const status = await page.evaluate(() => new Promise(resolve => {
+      wsSend({command:'get_logger_profile'}, msg => resolve(msg));
+    }));
+    expect(status.active_name).toBe('ac_lc11_a');
+  });
+
+  test('AC-LC12: Delete removes profile from dropdown + dongle', async ({ page }) => {
+    await bootClean(page);
+    await openLogConfig(page);
+    await page.locator('#logvar_rl_w').check();
+    await page.locator('#logcfgProfileName').fill('ac_lc12_doomed');
+    await page.locator('#panel-logconfig button:has-text("Save to Dongle")').click();
+    await expect(page.locator('#logcfgProfileSelect option[value="ac_lc12_doomed"]')).toHaveCount(1, { timeout: 6000 });
+    /* Direct WS delete (avoids the confirm() dialog the button uses). */
+    const delResp = await page.evaluate(() => new Promise(resolve => {
+      wsSend({command:'delete_logger_profile', params:{name:'ac_lc12_doomed'}}, msg => resolve(msg));
+    }));
+    expect(delResp.success).toBe(true);
+    /* Re-list to refresh dropdown. */
+    await page.evaluate(() => logcfgRefreshProfileList());
+    await expect(page.locator('#logcfgProfileSelect option[value="ac_lc12_doomed"]')).toHaveCount(0, { timeout: 6000 });
+  });
+
+  test('AC-LC13: Rename moves the profile in the dropdown + tracks active', async ({ page }) => {
+    await bootClean(page);
+    await openLogConfig(page);
+    await page.locator('#logvar_rl_w').check();
+    await page.locator('#logcfgProfileName').fill('ac_lc13_orig');
+    await page.locator('#panel-logconfig button:has-text("Save to Dongle")').click();
+    await expect(page.locator('#logcfgProfileSelect option[value="ac_lc13_orig"]')).toHaveCount(1, { timeout: 6000 });
+    /* Direct WS rename (avoids prompt() dialog). */
+    const renResp = await page.evaluate(() => new Promise(resolve => {
+      wsSend({command:'rename_logger_profile',
+              params:{old_name:'ac_lc13_orig', new_name:'ac_lc13_renamed'}},
+             msg => resolve(msg));
+    }));
+    expect(renResp.success).toBe(true);
+    await page.evaluate(() => logcfgRefreshProfileList());
+    await expect(page.locator('#logcfgProfileSelect option[value="ac_lc13_renamed"]')).toHaveCount(1, { timeout: 6000 });
+    await expect(page.locator('#logcfgProfileSelect option[value="ac_lc13_orig"]')).toHaveCount(0);
+    /* Active marker tracked the rename. */
+    const status = await page.evaluate(() => new Promise(resolve => {
+      wsSend({command:'get_logger_profile'}, msg => resolve(msg));
+    }));
+    expect(status.active_name).toBe('ac_lc13_renamed');
+  });
+
+  test('AC-LC14: Invalid profile names are rejected client-side + server-side', async ({ page }) => {
+    await bootClean(page);
+    await openLogConfig(page);
+    await page.locator('#logvar_rl_w').check();
+    /* Empty name → banner error, no WS frame. */
+    await page.locator('#logcfgProfileName').fill('');
+    await page.evaluate(() => {
+      window.__sentSet = [];
+      const orig = window.wsSend;
+      window.wsSend = (obj, cb) => {
+        if (obj.command === 'set_logger_profile') window.__sentSet.push(JSON.stringify(obj));
+        return orig(obj, cb);
+      };
+    });
+    await page.locator('#panel-logconfig button:has-text("Save to Dongle")').click();
+    await expect(page.locator('#logcfgSaveBanner')).toHaveClass(/show err/);
+    expect(await page.evaluate(() => window.__sentSet)).toEqual([]);
+    /* Server-side: a direct WS send with an invalid name (slash) is
+     * rejected. */
+    const r = await page.evaluate(() => new Promise(resolve => {
+      wsSend({command:'set_logger_profile', params:{name:'has/slash', variables:[]}},
+             msg => resolve(msg));
+    }));
+    expect(r.success).toBe(false);
+    expect(r.message).toMatch(/invalid 'name'/i);
   });
 
   test('AC-LC6: Unsupported vars render the "(not supported)" badge', async ({ page }) => {

@@ -49,8 +49,11 @@ const command_def_t COMMAND_REGISTRY[] = {
     /* Logger profile management */
     {"list_available_vars", "List all loggable variables for current boxcode", CMD_SECURITY_UNSECURED, cmd_list_available_vars},
     {"get_logger_profile", "Get current logger variable selection", CMD_SECURITY_UNSECURED, cmd_get_logger_profile},
-    {"set_logger_profile", "Save logger variable selection", CMD_SECURITY_UNSECURED, cmd_set_logger_profile},
-    {"delete_logger_profile", "Delete saved profile, revert to defaults", CMD_SECURITY_UNSECURED, cmd_delete_logger_profile},
+    {"set_logger_profile", "Save logger variable selection (named, P-75)", CMD_SECURITY_UNSECURED, cmd_set_logger_profile},
+    {"delete_logger_profile", "Delete a named profile (P-75)", CMD_SECURITY_UNSECURED, cmd_delete_logger_profile},
+    {"list_logger_profiles", "List stored named profiles (P-75)", CMD_SECURITY_UNSECURED, cmd_list_logger_profiles},
+    {"load_logger_profile", "Activate a stored named profile (P-75)", CMD_SECURITY_UNSECURED, cmd_load_logger_profile},
+    {"rename_logger_profile", "Rename a stored profile (P-75)", CMD_SECURITY_UNSECURED, cmd_rename_logger_profile},
     /* Flex fuel blending */
     {"flex_load_scal", "Load SCAL calibration file for flex fuel", CMD_SECURITY_SECURED, cmd_flex_load_scal},
     {"flex_unload_scal", "Unload SCAL and free PSRAM", CMD_SECURITY_SECURED, cmd_flex_unload_scal},

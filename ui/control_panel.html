@@ -198,10 +198,29 @@
       <button class="primary" onclick="logcfgSelectAll()">Select All</button>
       <button onclick="logcfgDeselectAll()">Deselect All</button>
       <button onclick="logcfgExpandAll()">Expand All</button>
-      <button onclick="logcfgSaveProfile()">Save Profile</button>
-      <button onclick="logcfgLoadProfile()">Load Profile</button>
-      <input type="file" id="logcfgFileInput" accept=".json" style="display:none" onchange="logcfgDoLoad(event)">
       <span class="logcfg-slot-counter" id="logcfgSlotCounter">0 / 32 slots</span>
+    </div>
+    <!-- P-75: named-profile management. Single "current" name is what
+         shows on every save; dropdown lists everything on the dongle. -->
+    <div class="logcfg-profile-bar">
+      <div class="logcfg-profile-row">
+        <label class="logcfg-profile-label">Profile on dongle</label>
+        <select id="logcfgProfileSelect" onchange="logcfgOnProfileSelected()">
+          <option value="">— select to load —</option>
+        </select>
+        <button onclick="logcfgLoadSelectedProfile()">Load</button>
+        <button class="danger" onclick="logcfgDeleteSelectedProfile()">Delete</button>
+        <button onclick="logcfgRenameSelectedProfile()">Rename</button>
+        <span class="logcfg-active-tag" id="logcfgActiveTag"></span>
+      </div>
+      <div class="logcfg-profile-row">
+        <label class="logcfg-profile-label">New name</label>
+        <input type="text" id="logcfgProfileName" placeholder="e.g. street_e30" maxlength="32" pattern="[A-Za-z0-9_-]+">
+        <button class="primary" onclick="logcfgSaveProfile()">Save to Dongle</button>
+        <button onclick="logcfgDownloadProfile()">Download JSON</button>
+        <button onclick="document.getElementById('logcfgFileInput').click()">Upload JSON</button>
+        <input type="file" id="logcfgFileInput" accept=".json" style="display:none" onchange="logcfgDoLoad(event)">
+      </div>
     </div>
     <div class="logcfg-limit-warning" id="logcfgLimitWarn">32-slot limit reached. Deselect variables to free slots.</div>
     <div id="logcfgCategories"></div>

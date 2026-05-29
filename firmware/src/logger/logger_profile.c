@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/unistd.h>
+#include <dirent.h>
 
 static const char *TAG = "LOGGER_PROFILE";
 
@@ -57,12 +58,82 @@ static void fire_on_apply(const char *boxcode) {
     }
 }
 
-/**
- * Build the full filesystem path for a boxcode's profile.
- * Result: "/cal/profiles/<boxcode>.json"
- */
-static void build_profile_path(const char *boxcode, char *path, size_t path_len) {
-    snprintf(path, path_len, "/cal/%s/%s.json", LOGGER_PROFILE_DIR, boxcode);
+/* P-75 path helpers — per-boxcode subdir contains named profile files
+ * plus a ".active" marker. Legacy /cal/profiles/<boxcode>.json is
+ * migrated on first apply via migrate_legacy_profile_if_needed(). */
+
+static void build_boxcode_dir(const char *boxcode, char *path, size_t n) {
+    snprintf(path, n, "/cal/%s/%s", LOGGER_PROFILE_DIR, boxcode);
+}
+
+static void build_named_profile_path(const char *boxcode, const char *name,
+                                      char *path, size_t n) {
+    snprintf(path, n, "/cal/%s/%s/%s.json", LOGGER_PROFILE_DIR, boxcode, name);
+}
+
+static void build_active_marker_path(const char *boxcode, char *path, size_t n) {
+    snprintf(path, n, "/cal/%s/%s/.active", LOGGER_PROFILE_DIR, boxcode);
+}
+
+static void build_legacy_profile_path(const char *boxcode, char *path, size_t n) {
+    snprintf(path, n, "/cal/%s/%s.json", LOGGER_PROFILE_DIR, boxcode);
+}
+
+static esp_err_t ensure_boxcode_dir(const char *boxcode) {
+    char dir[160];
+    build_boxcode_dir(boxcode, dir, sizeof(dir));
+    struct stat st;
+    if (stat(dir, &st) == 0) return ESP_OK;
+    if (mkdir(dir, 0755) != 0) {
+        ESP_LOGE(TAG, "Failed to mkdir %s", dir);
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "Created profile dir %s", dir);
+    return ESP_OK;
+}
+
+bool logger_profile_name_is_valid(const char *name) {
+    if (!name) return false;
+    size_t len = strlen(name);
+    if (len == 0 || len > LOGGER_PROFILE_NAME_MAX_LEN) return false;
+    for (size_t i = 0; i < len; i++) {
+        char c = name[i];
+        bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                  || (c >= '0' && c <= '9') || c == '_' || c == '-';
+        if (!ok) return false;
+    }
+    return true;
+}
+
+/* Migrate legacy /cal/profiles/<boxcode>.json into
+ * <boxcode>/<LOGGER_PROFILE_DEFAULT_NAME>.json + .active = default.
+ * Idempotent: no-op if either the subdir already exists OR the legacy
+ * file is absent. */
+static void migrate_legacy_profile_if_needed(const char *boxcode) {
+    char dir[160];
+    build_boxcode_dir(boxcode, dir, sizeof(dir));
+    struct stat st;
+    if (stat(dir, &st) == 0) return;  /* Subdir already exists, nothing to migrate. */
+    char legacy[160];
+    build_legacy_profile_path(boxcode, legacy, sizeof(legacy));
+    if (stat(legacy, &st) != 0) return;  /* No legacy file. */
+    if (ensure_boxcode_dir(boxcode) != ESP_OK) return;
+    char dest[160];
+    build_named_profile_path(boxcode, LOGGER_PROFILE_DEFAULT_NAME, dest, sizeof(dest));
+    /* rename() is atomic on the same FS; LittleFS supports it. */
+    if (rename(legacy, dest) != 0) {
+        ESP_LOGW(TAG, "Legacy migrate rename failed (%s -> %s)", legacy, dest);
+        return;
+    }
+    char active_path[160];
+    build_active_marker_path(boxcode, active_path, sizeof(active_path));
+    FILE *f = fopen(active_path, "wb");
+    if (f) {
+        fputs(LOGGER_PROFILE_DEFAULT_NAME, f);
+        fclose(f);
+    }
+    ESP_LOGI(TAG, "P-75 migrated legacy profile -> %s (active=%s)",
+             dest, LOGGER_PROFILE_DEFAULT_NAME);
 }
 
 esp_err_t logger_profile_init(void) {
@@ -89,24 +160,23 @@ esp_err_t logger_profile_init(void) {
 }
 
 esp_err_t logger_profile_save(const char *boxcode,
+                               const char *name,
                                const char **var_names,
                                uint8_t var_count) {
-    if (!boxcode || !var_names) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    if (!boxcode || !var_names) return ESP_ERR_INVALID_ARG;
+    if (!logger_profile_name_is_valid(name)) return ESP_ERR_INVALID_ARG;
 
     if (var_count > LOGGER_PROFILE_MAX_SELECTED) {
-        ESP_LOGW(TAG, "Clamping var_count from %d to %d", var_count, LOGGER_PROFILE_MAX_SELECTED);
+        ESP_LOGW(TAG, "Clamping var_count %d -> %d", var_count, LOGGER_PROFILE_MAX_SELECTED);
         var_count = LOGGER_PROFILE_MAX_SELECTED;
     }
 
-    /* Build JSON: {"vars":["name1","name2",...]} */
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        ESP_LOGE(TAG, "Failed to create JSON object");
-        return ESP_ERR_NO_MEM;
-    }
+    migrate_legacy_profile_if_needed(boxcode);
+    if (ensure_boxcode_dir(boxcode) != ESP_OK) return ESP_FAIL;
 
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+    cJSON_AddStringToObject(root, "name", name);
     cJSON *arr = cJSON_CreateArray();
     for (uint8_t i = 0; i < var_count; i++) {
         if (var_names[i] && strlen(var_names[i]) > 0) {
@@ -114,53 +184,56 @@ esp_err_t logger_profile_save(const char *boxcode,
         }
     }
     cJSON_AddItemToObject(root, "vars", arr);
-
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
+    if (!json_str) return ESP_ERR_NO_MEM;
 
-    if (!json_str) {
-        ESP_LOGE(TAG, "Failed to serialize JSON");
-        return ESP_ERR_NO_MEM;
-    }
-
-    /* Write to file */
-    char path[128];
-    build_profile_path(boxcode, path, sizeof(path));
-
+    char path[160];
+    build_named_profile_path(boxcode, name, path, sizeof(path));
     FILE *f = fopen(path, "wb");
     if (!f) {
-        ESP_LOGE(TAG, "Failed to open profile for writing: %s", path);
+        ESP_LOGE(TAG, "open for write failed: %s", path);
         free(json_str);
         return ESP_FAIL;
     }
-
     size_t json_len = strlen(json_str);
     size_t written = fwrite(json_str, 1, json_len, f);
     fclose(f);
     free(json_str);
-
     if (written != json_len) {
-        ESP_LOGE(TAG, "Profile write incomplete: %d/%d bytes", (int)written, (int)json_len);
+        ESP_LOGE(TAG, "Profile write short: %d/%d", (int)written, (int)json_len);
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Saved profile for %s: %d optional variables (%d bytes)",
-             boxcode, var_count, (int)json_len);
+    /* Mark active. Save-with-name == load-this-name-from-now-on. */
+    esp_err_t a = logger_profile_set_active(boxcode, name);
+    if (a != ESP_OK) {
+        ESP_LOGW(TAG, "saved %s but set_active failed (rc=%d)", name, a);
+    }
+    ESP_LOGI(TAG, "Saved profile '%s' for %s: %d vars (%d bytes)",
+             name, boxcode, var_count, (int)json_len);
     return ESP_OK;
 }
 
 esp_err_t logger_profile_load(const char *boxcode,
-                               char var_names[][32],
+                               const char *name,
+                               char var_names[][LOGGER_PROFILE_NAME_MAX_LEN],
                                uint8_t max_vars,
                                uint8_t *var_count) {
-    if (!boxcode || !var_names || !var_count) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
+    if (!boxcode || !var_names || !var_count) return ESP_ERR_INVALID_ARG;
     *var_count = 0;
 
-    char path[128];
-    build_profile_path(boxcode, path, sizeof(path));
+    /* Resolve name. NULL/empty → use active marker. */
+    char resolved[LOGGER_PROFILE_NAME_MAX_LEN + 1] = {0};
+    if (!name || name[0] == '\0') {
+        esp_err_t r = logger_profile_get_active(boxcode, resolved, sizeof(resolved));
+        if (r != ESP_OK) return ESP_ERR_NOT_FOUND;
+        name = resolved;
+    }
+    if (!logger_profile_name_is_valid(name)) return ESP_ERR_INVALID_ARG;
+
+    char path[160];
+    build_named_profile_path(boxcode, name, path, sizeof(path));
 
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -209,47 +282,166 @@ esp_err_t logger_profile_load(const char *boxcode,
     cJSON *item = NULL;
     cJSON_ArrayForEach(item, vars_arr) {
         if (*var_count >= max_vars) {
-            ESP_LOGW(TAG, "Profile truncated at %d variables (max %d)", *var_count, max_vars);
+            ESP_LOGW(TAG, "Profile truncated at %d (max %d)", *var_count, max_vars);
             break;
         }
         if (cJSON_IsString(item) && item->valuestring) {
-            strncpy(var_names[*var_count], item->valuestring, 31);
-            var_names[*var_count][31] = '\0';
+            strncpy(var_names[*var_count], item->valuestring, LOGGER_PROFILE_NAME_MAX_LEN - 1);
+            var_names[*var_count][LOGGER_PROFILE_NAME_MAX_LEN - 1] = '\0';
             (*var_count)++;
         }
     }
-
     cJSON_Delete(root);
-
-    ESP_LOGI(TAG, "Loaded profile for %s: %d optional variables", boxcode, *var_count);
+    ESP_LOGI(TAG, "Loaded profile '%s' for %s: %d vars", name, boxcode, *var_count);
     return ESP_OK;
 }
 
-esp_err_t logger_profile_delete(const char *boxcode) {
-    if (!boxcode) {
-        return ESP_ERR_INVALID_ARG;
+/* P-75 set_active: write "<name>" into <boxcode>/.active. */
+esp_err_t logger_profile_set_active(const char *boxcode, const char *name) {
+    if (!boxcode || !name) return ESP_ERR_INVALID_ARG;
+    if (!logger_profile_name_is_valid(name)) return ESP_ERR_INVALID_ARG;
+    if (ensure_boxcode_dir(boxcode) != ESP_OK) return ESP_FAIL;
+
+    char path[160];
+    build_active_marker_path(boxcode, path, sizeof(path));
+    FILE *f = fopen(path, "wb");
+    if (!f) return ESP_FAIL;
+    size_t n = strlen(name);
+    size_t w = fwrite(name, 1, n, f);
+    fclose(f);
+    if (w != n) return ESP_FAIL;
+    ESP_LOGI(TAG, "Active profile for %s = '%s'", boxcode, name);
+    return ESP_OK;
+}
+
+/* P-75 get_active: read <boxcode>/.active into name_out (NUL-terminated). */
+esp_err_t logger_profile_get_active(const char *boxcode, char *name_out, size_t name_max) {
+    if (!boxcode || !name_out || name_max == 0) return ESP_ERR_INVALID_ARG;
+    name_out[0] = '\0';
+    char path[160];
+    build_active_marker_path(boxcode, path, sizeof(path));
+    FILE *f = fopen(path, "rb");
+    if (!f) return ESP_ERR_NOT_FOUND;
+    size_t n = fread(name_out, 1, name_max - 1, f);
+    fclose(f);
+    name_out[n] = '\0';
+    /* Trim trailing whitespace/newlines defensively. */
+    while (n > 0 && (name_out[n-1] == '\n' || name_out[n-1] == '\r' || name_out[n-1] == ' ')) {
+        name_out[--n] = '\0';
     }
+    if (n == 0 || !logger_profile_name_is_valid(name_out)) {
+        ESP_LOGW(TAG, "Active marker for %s is empty / invalid", boxcode);
+        return ESP_ERR_NOT_FOUND;
+    }
+    return ESP_OK;
+}
 
-    char path[128];
-    build_profile_path(boxcode, path, sizeof(path));
+static void clear_active_marker(const char *boxcode) {
+    char path[160];
+    build_active_marker_path(boxcode, path, sizeof(path));
+    unlink(path);  /* Best-effort; missing marker == "use defaults". */
+}
 
+esp_err_t logger_profile_delete(const char *boxcode, const char *name) {
+    if (!boxcode || !logger_profile_name_is_valid(name)) return ESP_ERR_INVALID_ARG;
+
+    char path[160];
+    build_named_profile_path(boxcode, name, path, sizeof(path));
     if (unlink(path) != 0) {
-        ESP_LOGW(TAG, "Failed to delete profile: %s (may not exist)", path);
+        ESP_LOGW(TAG, "delete %s failed (may not exist)", path);
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Deleted profile for %s", boxcode);
+    /* If the deleted profile was active, clear the marker so apply
+     * falls back to defaults rather than chasing a dead reference. */
+    char active[LOGGER_PROFILE_NAME_MAX_LEN + 1] = {0};
+    if (logger_profile_get_active(boxcode, active, sizeof(active)) == ESP_OK &&
+        strcmp(active, name) == 0) {
+        clear_active_marker(boxcode);
+        ESP_LOGI(TAG, "Cleared active marker (was '%s')", name);
+    }
+    ESP_LOGI(TAG, "Deleted profile '%s' for %s", name, boxcode);
+    return ESP_OK;
+}
+
+esp_err_t logger_profile_rename(const char *boxcode,
+                                 const char *old_name,
+                                 const char *new_name) {
+    if (!boxcode) return ESP_ERR_INVALID_ARG;
+    if (!logger_profile_name_is_valid(old_name)) return ESP_ERR_INVALID_ARG;
+    if (!logger_profile_name_is_valid(new_name)) return ESP_ERR_INVALID_ARG;
+    if (strcmp(old_name, new_name) == 0) return ESP_OK;
+
+    char old_path[160], new_path[160];
+    build_named_profile_path(boxcode, old_name, old_path, sizeof(old_path));
+    build_named_profile_path(boxcode, new_name, new_path, sizeof(new_path));
+
+    struct stat st;
+    if (stat(old_path, &st) != 0) return ESP_ERR_NOT_FOUND;
+    if (stat(new_path, &st) == 0) {
+        ESP_LOGW(TAG, "rename target '%s' already exists", new_name);
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (rename(old_path, new_path) != 0) {
+        ESP_LOGE(TAG, "rename %s -> %s failed", old_path, new_path);
+        return ESP_FAIL;
+    }
+    /* If active pointed at old name, update it to track. */
+    char active[LOGGER_PROFILE_NAME_MAX_LEN + 1] = {0};
+    if (logger_profile_get_active(boxcode, active, sizeof(active)) == ESP_OK &&
+        strcmp(active, old_name) == 0) {
+        logger_profile_set_active(boxcode, new_name);
+    }
+    ESP_LOGI(TAG, "Renamed profile %s: '%s' -> '%s'", boxcode, old_name, new_name);
+    return ESP_OK;
+}
+
+esp_err_t logger_profile_list(const char *boxcode,
+                               char names_out[][LOGGER_PROFILE_NAME_MAX_LEN],
+                               uint8_t max_names,
+                               uint8_t *count_out) {
+    if (!boxcode || !names_out || !count_out) return ESP_ERR_INVALID_ARG;
+    *count_out = 0;
+
+    migrate_legacy_profile_if_needed(boxcode);
+
+    char dir_path[160];
+    build_boxcode_dir(boxcode, dir_path, sizeof(dir_path));
+
+    DIR *d = opendir(dir_path);
+    if (!d) return ESP_OK;  /* No directory == no profiles, not an error. */
+
+    struct dirent *ent;
+    while ((ent = readdir(d)) != NULL && *count_out < max_names) {
+        if (ent->d_name[0] == '.') continue;       /* Skip .active + . + .. */
+        size_t n = strlen(ent->d_name);
+        if (n < 6) continue;                       /* Need at least ".json" + 1 char */
+        if (strcmp(ent->d_name + n - 5, ".json") != 0) continue;
+        /* Strip ".json" suffix to recover the profile name. */
+        size_t bare = n - 5;
+        if (bare >= LOGGER_PROFILE_NAME_MAX_LEN) continue;
+        memcpy(names_out[*count_out], ent->d_name, bare);
+        names_out[*count_out][bare] = '\0';
+        if (!logger_profile_name_is_valid(names_out[*count_out])) continue;
+        (*count_out)++;
+    }
+    closedir(d);
     return ESP_OK;
 }
 
 bool logger_profile_exists(const char *boxcode) {
     if (!boxcode) return false;
 
-    char path[128];
-    build_profile_path(boxcode, path, sizeof(path));
+    /* Quick check: does the boxcode subdir hold at least one .json file? */
+    char names[1][LOGGER_PROFILE_NAME_MAX_LEN];
+    uint8_t cnt = 0;
+    if (logger_profile_list(boxcode, names, 1, &cnt) == ESP_OK && cnt > 0) return true;
 
+    /* Legacy fallback (pre-migration) */
+    char legacy[160];
+    build_legacy_profile_path(boxcode, legacy, sizeof(legacy));
     struct stat st;
-    return (stat(path, &st) == 0);
+    return (stat(legacy, &st) == 0);
 }
 
 bool logger_profile_apply(const char *boxcode) {
@@ -284,11 +476,18 @@ bool logger_profile_apply(const char *boxcode) {
         return false;
     }
 
-    /* Load saved profile */
-    char saved_vars[LOGGER_PROFILE_MAX_SELECTED][32];
+    /* P-75: migrate legacy single-file layout the FIRST time apply runs
+     * after upgrade. After this, all loads go through named-profile
+     * paths. Cheap no-op once the subdir exists. */
+    migrate_legacy_profile_if_needed(boxcode);
+
+    /* Load whichever profile the active marker points at. Passing
+     * name=NULL tells load() to resolve from .active. */
+    char saved_vars[LOGGER_PROFILE_MAX_SELECTED][LOGGER_PROFILE_NAME_MAX_LEN];
     uint8_t saved_count = 0;
 
-    esp_err_t err = logger_profile_load(boxcode, saved_vars, LOGGER_PROFILE_MAX_SELECTED, &saved_count);
+    esp_err_t err = logger_profile_load(boxcode, NULL, saved_vars,
+                                         LOGGER_PROFILE_MAX_SELECTED, &saved_count);
 
     if (err == ESP_ERR_NOT_FOUND) {
         /* No saved profile — add all optional variables as default */

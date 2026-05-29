@@ -492,59 +492,193 @@ function logcfgUpdateStats(){
   const c = document.getElementById('logcfgHz');       if (c) c.textContent = estHz > 0 ? estHz.toFixed(1) : '0';
 }
 
+/* P-75: named-profile save. Reads the profile name from the
+ * dedicated input (or the currently-selected dropdown entry if the
+ * input is blank). Server-side P-72 force_reconfigure handles the
+ * apply on can_task. Show-on-Dashboard set is committed atomically
+ * with rollback on firmware failure (P1.E semantics preserved). */
+const LOGCFG_NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
+
+function logcfgGetSaveName(){
+  const input = document.getElementById('logcfgProfileName');
+  const typed = input ? input.value.trim() : '';
+  if (typed) return typed;
+  const sel = document.getElementById('logcfgProfileSelect');
+  return sel ? sel.value.trim() : '';
+}
+
 function logcfgSaveProfile(){
-  /* P1.A: firmware expects { variables: ["name1","name2",...] } — an
-   * ARRAY of variable names. The UI previously sent
-   * { profile: { name: rate } } and the firmware bailed with
-   * "Missing parameters" because it couldn't find the `variables`
-   * field. The per-var rate selector is UI-only for now (firmware
-   * doesn't store rates); just send the names. Required vars
-   * (nmot_w, eth, cruise) are always included by firmware — sending
-   * them is harmless (silently skipped). */
-  const selected = logcfgGetSelected();
+  const name = logcfgGetSaveName();
+  if (!LOGCFG_NAME_RE.test(name)){
+    logcfgSetSaveBanner(false,
+      'Enter a profile name (letters, digits, _ or -, max 32 chars).');
+    return;
+  }
+
+  const selected  = logcfgGetSelected();
   const variables = selected.map(v => v.key);
 
-  /* P1.E: Save commits Logged AND Show-on-Dashboard atomically.
-   * Capture the current Show-on-Dashboard set BEFORE the wsSend so
-   * we can compare on the callback and roll back if the firmware
-   * save fails. */
+  /* Overwrite confirmation: if name already exists in the dropdown
+   * and wasn't the currently-active one, prompt before clobbering. */
+  const select = document.getElementById('logcfgProfileSelect');
+  const exists = select && Array.from(select.options).some(o => o.value === name);
+  const activeTag = document.getElementById('logcfgActiveTag');
+  const wasActive = activeTag && activeTag.textContent.endsWith(name);
+  if (exists && !wasActive && !confirm(`Overwrite existing profile "${name}"?`)){
+    return;
+  }
+
+  /* P1.E: atomic Show-on-Dashboard with rollback. */
   const vin       = dashboardGetCurrentVin();
   const showSet   = dashboardSelectedSet();
   const priorVars = dashboardLoadVars(vin);
-
-  /* Optimistically persist Show-on-Dashboard now (the user already
-   * saw it ticked in the UI). On firmware failure, restore the
-   * prior set so the two columns remain consistent. */
   dashboardSaveVars(vin, showSet);
 
-  wsSend({command:'set_logger_profile', params:{variables: variables}}, msg => {
+  wsSend({command:'set_logger_profile', params:{name, variables}}, msg => {
     const ok = !!(msg && msg.success);
-    /* P1.B: explicit success / failure banner in the Log Config tab. */
     logcfgSetSaveBanner(ok, ok
-      ? `Profile saved — ${(msg && msg.saved_count != null) ? msg.saved_count : variables.length} optional var(s)`
-        + ((msg && msg.invalid_count) ? `; ${msg.invalid_count} unknown ignored` : '')
+      ? `Saved "${name}" — ${(msg.saved_count != null) ? msg.saved_count : variables.length} optional var(s)`
+        + ((msg.invalid_count) ? `; ${msg.invalid_count} unknown ignored` : '')
       : 'Save failed: ' + ((msg && (msg.message || msg.error)) || 'unknown error'));
-
     if (!ok){
-      /* Roll back Show-on-Dashboard so the two columns stay in lockstep. */
       dashboardSaveVars(vin, priorVars);
       dashboardLoadSelectionToUI();
       return;
     }
-    /* P-69 #3: refresh the polled set so Dashboard placeholders flip
-     * for newly-Logged or newly-Unlogged vars. */
-    if (typeof dashboardRefreshPolledSet === 'function'){
-      dashboardRefreshPolledSet();
-    }
+    /* Refresh both the dropdown (in case this was a new name) and
+     * the dashboard polled-set (P-69 #3). */
+    logcfgRefreshProfileList();
+    if (typeof dashboardRefreshPolledSet === 'function') dashboardRefreshPolledSet();
   });
+}
 
-  /* Also offer download for backup. */
-  const blob = new Blob([JSON.stringify({variables, dashboard_vars: Array.from(showSet)}, null, 2)], {type:'application/json'});
+/* P-75: separate "Download JSON" button. No WS, no naming — just
+ * dumps the current checkbox state to disk so the user has a local
+ * backup. Filename includes the typed name if one is present. */
+function logcfgDownloadProfile(){
+  const variables = logcfgGetSelected().map(v => v.key);
+  const showSet   = dashboardSelectedSet();
+  const name      = (document.getElementById('logcfgProfileName').value.trim()
+                      || document.getElementById('logcfgProfileSelect').value
+                      || 'profile');
+  const payload = { name, variables, dashboard_vars: Array.from(showSet) };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'futuner_log_profile.json';
+  a.download = 'futuner_log_profile_' + name + '.json';
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/* P-75: list dropdown population from list_logger_profiles. Fires on
+ * WS connect, after every save, and on Log Config tab enter. */
+function logcfgRefreshProfileList(){
+  if (!ws || ws.readyState !== 1) return;
+  wsSend({command:'list_logger_profiles'}, msg => {
+    if (!msg || !msg.success) return;
+    const sel = document.getElementById('logcfgProfileSelect');
+    if (!sel) return;
+    const profiles = Array.isArray(msg.profiles) ? msg.profiles : [];
+    const active = msg.active || '';
+    const prevSelection = sel.value;
+    /* Clear all but the placeholder option. */
+    while (sel.options.length > 1) sel.remove(1);
+    profiles.forEach(p => {
+      if (!p || typeof p.name !== 'string') return;
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name + (p.vars ? ` (${p.vars.length} vars)` : '');
+      sel.appendChild(opt);
+    });
+    /* Restore the user's selection if still present, else fall back
+     * to whatever the dongle reports as active. */
+    if (Array.from(sel.options).some(o => o.value === prevSelection)){
+      sel.value = prevSelection;
+    } else if (active && Array.from(sel.options).some(o => o.value === active)){
+      sel.value = active;
+    }
+    const tag = document.getElementById('logcfgActiveTag');
+    if (tag) tag.textContent = active ? ('Active: ' + active) : '';
+  });
+}
+
+function logcfgOnProfileSelected(){
+  /* Pure UI hook — selecting from the dropdown does NOT trigger an
+   * automatic load (user might just be browsing). They explicitly
+   * click Load. We do copy the name into the input though so Save
+   * defaults to overwriting that one. */
+  const sel = document.getElementById('logcfgProfileSelect');
+  const name = sel ? sel.value : '';
+  const input = document.getElementById('logcfgProfileName');
+  if (input && name) input.value = name;
+}
+
+function logcfgLoadSelectedProfile(){
+  const sel = document.getElementById('logcfgProfileSelect');
+  const name = sel ? sel.value : '';
+  if (!name){
+    logcfgSetSaveBanner(false, 'Pick a profile from the dropdown first.');
+    return;
+  }
+  wsSend({command:'load_logger_profile', params:{name}}, msg => {
+    if (!msg || !msg.success){
+      logcfgSetSaveBanner(false, 'Load failed: ' + ((msg && (msg.message || msg.error)) || 'unknown'));
+      return;
+    }
+    /* P-75: load_logger_profile returns the named profile's vars +
+     * required list inline so we don't race the deferred apply with
+     * a follow-up get_logger_profile (which can land mid-clear on
+     * can_task and return selected=[]). */
+    const required = Array.isArray(msg.required) ? msg.required : [];
+    const optional = Array.isArray(msg.vars)     ? msg.vars     : [];
+    const profile = {};
+    required.concat(optional).forEach(n => { profile[n] = 1; });
+    logcfgApplyProfile(profile);
+    logcfgSetSaveBanner(true,
+      `Loaded "${name}" — ${optional.length} optional var(s)`);
+    logcfgRefreshProfileList();
+  });
+}
+
+function logcfgDeleteSelectedProfile(){
+  const sel = document.getElementById('logcfgProfileSelect');
+  const name = sel ? sel.value : '';
+  if (!name){
+    logcfgSetSaveBanner(false, 'Pick a profile from the dropdown first.');
+    return;
+  }
+  if (!confirm(`Delete profile "${name}"? This can't be undone.`)) return;
+  wsSend({command:'delete_logger_profile', params:{name}}, msg => {
+    if (!msg || !msg.success){
+      logcfgSetSaveBanner(false, 'Delete failed: ' + ((msg && (msg.message || msg.error)) || 'unknown'));
+      return;
+    }
+    logcfgSetSaveBanner(true, `Deleted "${name}"`);
+    logcfgRefreshProfileList();
+  });
+}
+
+function logcfgRenameSelectedProfile(){
+  const sel = document.getElementById('logcfgProfileSelect');
+  const old_name = sel ? sel.value : '';
+  if (!old_name){
+    logcfgSetSaveBanner(false, 'Pick a profile from the dropdown first.');
+    return;
+  }
+  const new_name = (prompt(`Rename "${old_name}" to:`, old_name) || '').trim();
+  if (!new_name || new_name === old_name) return;
+  if (!LOGCFG_NAME_RE.test(new_name)){
+    logcfgSetSaveBanner(false, 'Invalid name (letters, digits, _ or -, max 32 chars).');
+    return;
+  }
+  wsSend({command:'rename_logger_profile', params:{old_name, new_name}}, msg => {
+    if (!msg || !msg.success){
+      logcfgSetSaveBanner(false, 'Rename failed: ' + ((msg && (msg.message || msg.error)) || 'unknown'));
+      return;
+    }
+    logcfgSetSaveBanner(true, `Renamed "${old_name}" → "${new_name}"`);
+    logcfgRefreshProfileList();
+  });
 }
 
 /* P1.B: success/error banner above the variable table. The element
@@ -878,6 +1012,8 @@ function wsConnect(){
     /* P1.D: cross-check the UI catalog against the firmware's
      * per-boxcode supported-vars list and gray out unsupported rows. */
     if (typeof logcfgRefreshSupportedVars === 'function') logcfgRefreshSupportedVars();
+    /* P-75: populate the named-profile dropdown. */
+    if (typeof logcfgRefreshProfileList === 'function') logcfgRefreshProfileList();
     /* If the Dashboard was Started before the WS drop, restart its
      * intent now (spec §5.6: reconnect resumes the Started intent). */
     if (dashState && dashState.startedIntent) dashboardStart();
