@@ -67,8 +67,9 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"can_sniff_status", "Get CAN sniffer capture stats", CMD_SECURITY_UNSECURED, cmd_can_sniff_status},
     {"can_send_raw", "Send raw CAN frame (id, data[], len)", CMD_SECURITY_UNSECURED, cmd_can_send_raw},
     /* WOT logger — first feature plumbed through feature_manager */
-    {"wot_log_start", "Start WOT logging (via feature_manager)", CMD_SECURITY_UNSECURED, cmd_wot_log_start},
-    {"wot_log_stop",  "Stop WOT logging (via feature_manager)",  CMD_SECURITY_UNSECURED, cmd_wot_log_stop},
+    {"wot_log_start",  "Start WOT logging (via feature_manager)",  CMD_SECURITY_UNSECURED, cmd_wot_log_start},
+    {"wot_log_stop",   "Stop WOT logging (via feature_manager)",   CMD_SECURITY_UNSECURED, cmd_wot_log_stop},
+    {"wot_log_status", "Snapshot WOT queue + running state (P-77)", CMD_SECURITY_UNSECURED, cmd_wot_log_status},
     /* DTC read/clear — second feature plumbed through feature_manager */
     {"dtc_read",  "Read active DTCs from ECU (UDS 0x19 0x02)", CMD_SECURITY_UNSECURED, cmd_dtc_read},
     {"dtc_clear", "Clear all DTCs in ECU (UDS 0x14 FF FF FF)", CMD_SECURITY_UNSECURED,   cmd_dtc_clear},

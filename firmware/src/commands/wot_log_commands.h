@@ -15,4 +15,8 @@
 esp_err_t cmd_wot_log_start(int fd, const char *params, char *response, size_t response_size);
 esp_err_t cmd_wot_log_stop(int fd, const char *params, char *response, size_t response_size);
 
+/* P-77: status snapshot — queue depth, active-feature, running flag.
+ * UI polls this on the WOT panel to keep the stats tiles live. */
+esp_err_t cmd_wot_log_status(int fd, const char *params, char *response, size_t response_size);
+
 #endif /* WOT_LOG_COMMANDS_H */

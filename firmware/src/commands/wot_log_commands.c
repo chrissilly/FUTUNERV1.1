@@ -1,5 +1,6 @@
 #include "wot_log_commands.h"
 #include "feature_manager.h"
+#include "logger/wot_uploader.h"
 
 #include "esp_log.h"
 #include "cJSON.h"
@@ -56,6 +57,32 @@ esp_err_t cmd_wot_log_start(int fd, const char *params, char *response, size_t r
     emit_simple(response, response_size, "wot_log_start",
                 false, err[0] != '\0' ? err : "feature_manager rejected start",
                 feature_manager_active_name());
+    return ESP_OK;
+}
+
+/* Status: queue depth + active feature + running flag. Cheap; UI
+ * polls this on the WOT panel to keep the stats tiles live. */
+esp_err_t cmd_wot_log_status(int fd, const char *params, char *response, size_t response_size) {
+    (void)fd;
+    (void)params;
+
+    const char *active = feature_manager_active_name();
+    bool running = (active && strcmp(active, "wot_logger") == 0);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "success", true);
+    cJSON_AddStringToObject(root, "command", "wot_log_status");
+    cJSON_AddStringToObject(root, "active_feature", active ? active : "none");
+    cJSON_AddBoolToObject(root, "running", running);
+    cJSON_AddNumberToObject(root, "queue_count", (double)wot_uploader_queue_count());
+
+    char *json = cJSON_PrintUnformatted(root);
+    if (json) {
+        strncpy(response, json, response_size - 1);
+        response[response_size - 1] = '\0';
+        free(json);
+    }
+    cJSON_Delete(root);
     return ESP_OK;
 }
 

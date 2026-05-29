@@ -1572,7 +1572,11 @@ function renderVinPairPanel(msg){
  * WOT Logger — Prompt 9.
  * ========================================================================= */
 function wotStart(){
-  if (!confirmFeatureSwap('wot_logging', () => doWotStart())) return;
+  /* Feature name must match firmware exactly — wot_logger.c registers
+   * itself as "wot_logger", not "wot_logging". The old "wot_logging"
+   * string here triggered a swap-confirm modal every time the user
+   * clicked Start, even when WOT was the only feature active. */
+  if (!confirmFeatureSwap('wot_logger', () => doWotStart())) return;
   doWotStart();
 }
 function doWotStart(){ wsSend({command:'wot_log_start'}); }
@@ -1596,12 +1600,38 @@ function onWotStopResp(msg){
 
 function startWotPoll(){
   stopWotPoll();
-  /* WOT status currently piggy-backs on get_status (active_feature
-   * field). Future firmware command: wot_log_status. For now, refresh
-   * get_status on cadence. */
-  wotPollTimer = setInterval(() => {
-    if (ws && ws.readyState === 1) wsSend({command:'get_status'});
-  }, UI_CONST.WOT_STATUS_POLL_MS);
+  /* P-77: firmware now exposes wot_log_status — queue depth +
+   * active feature + running flag. UI populates the stats tiles
+   * from this rather than from get_status. */
+  const fire = () => {
+    if (!ws || ws.readyState !== 1) return;
+    wsSend({command:'wot_log_status'}, msg => {
+      if (!msg || !msg.success) return;
+      const q   = (typeof msg.queue_count === 'number') ? msg.queue_count : 0;
+      const run = !!msg.running;
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+      setVal('wotQueued', String(q));
+      /* No bytes/last-result accessor in firmware yet — leave the
+       * tiles at their defaults rather than fabricate numbers. */
+      const banner = document.getElementById('wotBanner');
+      if (banner){
+        if (run){
+          banner.className = 'banner info show';
+          banner.querySelector('.msg').textContent =
+            q > 0 ? `Logging armed — ${q} log(s) queued for upload`
+                  : 'Logging armed — waiting for WOT trigger (nmot×wdkba threshold)';
+        } else {
+          banner.className = 'banner';
+        }
+      }
+      if (msg.active_feature !== undefined) setActiveFeature(msg.active_feature);
+    });
+  };
+  fire();
+  wotPollTimer = setInterval(fire, UI_CONST.WOT_STATUS_POLL_MS);
 }
 function stopWotPoll(){ if (wotPollTimer){ clearInterval(wotPollTimer); wotPollTimer = null; } }
 
@@ -1776,8 +1806,14 @@ wsEvents.on('unload', (m) => {
  * ========================================================================= */
 function confirmFeatureSwap(requestedFeature, onConfirm){
   const active = appState.activeFeature || 'idle';
-  if (active === 'idle' || active === requestedFeature){
-    return true;  /* No swap needed. */
+  /* Firmware reports "none" when no feature is active (see
+   * feature_manager_active_name()); UI defaults to "idle". Treat
+   * both as the no-active-feature sentinel. Without this branch
+   * the Start button popped the swap-confirm modal every time
+   * after a stop, because 'none' !== 'idle' && 'none' !== the
+   * requested feature. */
+  if (active === 'idle' || active === 'none' || active === requestedFeature){
+    return true;
   }
   _pendingSwap = { active, requestedFeature, onConfirm };
   const modal = document.getElementById('swapConfirmModal');
