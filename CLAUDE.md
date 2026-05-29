@@ -139,6 +139,30 @@ Stage 2 — end-of-session: copy the active log to `firmware/test/can_capture/de
 
 The rule sits next to Rule 10 because both close customer-debug evidence gaps. Rule 10 catches UI vapor at the DOM boundary. Rule 11 catches missing-evidence gaps at the wire boundary — when a bug surfaces and there's no wire log to diff against, the work to reproduce is full and re-incurred. Today's incident (2026-05-28): three days of HIL + UI vetting + Playwright runs without continuous wire capture; P-52 (macOS gs_usb sustained-use wedge) was the historical justification but that justification expired now that the host has been stable for the last several sessions. From now on, missing wire witness ≡ unfinished dev work.
 
+### 12. Wire-surface diagnostic discipline
+
+Any firmware change touching CAN, UDS, ISO-TP, or other wire-bound code requires, **BEFORE any code change**:
+
+(a) A captured wire log of the problem in the actual failure state.
+
+(b) A diagnostic markdown at `firmware/test/<feature>/<date>_diagnostic.md` documenting the byte-level evidence, the proposed fix shape, and an explicit identification of which hypotheses were proven vs disproven by the capture.
+
+(c) **Explicit owner sign-off on the diagnostic before the patch lands.**
+
+Hypothesis-driven wire-surface patches are forbidden. The workflow exists because hypothesis patches have backed us into multiple dead-ends this development cycle. When the symptom is "this CAN exchange doesn't work," the answer is never "guess and reflash" — the answer is "capture the exchange, write down what we saw, propose the fix, get a yes, then patch."
+
+Mechanical check (do this in your head before touching any `firmware/src/can/`, `firmware/src/dtc/`, `firmware/src/isotp_*`, `firmware/src/logger/logger_*.c`, `firmware/src/flash/`, or any other file whose changes affect bytes on the bus):
+
+1. Is there a wire log capturing the current failure?
+2. Is there a markdown report at `firmware/test/<feature>/*.md` documenting the byte-level analysis?
+3. Has the owner read it and said "ship the fix"?
+
+If any of those three is "no," **stop and produce the missing artifact**. Do NOT commit firmware code.
+
+Today's incident (2026-05-29): P-54 ClearDTC fix went from VCDS wire capture → diagnostic markdown → firmware patch → flash → commit in a single un-paused chain. The diagnostic report `firmware/test/dtc/vcds_clear_capture_2026-05-29.md` was written, but the patch shipped before owner read it. The fix turned out to be correct (Mode 04 vs UDS \$14 was the right swap), but the *process* failure means a wrong fix could have shipped just as easily. Rule 12 lands so that doesn't keep happening.
+
+Rule 12 sits next to Rule 11 because both gate work on evidence: Rule 11 ensures the wire is being captured during dev, Rule 12 ensures the captured evidence drives the patch and not a hypothesis.
+
 ---
 
 ## Repository layout
