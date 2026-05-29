@@ -25,14 +25,14 @@ def extract_ui_catalog(js_path):
     if not m:
         raise RuntimeError("ECU_VAR_DB literal not found")
     raw = m.group(1).rstrip(";").rstrip()
+    # Strip JS comments BEFORE other rewrites so they don't confuse
+    # the key/string regexes. Order: block then line.
+    raw = re.sub(r'/\*.*?\*/', '', raw, flags=re.S)
+    raw = re.sub(r'//[^\n]*', '', raw)
     # Convert JS object literal -> JSON. Specifically: unquoted keys.
-    # Quote bare-word keys before `:` (one of: name, display, unit, etc.)
     raw = re.sub(r'(\b[A-Za-z_][A-Za-z0-9_]*\b)\s*:', r'"\1":', raw)
     # Strip trailing commas in objects/arrays.
     raw = re.sub(r',(\s*[\]}])', r'\1', raw)
-    # JS single quotes -> double quotes (be careful: not inside strings).
-    # Use a simple heuristic: replace single quotes that surround
-    # identifier-shaped strings.
     raw = re.sub(r"'([^'\\]*)'", r'"\1"', raw)
     return json.loads(raw)
 
@@ -69,16 +69,21 @@ def main():
                 hit, conf = candidates[0], "substring"
                 why = f"closest substring: {hit['name']}"
         counts[conf] += 1
+        # UI catalog has its own `unit` field — use it when present
+        # since Sean's hand-curated values are more user-friendly
+        # than the raw A2L unit string.
+        ui_unit = u.get("unit") or (hit.get("unit") if hit else "")
         if hit:
             rows.append({
                 "ui_name":  n,
                 "ui_display": u.get("display", ""),
+                "ui_unit":  ui_unit,
                 "a2l_name": hit["name"],
                 "address":  f"0x{hit['address']:08X}",
                 "datatype": hit["datatype"],
                 "scale":    hit.get("scale"),
                 "offset":   hit.get("offset"),
-                "unit":     hit.get("unit"),
+                "a2l_unit": hit.get("unit"),
                 "confidence": conf,
                 "note": why,
             })
@@ -86,19 +91,20 @@ def main():
             rows.append({
                 "ui_name":  n,
                 "ui_display": u.get("display", ""),
+                "ui_unit":  ui_unit,
                 "a2l_name": "",
                 "address":  "",
                 "datatype": "",
                 "scale": None,
                 "offset": None,
-                "unit": None,
+                "a2l_unit": None,
                 "confidence": "missing",
                 "note": "",
             })
 
     with open(out_tsv, "w") as f:
-        cols = ["ui_name","ui_display","a2l_name","address","datatype",
-                "scale","offset","unit","confidence","note"]
+        cols = ["ui_name","ui_display","ui_unit","a2l_name","address","datatype",
+                "scale","offset","a2l_unit","confidence","note"]
         f.write("\t".join(cols) + "\n")
         for r in rows:
             f.write("\t".join(str(r[c]) if r[c] is not None else "" for c in cols) + "\n")

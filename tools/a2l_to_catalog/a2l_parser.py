@@ -186,14 +186,18 @@ def parse_a2l(path):
                         if re.search(rb'\b' + kind + rb'\b', line):
                             top_d["type"] = kind.decode()
                             break
-                # First two double-quoted strings on the same line as the
-                # type are the format and unit.
-                if top_d["type"] and top_d["format"] is None:
+                # A2L Bosch dialect emits one quoted string per line:
+                # description, then (after the TYPE keyword) format,
+                # then unit. We track which positional string slot
+                # the next quoted line fills.
+                if top_d["type"]:
                     strs = _RE_STR.findall(line)
-                    if len(strs) >= 1:
-                        top_d["format"] = _decode(strs[0])
-                    if len(strs) >= 2:
-                        top_d["unit"] = _decode(strs[1])
+                    for s in strs:
+                        sd = _decode(s)
+                        if top_d["format"] is None:
+                            top_d["format"] = sd
+                        elif top_d["unit"] is None:
+                            top_d["unit"] = sd
                 cf = _RE_COEFFS.match(line)
                 if cf:
                     try:

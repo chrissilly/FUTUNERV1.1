@@ -375,24 +375,21 @@ test.describe('Log Config tab (PRIORITY 1)', () => {
   });
 
   test('AC-LC6: Unsupported vars render the "(not supported)" badge', async ({ page }) => {
-    /* For 4K0907557G__0003, list_available_vars returns 6 names. The
-     * UI's ECU_VAR_DB lists ~55. The remaining ~49 rows should be
-     * tagged var-unsupported. Wait for the filter to run (fires on
-     * WS connect). */
+    /* P-74 expanded the firmware catalog from 6 → 47 vars. The 8
+     * vars still unsupported on MA22G01 are either per-cyl arrays
+     * (MATRIX_DIM filtered) or names that have no A2L analog
+     * (zwoutzyl_w's SEFI-legacy address points at an injection-
+     * adaptation table, not ignition timing). zwoutzyl_w is a
+     * stable canary for the unsupported-badge UX. */
     await bootClean(page);
     await openLogConfig(page);
-    /* logcfgRefreshSupportedVars runs on WS open; allow 5 s for the
-     * round-trip + DOM update. */
     await expect(page.locator('.logcfg-var-row.var-unsupported').first())
       .toBeVisible({ timeout: 6000 });
-    /* A known unsupported var (no firmware parser for it on this
-     * boxcode). */
-    const row = page.locator('.logcfg-var-row[data-varname="GearBx_tOil_VW"]');
+    const row = page.locator('.logcfg-var-row[data-varname="zwoutzyl_w"]');
     await expect(row).toHaveClass(/var-unsupported/);
-    /* Logged checkbox is disabled. */
-    const cb = page.locator('#logvar_GearBx_tOil_VW');
+    const cb = page.locator('#logvar_zwoutzyl_w');
     await expect(cb).toBeDisabled();
-    /* Supported vars stay enabled. */
-    await expect(page.locator('#logvar_rl_w')).toBeEnabled();
+    /* P-74-supported var stays enabled. */
+    await expect(page.locator('#logvar_pvdg_w')).toBeEnabled();
   });
 });

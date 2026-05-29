@@ -5,34 +5,10 @@
 
 static const char *TAG = "LOGGER_VARS";
 
-// Boxcode: 4K0907557G__0003
-//
-// 0x5001xxxx variables temporarily disabled (2026-05-03): live capture showed
-// every poll response coming back too short to parse, with the failure landing
-// at the first 0x5001-region variable in sorted order (pvdg_w). Suspected: the
-// patched ECU's logger handler bails when one of those addresses is read in
-// the current vehicle state. Re-enable one at a time after diagnosing why the
-// 0x5001 SRAM region returns a truncated response.
-static const logger_variable_def_t VARIABLES_4K0907557G__0003[] = {
-    {"nmot_w", "Engine Speed", "rpm", 0x60020618, 2, 0.25f, 0, true, false},
-    {"InjSys_ratEthPrtnBascFu", "Ethanol Content", "%", 0x6001522A, 2, 0.00152587167162585f, 0, true, false},
-    {"Com_stCrCtlPan", "Cruise Control Status", "-", 0x600206F8, 2, 1.0f, 0, true, false},
-    {"rl_w", "Load (actual)", "%", 0x60015660, 2, 0.0234375066758221f, 0, false, false},
-    {"tmot", "Coolant Temp", "C", 0x6001BF38, 1, 0.749803921568627f, -48, false, false},
-    {"wdkba", "Throttle Position", "%", 0x6001B842, 1, 0.392156862745098f, 0, false, false},
-    /* P-74 Batch A — non-0x5001 _msg-suffix variants resolved against
-     * A2L MA22G01 (firmware/src/logger/catalogs/4K0907557G__0003__MA22G01.json).
-     * All in known-good 0x6001/0x6002/0x7000 regions; expected to poll
-     * cleanly. */
-    {"tans",        "Intake Air Temp",      "C",   0x60021C63, 1, 0.75f,                   -48, false, false},
-    {"ldtvm",       "Charge Air Pressure",  "hPa", 0x6002219C, 1, 0.390625f,                  0, false, false},
-    {"fra_w",       "Lambda Bank 1",        "-",   0x700042E2, 2, 3.0517578125e-05f,           0, false, false},
-    {"zwoutakt",    "Ignition Angle Actual","deg", 0x6001B6E6, 1, 0.75f,                       0, false, true},  /* SBYTE — signed */
-    /* P-74 Batch B canary — single 0x5001 entry. P-55 commit f916b04
-     * marked this region as truncating; this test confirms whether
-     * that's still true on MA22G01. */
-    {"pvdg_w",      "Boost Pressure",       "hPa", 0x5001BA86, 2, 0.078125f,                   0, false, false},
-};
+/* P-74 Batch C: the per-(boxcode, calibration) catalog is now
+ * generated from A2L via tools/a2l_to_catalog/generate.py. Edit
+ * the input JSON / regen the header, don't hand-edit. */
+#include "catalogs/generated/logger_catalog_4K0907557G__0003__MA22G01.h"
 
 // Boxcode: 8W0907559H__0008
 static const logger_variable_def_t VARIABLES_8W0907559H__0008[] = {
@@ -77,8 +53,8 @@ static const boxcode_config_t BOXCODE_CONFIGS[] = {
         0,                              // Write address offset
         0x11E6AE,                       // Ethanol memory address
         0x9F93E,                        // Speed display memory address
-        VARIABLES_4K0907557G__0003,
-        sizeof(VARIABLES_4K0907557G__0003) / sizeof(logger_variable_def_t)
+        LOGGER_CATALOG_4K0907557G__0003__MA22G01,
+        LOGGER_CATALOG_4K0907557G__0003__MA22G01_COUNT
     },
     {
         "8W0907559H__0008",
