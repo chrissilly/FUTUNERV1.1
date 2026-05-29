@@ -123,6 +123,39 @@ test.describe('Log Config tab (PRIORITY 1)', () => {
     await expect(warn).toBeHidden();
   });
 
+  test('AC-LC7: Slot-limit warning is HIDDEN when used < 32', async ({ page }) => {
+    /* Sean/Cowork report: warning rendered alongside "4 / 32 slots".
+     * Regression test: with zero ticks (and again with 4 ticks) the
+     * #logcfgLimitWarn element must not be `.show`. */
+    await bootClean(page);
+    await openLogConfig(page);
+    await expect(page.locator('#logcfgLimitWarn')).toBeHidden();
+    /* Tick 3 vars (max supported on this dongle for non-required). */
+    for (const v of ['rl_w', 'tmot', 'wdkba']){
+      await page.locator(`#logvar_${v}`).check();
+    }
+    await expect(page.locator('#logcfgSlotCounter')).toContainText(/^\s*3\s*\/\s*32/);
+    await expect(page.locator('#logcfgLimitWarn')).toBeHidden();
+  });
+
+  test('AC-LC8: Slot-limit warning is SHOWN when used >= 32', async ({ page }) => {
+    /* Driving the actual >=32 state on this 6-var dongle requires
+     * the test fixture to call logcfgUpdateStats() with a forced
+     * over-limit state. We poke checkbox dataset.slots to 32 on a
+     * single tick — that's the path logcfgUsedSlots() walks. */
+    await bootClean(page);
+    await openLogConfig(page);
+    await expect(page.locator('#logcfgLimitWarn')).toBeHidden();
+    await page.evaluate(() => {
+      const cb = document.getElementById('logvar_rl_w');
+      cb.dataset.slots = '32';
+      cb.checked = true;
+      logcfgUpdateStats();
+    });
+    await expect(page.locator('#logcfgSlotCounter')).toContainText(/32\s*\/\s*32/);
+    await expect(page.locator('#logcfgLimitWarn')).toHaveClass(/show/);
+  });
+
   test('AC-LC6: Unsupported vars render the "(not supported)" badge', async ({ page }) => {
     /* For 4K0907557G__0003, list_available_vars returns 6 names. The
      * UI's ECU_VAR_DB lists ~55. The remaining ~49 rows should be

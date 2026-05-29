@@ -118,6 +118,27 @@ The rule sits next to Rule 9 because the same pattern applies: Rule 9 catches WS
 
 Today's incident (2026-05-28): the P-69 Dashboard close was declared green based on `eval.sh` (golden-contract grep) + WS probes (`license_status` returned paid:true on the wire). Cowork's browser validation found the top-bar lock still rendered "License: unpaid · VIN (unpaired)". Root cause: the WS `command_handler` wraps every payload in a `data:{}` envelope, but `onLicenseStatusResp`, `updateDash`, and the active-feature dispatch all read top-level `msg.paid` / `msg.nmot_w` / `msg.active_feature`. Those reads silently returned undefined for every response, hiding behind `|| 0` fallbacks in the gauge code. The prototype dashboard appeared to "work" only because engine-off vars are 0, which is also the fallback. Playwright caught all four customer-visible failures (license lock, gauge updates, WOT banner, localStorage persistence) on the first run.
 
+### 11. Wire witness runs continuously during all dev work
+
+Before any HIL probe, UI vet, Playwright run, firmware flash, or ECU interaction: confirm `~/sniffer/can_tail.py` is running and capturing to `firmware/test/can_capture/dev_session/wire_*.log`. If absent, start it. If wedged (zero new frames for >30 s while the dongle is active), restart it. Closing a session without wire witness running means lost evidence; debugging without it means work the next bug forces you to redo.
+
+Stage 1 — start (paste-ready, sudo required on macOS for gs_usb):
+
+```bash
+sudo pkill -f can_tail.py 2>/dev/null; sleep 1
+STAMP=$(date +%Y%m%d_%H%M%S)
+mkdir -p ~/esp/obd/FUTV1.1/firmware/test/can_capture/dev_session/
+sudo python3 ~/sniffer/can_tail.py \
+  --out ~/esp/obd/FUTV1.1/firmware/test/can_capture/dev_session/wire_${STAMP}.log \
+  --timestamp &
+```
+
+Verify Candlelight LEDs are blinking. If not: cable / Y-splitter physical check, then if still dead restart once, then halt + surface.
+
+Stage 2 — end-of-session: copy the active log to `firmware/test/can_capture/dev_session/<commit-SHA>.log` so it's pinned to the specific build that produced it. Keep `can_tail.py` running across CC restarts; stop only on intentional dongle / OBD disconnect.
+
+The rule sits next to Rule 10 because both close customer-debug evidence gaps. Rule 10 catches UI vapor at the DOM boundary. Rule 11 catches missing-evidence gaps at the wire boundary — when a bug surfaces and there's no wire log to diff against, the work to reproduce is full and re-incurred. Today's incident (2026-05-28): three days of HIL + UI vetting + Playwright runs without continuous wire capture; P-52 (macOS gs_usb sustained-use wedge) was the historical justification but that justification expired now that the host has been stable for the last several sessions. From now on, missing wire witness ≡ unfinished dev work.
+
 ---
 
 ## Repository layout

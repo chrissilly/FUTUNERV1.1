@@ -309,8 +309,8 @@
   <div class="card">
     <h3>Vehicle</h3>
     <div style="display:flex;gap:8px">
-      <button onclick="wsSend({command:'pair_ecu'})">Pair Vehicle</button>
-      <button class="danger" onclick="wsSend({command:'remove_pairing'})">Unpair Vehicle</button>
+      <button onclick="wsSend({command:'pair_ecu'})">Pair ECU</button>
+      <button class="danger" onclick="wsSend({command:'remove_pairing'})">Remove Pairing</button>
       <button class="danger" onclick="if(confirm('Reboot dongle?'))wsSend({command:'reboot'})" style="margin-left:20px">Reboot</button>
     </div>
   </div>
