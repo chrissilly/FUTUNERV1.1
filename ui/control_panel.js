@@ -239,6 +239,10 @@ const ECU_VAR_DB = [
   {name:'GearBx_tOil_VW', display:'Gearbox Oil Temp', unit:'°C', bytes:1, category:'temperature'},
   {name:'ldtvm', display:'Wastegate Duty', unit:'%', bytes:1, category:'turbo'},
   {name:'zwoutzyl_w', display:'Ignition Timing (per-cyl)', unit:'deg', bytes:2, array:8, category:'ignition'},
+  /* P-74 Batch A — actual global ignition timing (the SEFI-legacy
+   * zwoutzyl_w above pointed at an injection-adaptation table; A2L
+   * MA22G01 has the real signal at zwoutakt_msg @ 0x6001B6E6 SBYTE). */
+  {name:'zwoutakt', display:'Ignition Timing', unit:'deg', bytes:1, category:'ignition'},
   {name:'klopfakt', display:'Knock Bitmask', unit:'-', bytes:1, category:'knock'},
   {name:'IKCtl_agKnkRtdt_as8', display:'Knock Retard (per-cyl)', unit:'deg', bytes:1, array:8, category:'knock'},
   {name:'IKCtl_agKnkInt_as8', display:'Knock Integrator (per-cyl)', unit:'deg', bytes:1, array:8, category:'knock'},

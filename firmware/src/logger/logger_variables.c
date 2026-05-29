@@ -16,14 +16,22 @@ static const char *TAG = "LOGGER_VARS";
 static const logger_variable_def_t VARIABLES_4K0907557G__0003[] = {
     {"nmot_w", "Engine Speed", "rpm", 0x60020618, 2, 0.25f, 0, true, false},
     {"InjSys_ratEthPrtnBascFu", "Ethanol Content", "%", 0x6001522A, 2, 0.00152587167162585f, 0, true, false},
-    /* {"rlp_w", "Load (predicted)", "%", 0x5001CB0C, 2, 0.0234375066758221f, 0, true, false}, */ /* DISABLED: 0x5001 region */
     {"Com_stCrCtlPan", "Cruise Control Status", "-", 0x600206F8, 2, 1.0f, 0, true, false},
     {"rl_w", "Load (actual)", "%", 0x60015660, 2, 0.0234375066758221f, 0, false, false},
     {"tmot", "Coolant Temp", "C", 0x6001BF38, 1, 0.749803921568627f, -48, false, false},
     {"wdkba", "Throttle Position", "%", 0x6001B842, 1, 0.392156862745098f, 0, false, false},
-    /* {"pvdg_w", "Boost Pressure", "hPa", 0x5001BA86, 2, 0.0781250019073777f, 0, false, false}, */ /* DISABLED: 0x5001 region */
-    /* {"zwoutzyl_w", "Ignition Timing", "deg", 0x5001CD84, 2, 0.1f, 0, false, true}, */ /* DISABLED: 0x5001 region */
-    /* {"frm_w", "Short Term Fuel Trim", "-", 0x5001C9A6, 2, 3.05180437933928e-05f, 0, false, false}, */ /* DISABLED: 0x5001 region */
+    /* P-74 Batch A — non-0x5001 _msg-suffix variants resolved against
+     * A2L MA22G01 (firmware/src/logger/catalogs/4K0907557G__0003__MA22G01.json).
+     * All in known-good 0x6001/0x6002/0x7000 regions; expected to poll
+     * cleanly. */
+    {"tans",        "Intake Air Temp",      "C",   0x60021C63, 1, 0.75f,                   -48, false, false},
+    {"ldtvm",       "Charge Air Pressure",  "hPa", 0x6002219C, 1, 0.390625f,                  0, false, false},
+    {"fra_w",       "Lambda Bank 1",        "-",   0x700042E2, 2, 3.0517578125e-05f,           0, false, false},
+    {"zwoutakt",    "Ignition Angle Actual","deg", 0x6001B6E6, 1, 0.75f,                       0, false, true},  /* SBYTE — signed */
+    /* P-74 Batch B canary — single 0x5001 entry. P-55 commit f916b04
+     * marked this region as truncating; this test confirms whether
+     * that's still true on MA22G01. */
+    {"pvdg_w",      "Boost Pressure",       "hPa", 0x5001BA86, 2, 0.078125f,                   0, false, false},
 };
 
 // Boxcode: 8W0907559H__0008
