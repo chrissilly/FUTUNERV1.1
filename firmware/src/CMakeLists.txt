@@ -47,6 +47,7 @@ set(app_sources
     "feature_manager/feature_manager.c"
     "dtc/dtc_feature.c"
     "dtc/dtc_uds.c"
+    "dtc/generated/dtc_descriptions.gen.c"
     "cloud/cloud_client.c"
     "license/license.c"
     "vin_pairing/vin_pairing.c"

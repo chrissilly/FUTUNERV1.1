@@ -193,10 +193,33 @@ static const char *resolve_fallback(const char *code) {
     return DTC_FALLBACK_MANUFACTURER;
 }
 
-static const char *resolve_description(dtc_ecu_family_t family, const char *code) {
-    if (family >= DTC_ECU_FAMILY_COUNT || code == NULL) {
-        return resolve_fallback(code);
+/* P-77 L2: generated table from tools/sae_j2012_to_dtc_table.py.
+ * Layered above the hand-authored k_master_descriptions[] — the
+ * generated table is checked first, the legacy hand-curated table
+ * second, fallback router last. */
+typedef struct {
+    const char *code;
+    const char *description;
+} dtc_gen_entry_t;
+extern const dtc_gen_entry_t DTC_GEN_DESCRIPTIONS[];
+extern const size_t          DTC_GEN_DESCRIPTIONS_COUNT;
+
+static const char *resolve_generated(const char *code) {
+    for (size_t i = 0; i < DTC_GEN_DESCRIPTIONS_COUNT; i++) {
+        if (strcmp(DTC_GEN_DESCRIPTIONS[i].code, code) == 0) {
+            return DTC_GEN_DESCRIPTIONS[i].description;
+        }
     }
+    return NULL;
+}
+
+static const char *resolve_description(dtc_ecu_family_t family, const char *code) {
+    if (code == NULL) return resolve_fallback(code);
+    /* Generated SAE table first (P-77 L2). */
+    const char *hit = resolve_generated(code);
+    if (hit != NULL) return hit;
+    if (family >= DTC_ECU_FAMILY_COUNT) return resolve_fallback(code);
+    /* Legacy hand-curated family-specific overrides. */
     const dtc_desc_entry_t *table = k_descriptions_by_family[family];
     size_t                   count = k_descriptions_count_by_family[family];
     for (size_t i = (size_t)0; i < count; i++) {
