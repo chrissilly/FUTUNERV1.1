@@ -67,6 +67,10 @@ esp_err_t cmd_dtc_read(int fd, const char *params, char *response, size_t respon
     for (size_t i = (size_t)0; i < count; i++) {
         cJSON *entry = cJSON_CreateObject();
         cJSON_AddStringToObject(entry, "code", entries[i].code);
+        /* P-78: surface the FTB (Failure Type Byte) so the UI can
+         * render "P0077.84" vs "P0077.89" — two records with the
+         * same DTC code but different sub-fault types. */
+        cJSON_AddNumberToObject(entry, "ftb",    (double)entries[i].ftb);
         cJSON_AddNumberToObject(entry, "status", (double)entries[i].status);
         cJSON_AddStringToObject(entry, "description",
                                 entries[i].description != NULL

@@ -191,6 +191,12 @@ esp_err_t dtc_uds_read_dtcs_by_status_mask(uint8_t       status_mask,
                                 resp[off + (size_t)DTC_UDS_DTC_RECORD_BYTE_LO_OFFSET],
                                 out_entries[i].code,
                                 (size_t)DTC_CODE_STRING_LEN);
+        /* P-78: capture the Failure Type Byte (3rd raw byte). Was
+         * dropped via `(void)lo` in format_dtc_code under the
+         * obsolete belief that it was the 6th hex digit of an
+         * extended-DTC display. Per SAE J2012-2016 it's the FTB
+         * and distinguishes two records with the same code. */
+        out_entries[i].ftb         = resp[off + (size_t)DTC_UDS_DTC_RECORD_BYTE_LO_OFFSET];
         out_entries[i].status      = resp[off + (size_t)DTC_UDS_DTC_RECORD_STATUS_OFFSET];
         out_entries[i].description = NULL; /* resolved by dtc_feature.c */
     }

@@ -48,6 +48,15 @@ typedef struct {
      * "P0420". DTC_CODE_STRING_LEN is the buffer size including NUL. */
     char        code[DTC_CODE_STRING_LEN];
 
+    /* P-78: Failure Type Byte (3rd raw byte of the 4-byte UDS
+     * 0x19 0x02 record). Sub-classifies the fault per SAE J2012-2016
+     * — e.g. 0x11 "short to ground", 0x12 "short to battery",
+     * 0x1A "circuit voltage below threshold". 0x00 means
+     * no-sub-type / generic. Two records with the same code but
+     * different FTB are TWO DISTINCT FAULTS on the same circuit,
+     * not duplicates. */
+    uint8_t     ftb;
+
     /* Raw status byte exactly as the ECU returned it. ISO 14229
      * semantics: bit 0 testFailed, bit 1 testFailedThisOperationCycle,
      * bit 2 pendingDTC, bit 3 confirmedDTC, bit 4
@@ -57,9 +66,7 @@ typedef struct {
     uint8_t     status;
 
     /* Pointer to a static, NUL-terminated description string. Resolved
-     * via the family-keyed lookup table at read time. Returns
-     * "manufacturer-specific code (see scan tool)" for codes the
-     * lookup does not cover. */
+     * via the family-keyed lookup table at read time. */
     const char *description;
 } dtc_entry_t;
 

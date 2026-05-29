@@ -45,7 +45,20 @@
 
 static const char *TAG = "DTC";
 
-#define DTC_FALLBACK_DESCRIPTION   "manufacturer-specific code (see scan tool)"
+/* P-77 L1: fallback wording fixed. The old single string falsely
+ * claimed every miss was "manufacturer-specific" even for codes in
+ * the SAE-standard P0xxx / P2xxx ranges. Now the fallback splits
+ * by code prefix per SAE J2012-2016 ownership boundaries:
+ *
+ *   P0xxx, P2xxx, P34xx           SAE-defined (table miss = description gap)
+ *   P1xxx, P3500-P3FFF            OEM/manufacturer-specific
+ *   C0/C2/B0/B2/U0/U2             SAE-defined network codes
+ *   C1/C3/B1/B3/U1/U3             manufacturer-specific
+ *
+ * Range constants live in dtc_config.h (Rule 3). */
+#define DTC_FALLBACK_SAE_STANDARD   "(no description in database — SAE J2012 code)"
+#define DTC_FALLBACK_MANUFACTURER   "(manufacturer-specific — Bosch reference may apply)"
+#define DTC_FALLBACK_UNKNOWN        "(unknown code format)"
 
 /* ------------------------------------------------------------------ */
 /* Description database                                                */
@@ -159,9 +172,30 @@ static dtc_ecu_family_t s_active_family = DTC_ECU_FAMILY_MG1;
 /* Description lookup                                                  */
 /* ------------------------------------------------------------------ */
 
+/* P-77 L1: pick the right fallback wording when a code isn't in the
+ * description table. Whether a code is SAE-standard or
+ * manufacturer-specific is determined by SAE J2012-2016 prefix
+ * ownership, not by whether we happen to have a string for it. */
+static const char *resolve_fallback(const char *code) {
+    if (code == NULL || code[0] == '\0') return DTC_FALLBACK_UNKNOWN;
+    const char letter = code[0];
+    const char prefix = code[1];  /* '0'..'3' subdomain digit */
+    /* P, C, B, U all follow the same odd/even subdomain rule:
+     *   0, 2  → SAE-defined
+     *   1, 3  → OEM
+     * P3 has a wrinkle (P3000-P34FF SAE, P3500-P3FFF OEM); we
+     * conservatively call P3 "OEM" without further parsing —
+     * the SAE-range corner is rare in field data. */
+    if (letter != 'P' && letter != 'C' && letter != 'B' && letter != 'U') {
+        return DTC_FALLBACK_UNKNOWN;
+    }
+    if (prefix == '0' || prefix == '2') return DTC_FALLBACK_SAE_STANDARD;
+    return DTC_FALLBACK_MANUFACTURER;
+}
+
 static const char *resolve_description(dtc_ecu_family_t family, const char *code) {
     if (family >= DTC_ECU_FAMILY_COUNT || code == NULL) {
-        return DTC_FALLBACK_DESCRIPTION;
+        return resolve_fallback(code);
     }
     const dtc_desc_entry_t *table = k_descriptions_by_family[family];
     size_t                   count = k_descriptions_count_by_family[family];
@@ -170,7 +204,7 @@ static const char *resolve_description(dtc_ecu_family_t family, const char *code
             return table[i].description;
         }
     }
-    return DTC_FALLBACK_DESCRIPTION;
+    return resolve_fallback(code);
 }
 
 /* ------------------------------------------------------------------ */

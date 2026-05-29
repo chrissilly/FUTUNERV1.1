@@ -196,9 +196,20 @@ tr:hover td{background:var(--bg-hover)}
 .dtc-code{font-weight:700;color:var(--red);font-family:monospace}
 .dtc-desc{flex:1;font-size:.88em;color:var(--text)}
 .dtc-status-chip{font-size:.7em;padding:2px 8px;border-radius:3px;background:var(--bg-input);color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.dtc-chips{display:inline-flex;flex-wrap:wrap;gap:4px}
+/* P-78: per-bit ISO-14229 statusOfDTC chips. Severity color
+   gradient — confirmed / failed / warning indicator (MIL) are
+   prominent; pending + op-cycle are warning; since-clear and
+   not-completed flavors are dim informational. */
 .dtc-status-chip.active{background:var(--error-bg);color:var(--red);border:1px solid var(--error-border)}
-.dtc-status-chip.pending{background:var(--warn-bg);color:var(--yellow);border:1px solid var(--warn-border)}
+.dtc-status-chip.failed{background:var(--error-bg);color:var(--red);border:1px solid var(--error-border)}
 .dtc-status-chip.confirmed{background:var(--error-bg);color:var(--red);border:1px solid var(--error-border)}
+.dtc-status-chip.mil{background:rgba(255,102,0,.18);color:var(--accent);border:1px solid var(--accent)}
+.dtc-status-chip.pending{background:var(--warn-bg);color:var(--yellow);border:1px solid var(--warn-border)}
+.dtc-status-chip.op-cycle{background:var(--warn-bg);color:var(--yellow);border:1px solid var(--warn-border)}
+.dtc-status-chip.since-clear{background:rgba(150,150,150,.12);color:var(--text-dim);border:1px solid #555}
+.dtc-status-chip.incomplete{background:rgba(150,150,150,.12);color:var(--text-dim);border:1px solid #555}
+.dtc-status-chip.op-incomplete{background:rgba(150,150,150,.12);color:var(--text-dim);border:1px solid #555}
 .dtc-meta{display:flex;justify-content:space-between;font-size:.78em;color:var(--text-dim);margin-top:8px}
 .ecu-info{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
 .ecu-field{padding:8px;background:var(--bg-input);border-radius:4px}

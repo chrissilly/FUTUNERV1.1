@@ -1302,19 +1302,39 @@ function onDtcReadResp(msg){
     return;
   }
   c.innerHTML = dtcs.map(d => {
-    const code = esc(d.code || '');
+    /* P-78: render code + FTB (Failure Type Byte) as "P0077.84"
+     * when FTB ≠ 0. Two records with the same code but different
+     * FTB now visibly distinguish as separate fault sub-types. */
+    const codeOnly = esc(d.code || '');
+    const ftb = (typeof d.ftb === 'number') ? (d.ftb & 0xFF) : 0;
+    const display = ftb !== 0
+      ? `${codeOnly}.${ftb.toString(16).toUpperCase().padStart(2,'0')}`
+      : codeOnly;
     const desc = esc(d.description || '');
-    /* status flags chip: ISO 14229-1 statusOfDTC byte. Common bits:
-     *   0x01 testFailed / 0x08 confirmedDTC / 0x04 pendingDTC. */
+    /* P-78: full ISO 14229-1 statusOfDTC bit decode. Each set bit
+     * gets its own chip; tooltip exposes the raw hex for power-
+     * users. */
     const status = d.status | 0;
-    let chip = 'active';
-    if (status & 0x08) chip = 'confirmed';
-    else if (status & 0x04) chip = 'pending';
-    const chipLabel = chip;
+    const bits = [
+      [0x01, 'testFailed',                  'failed'],
+      [0x02, 'testFailedThisOpCycle',       'op-cycle'],
+      [0x04, 'pending',                     'pending'],
+      [0x08, 'confirmed',                   'confirmed'],
+      [0x10, 'notCompletedSinceClear',      'incomplete'],
+      [0x20, 'failedSinceClear',            'since-clear'],
+      [0x40, 'notCompletedThisOpCycle',     'op-incomplete'],
+      [0x80, 'warningIndicator',            'mil'],
+    ];
+    const chips = bits
+      .filter(([mask]) => (status & mask) !== 0)
+      .map(([_, fullName, shortName]) =>
+        `<span class="dtc-status-chip ${shortName}" title="${fullName} (bit 0x${_.toString(16).padStart(2,'0')})">${shortName}</span>`
+      ).join('');
+    const statusHex = '0x' + status.toString(16).toUpperCase().padStart(2, '0');
     return `<div class="dtc-item">
-      <span class="dtc-code">${code}</span>
+      <span class="dtc-code" title="raw status ${statusHex}">${display}</span>
       <span class="dtc-desc">${desc}</span>
-      <span class="dtc-status-chip ${chip}">${chipLabel}</span>
+      <span class="dtc-chips">${chips || '<span class="dtc-status-chip">' + statusHex + '</span>'}</span>
     </div>`;
   }).join('');
   const meta = document.getElementById('dtcMeta');
