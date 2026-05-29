@@ -23,6 +23,20 @@ static const char *TAG = "LOGGER_PROFILE";
 static logger_profile_on_apply_fn_t s_on_apply_cbs[LOGGER_PROFILE_MAX_ON_APPLY_CBS];
 static uint8_t s_on_apply_count = 0;
 
+/* P-72: task-affinity guard. Apply mutates shared logger_manager
+ * state; concurrent calls from WS task + can_task interleave clear/
+ * add operations and produce duplicate entries that take a full
+ * CONN_MGR cascade to settle. Pin to the can_task; any caller from
+ * another context is rejected at the door so the bug surfaces in
+ * the serial log instead of corrupting state. NULL = guard
+ * disabled (host-test). */
+static TaskHandle_t s_owner_task = NULL;
+
+void logger_profile_set_owner_task(TaskHandle_t owner) {
+    s_owner_task = owner;
+    ESP_LOGI(TAG, "apply() owner pinned to task %p", (void *)owner);
+}
+
 esp_err_t logger_profile_register_on_apply(logger_profile_on_apply_fn_t cb) {
     if (cb == NULL) return ESP_ERR_INVALID_ARG;
     for (uint8_t i = 0; i < s_on_apply_count; i++) {
@@ -239,6 +253,18 @@ bool logger_profile_exists(const char *boxcode) {
 }
 
 bool logger_profile_apply(const char *boxcode) {
+    /* P-72 task-affinity guard. */
+    if (s_owner_task != NULL) {
+        TaskHandle_t cur = xTaskGetCurrentTaskHandle();
+        if (cur != s_owner_task) {
+            ESP_LOGE(TAG, "logger_profile_apply called from non-owner "
+                          "task (cur=%p owner=%p) — RACE; "
+                          "use logger_manager_force_reconfigure()",
+                     (void *)cur, (void *)s_owner_task);
+            return false;
+        }
+    }
+
     if (!boxcode) {
         ESP_LOGE(TAG, "No boxcode provided");
         return false;

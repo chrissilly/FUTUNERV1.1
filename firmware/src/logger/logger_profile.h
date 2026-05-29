@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "logger_variables.h"
 
 /**
@@ -76,6 +78,21 @@ bool logger_profile_exists(const char *boxcode);
  *         false on error
  */
 bool logger_profile_apply(const char *boxcode);
+
+/**
+ * P-72: pin logger_profile_apply() to a single owner task so the
+ * apply path (clear + add required + load file + add saved) cannot
+ * race with itself across tasks. The can_task — which is the sole
+ * caller via connection_manager_update() → handle_check_logger_config()
+ * — calls this once at task start. Any subsequent apply() invocation
+ * from another task (e.g. a misguided WS command handler) is rejected
+ * with an ESP_LOGE and returns false. WS handlers must instead call
+ * logger_manager_force_reconfigure() and let the owner re-apply on
+ * its next state-machine tick.
+ *
+ * Set s_owner_task to NULL to disable the check (host-test builds).
+ */
+void logger_profile_set_owner_task(TaskHandle_t owner);
 
 /**
  * Callback fired after logger_profile_apply() successfully populates

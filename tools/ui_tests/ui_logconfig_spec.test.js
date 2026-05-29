@@ -156,6 +156,69 @@ test.describe('Log Config tab (PRIORITY 1)', () => {
     await expect(page.locator('#logcfgLimitWarn')).toHaveClass(/show/);
   });
 
+  test('AC-LC9: Save non-default profile persists, no duplicate inserts', async ({ page }) => {
+    /* P-72: regression. The previous race between cmd_set_logger_profile's
+     * apply (WS task) and conn_manager_update's apply (can_task) corrupted
+     * logger_manager with duplicate inserts that took a full CONN_MGR
+     * cascade to settle. Fix defers the apply to can_task via
+     * logger_manager_force_reconfigure() so it runs single-threaded.
+     *
+     * Discriminators (each fails on the racy build, passes on the fix):
+     *  1. The save response no longer includes total_active (dropped).
+     *  2. saved_count equals the var count sent (1 for [wdkba]).
+     *  3. No get_logger_profile call in the seconds after save EVER
+     *     returns a selected array with duplicates. (Pre-fix race
+     *     produces ["wdkba","wdkba"] during the cascade window; post-
+     *     fix the apply runs once, so no duplicates can appear.) */
+    await bootClean(page);
+    await openLogConfig(page);
+    for (const v of ['rl_w', 'tmot']){
+      await page.locator(`#logvar_${v}`).uncheck();
+    }
+    await page.locator('#logvar_wdkba').check();
+    /* Snoop the save response shape. */
+    const saveResp = await page.evaluate(() => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject('timeout'), 6000);
+      wsSend({command:'set_logger_profile', params:{variables:['wdkba']}}, msg => {
+        clearTimeout(timer);
+        resolve({
+          success: msg.success === true,
+          saved_count: msg.saved_count,
+          /* msg.data is the inner envelope from command_handler. */
+          has_total_active_inner: msg.data && 'total_active' in msg.data,
+          has_total_active_top: 'total_active' in msg,
+        });
+      });
+    }));
+    expect(saveResp.success).toBe(true);
+    expect(saveResp.saved_count).toBe(1);
+    /* Discriminator 1: post-fix response drops total_active. */
+    expect(saveResp.has_total_active_inner).toBe(false);
+    expect(saveResp.has_total_active_top).toBe(false);
+    /* Discriminator 3: poll get_logger_profile rapidly for ~3 s; if
+     * ANY response has duplicates in `selected`, the race is alive. */
+    const duplicates = await page.evaluate(() => new Promise(resolve => {
+      const seen = [];
+      const start = Date.now();
+      const probe = () => {
+        wsSend({command:'get_logger_profile'}, msg => {
+          const sel = msg.selected || (msg.data && msg.data.selected) || [];
+          const set = new Set(sel);
+          if (sel.length !== set.size){
+            seen.push(sel.slice());
+          }
+          if (Date.now() - start < 3000){
+            setTimeout(probe, 100);
+          } else {
+            resolve(seen);
+          }
+        });
+      };
+      probe();
+    }));
+    expect(duplicates).toEqual([]);
+  });
+
   test('AC-LC6: Unsupported vars render the "(not supported)" badge', async ({ page }) => {
     /* For 4K0907557G__0003, list_available_vars returns 6 names. The
      * UI's ECU_VAR_DB lists ~55. The remaining ~49 rows should be

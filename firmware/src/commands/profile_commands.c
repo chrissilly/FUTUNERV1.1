@@ -175,8 +175,14 @@ esp_err_t cmd_set_logger_profile(int fd, const char *params, char *response, siz
         return ESP_FAIL;
     }
 
-    /* Apply the new profile immediately */
-    logger_profile_apply(config->boxcode);
+    /* P-72: defer the apply to the can_task owner. Calling
+     * logger_profile_apply() from the WS task races with can_task's
+     * own apply on the CHECK_LOGGER_CONFIG branch and corrupts the
+     * shared logger_manager array with duplicate inserts.
+     * force_reconfigure() just flips the is_configured / needs_
+     * reconfigure flags; can_task picks it up on its next state
+     * tick (~1 polling cycle) and runs apply() single-threaded. */
+    logger_manager_force_reconfigure();
 
     ESP_LOGI(TAG, "Profile updated: %d optional vars saved, %d invalid skipped",
              var_count, invalid_count);
@@ -185,7 +191,10 @@ esp_err_t cmd_set_logger_profile(int fd, const char *params, char *response, siz
     cJSON_AddStringToObject(resp, "status", "success");
     cJSON_AddNumberToObject(resp, "saved_count", var_count);
     cJSON_AddNumberToObject(resp, "invalid_count", invalid_count);
-    cJSON_AddNumberToObject(resp, "total_active", logger_manager_get_variable_count());
+    /* P-72: total_active dropped from the response. With deferred
+     * apply, the count at this point is the pre-save value; reading
+     * it would mislead the UI. UI consumes only saved_count +
+     * invalid_count (ui/control_panel.js logcfgSaveProfile callback). */
 
     char *json_str = cJSON_PrintUnformatted(resp);
     cJSON_Delete(resp);
@@ -213,12 +222,17 @@ esp_err_t cmd_delete_logger_profile(int fd, const char *params, char *response, 
 
     logger_profile_delete(config->boxcode);
 
-    /* Re-apply defaults (all optional vars) */
-    logger_profile_apply(config->boxcode);
+    /* P-72: defer apply to can_task. See cmd_set_logger_profile for
+     * the race-condition writeup; same shared-state issue applies
+     * here. can_task picks up needs_reconfigure on its next tick and
+     * loads the (now-absent) profile, which falls through to "all
+     * optional vars" defaults via logger_profile_apply's
+     * ESP_ERR_NOT_FOUND branch. */
+    logger_manager_force_reconfigure();
 
+    /* total_active dropped for the same reason as in
+     * cmd_set_logger_profile — would be the pre-defer count. */
     snprintf(response, response_size,
-             "{\"status\":\"success\",\"message\":\"Profile deleted, using defaults\","
-             "\"total_active\":%d}",
-             logger_manager_get_variable_count());
+             "{\"status\":\"success\",\"message\":\"Profile deleted, using defaults\"}");
     return ESP_OK;
 }

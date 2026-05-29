@@ -1985,6 +1985,67 @@ stay 0 regardless — they're not auto-flipped by Phase 1 close.
 
 ---
 
+## P-72 — logger profile apply race (single-owner enforcement) — 🟢
+
+Two task contexts (WS task via `cmd_set_logger_profile` /
+`cmd_delete_logger_profile`, and can_task via
+`connection_manager_update` → `handle_check_logger_config`) both
+called `logger_profile_apply()` directly. The function clears
+`logger_manager`, re-adds required vars, loads the saved profile,
+and adds the saved vars — all unsynchronized. When the WS call's
+clear+add overlapped with the can_task's clear+add, duplicate
+inserts entered the shared `logger_manager` array and persisted
+until the next CONN_MGR cycle re-applied (1–2 s).
+
+User-visible symptom (Cowork repro on RS7, 2026-05-28): "Save
+Profile" sometimes resulted in the dongle reporting
+`selected:["wdkba","wdkba"]` for a single-var save, and a quick
+hard-reload saw the corrupted intermediate state.
+
+Fix:
+- `cmd_set_logger_profile` and `cmd_delete_logger_profile` call
+  `logger_manager_force_reconfigure()` (existing primitive at
+  `logger_manager.c:110`) instead of `logger_profile_apply()`.
+  can_task picks up the flag on its next tick and runs `apply()`
+  single-threaded.
+- `logger_profile_apply()` gained a task-affinity guard. Owner is
+  set once at can_task startup via
+  `logger_profile_set_owner_task(xTaskGetCurrentTaskHandle())`. Any
+  later caller from another context is rejected with `ESP_LOGE`
+  pointing at `logger_manager_force_reconfigure()`. Surfaces future
+  regressions loudly on serial.
+- Save response no longer carries `total_active` (would be pre-
+  defer value; UI consumes only `saved_count` + `invalid_count`).
+
+Playwright regression `tools/ui_tests/ui_logconfig_spec.test.js`
+AC-LC9 asserts (a) save response omits `total_active`, (b)
+`saved_count` matches sent var count, (c) no `get_logger_profile`
+response within 3 s of save returns duplicates in `selected`.
+Verified red on pre-fix, green on the fix commit.
+
+---
+
+## P-73 — logger_manager message-queue ownership (Phase 1 followup) — 🔴
+
+Followup to P-72. Single-owner invariant currently enforced by a
+runtime guard. Closes the gap by formalizing it as a message
+queue: WS handlers post `LOGGER_PROFILE_RECONFIGURE` events; the
+can_task consumes serially from the queue. Removes the guard's
+"rejected at the door" failure mode (silently dropped WS intent)
+in favor of explicit queued requests with bounded latency.
+
+**Closes when:** queue lands + replaces
+`logger_manager_force_reconfigure()` call sites + AC-LC9 stays
+green + a new AC asserts that fast-succession
+`set_logger_profile` from two WS sessions serializes
+deterministically rather than racing on the flag.
+
+**Not blocking Phase 2:** P-72 closed the user-visible race; this
+is hardening for future feature work that adds more apply
+callers.
+
+---
+
 ## Update protocol
 
 When you close an item out, change its emoji to 🟢 and add a one-line

@@ -45,6 +45,12 @@ static const char *TAG = "MAIN";
 static void can_task(void *arg) {
     ESP_LOGI(TAG, "CAN task started on core %d", xPortGetCoreID());
 
+    /* P-72: pin logger_profile_apply() to this task. Any subsequent
+     * caller from another context (e.g. a WS command handler) gets
+     * rejected at the door instead of corrupting shared
+     * logger_manager state in a clear/add race. */
+    logger_profile_set_owner_task(xTaskGetCurrentTaskHandle());
+
     connection_manager_start_connection();
 
     uint32_t last_log_ticks = xTaskGetTickCount();
