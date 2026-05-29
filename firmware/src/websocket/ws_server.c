@@ -39,8 +39,7 @@ static void register_client(int fd) {
 }
 
 static void unregister_client(int fd) {
-    /* H3 fix: clear auth state so a new client on the same fd doesn't inherit it */
-    command_handler_clear_authentication(fd);
+    /* P-75: no per-client auth state to clear. */
     if (s_client_mutex) xSemaphoreTake(s_client_mutex, portMAX_DELAY);
     for (int i = 0; i < MAX_WS_CLIENTS; i++) {
         if (active_clients[i] == fd) {

@@ -60,8 +60,9 @@ esp_err_t cmd_list_commands(int fd, const char *params, char *response, size_t r
         cJSON *cmd = cJSON_CreateObject();
         cJSON_AddStringToObject(cmd, "name", COMMAND_REGISTRY[i].name);
         cJSON_AddStringToObject(cmd, "description", COMMAND_REGISTRY[i].description);
-        cJSON_AddStringToObject(cmd, "security", 
-                               COMMAND_REGISTRY[i].security == CMD_SECURITY_SECURED ? "secured" : "unsecured");
+        /* P-75: every command is unsecured at the dongle layer.
+         * Field kept for client back-compat; always "unsecured". */
+        cJSON_AddStringToObject(cmd, "security", "unsecured");
         cJSON_AddItemToArray(commands_array, cmd);
     }
     

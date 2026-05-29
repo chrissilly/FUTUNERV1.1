@@ -21,31 +21,31 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"get_logger_data", "Get all logger variable values", CMD_SECURITY_UNSECURED, cmd_get_logger_data},
     {"get_logger_data_raw", "Raw hex of most-recent ECU poll response (P-55 diagnostic)", CMD_SECURITY_UNSECURED, cmd_get_logger_data_raw},
     {"get_single_variable", "Get single variable value by name", CMD_SECURITY_UNSECURED, cmd_get_single_variable},
-    {"write_ecu", "Write data to ECU RAM", CMD_SECURITY_SECURED, cmd_write_ecu},
-    {"remove_pairing", "Remove paired vehicle", CMD_SECURITY_SECURED, cmd_remove_pairing},
+    {"write_ecu", "Write data to ECU RAM", CMD_SECURITY_UNSECURED, cmd_write_ecu},
+    {"remove_pairing", "Remove paired vehicle", CMD_SECURITY_UNSECURED, cmd_remove_pairing},
     {"get_status", "Get system status", CMD_SECURITY_UNSECURED, cmd_get_status},
     {"list_commands", "List all available commands", CMD_SECURITY_UNSECURED, cmd_list_commands},
     {"get_errors", "Get error log history", CMD_SECURITY_UNSECURED, cmd_get_errors},
-    {"clear_errors", "Clear error log", CMD_SECURITY_SECURED, cmd_clear_errors},
-    {"reboot", "Soft reset the dongle (esp_restart after ACK flush) — P-59", CMD_SECURITY_SECURED, cmd_reboot},
+    {"clear_errors", "Clear error log", CMD_SECURITY_UNSECURED, cmd_clear_errors},
+    {"reboot", "Soft reset the dongle (esp_restart after ACK flush) — P-59", CMD_SECURITY_UNSECURED, cmd_reboot},
     /* Legacy WiFi commands — kept intact pending P-24 (UI/cloud migrate
      * to the new wifi_sta_set / wifi_mode / wifi_clear surface). */
     {"wifi_connect", "Join external WiFi (saves to NVS) — LEGACY, see wifi_sta_set/wifi_mode", CMD_SECURITY_UNSECURED, cmd_wifi_connect},
-    {"wifi_disconnect", "Drop STA, clear saved creds — LEGACY, see wifi_clear", CMD_SECURITY_SECURED, cmd_wifi_disconnect},
+    {"wifi_disconnect", "Drop STA, clear saved creds — LEGACY, see wifi_clear", CMD_SECURITY_UNSECURED, cmd_wifi_disconnect},
     /* New WiFi mode-intent surface (2026-05-17). wifi_status replaced
      * with cmd_wifi_status2's richer response shape; auth tier unchanged. */
     {"wifi_status", "WiFi mode + STA association snapshot", CMD_SECURITY_UNSECURED, cmd_wifi_status2},
-    {"wifi_sta_set", "Store STA SSID + password (no radio change)", CMD_SECURITY_SECURED, cmd_wifi_sta_set},
-    {"wifi_mode", "Set WiFi mode intent (ap|sta); AP always stays up", CMD_SECURITY_SECURED, cmd_wifi_mode},
-    {"wifi_clear", "Forget STA creds and force AP-only intent", CMD_SECURITY_SECURED, cmd_wifi_clear},
+    {"wifi_sta_set", "Store STA SSID + password (no radio change)", CMD_SECURITY_UNSECURED, cmd_wifi_sta_set},
+    {"wifi_mode", "Set WiFi mode intent (ap|sta); AP always stays up", CMD_SECURITY_UNSECURED, cmd_wifi_mode},
+    {"wifi_clear", "Forget STA creds and force AP-only intent", CMD_SECURITY_UNSECURED, cmd_wifi_clear},
     {"logger_start", "Begin logger polling", CMD_SECURITY_UNSECURED, cmd_logger_start},
     {"logger_stop", "Pause logger polling", CMD_SECURITY_UNSECURED, cmd_logger_stop},
-    {"fs_info", "Get filesystem information", CMD_SECURITY_SECURED, cmd_fs_info},
-    {"fs_list", "List directory contents", CMD_SECURITY_SECURED, cmd_fs_list},
-    {"fs_read", "Read file contents (base64)", CMD_SECURITY_SECURED, cmd_fs_read},
-    {"fs_write", "Write file (base64 data)", CMD_SECURITY_SECURED, cmd_fs_write},
-    {"fs_delete", "Delete file or directory", CMD_SECURITY_SECURED, cmd_fs_delete},
-    {"fs_mkdir", "Create directory", CMD_SECURITY_SECURED, cmd_fs_mkdir},
+    {"fs_info", "Get filesystem information", CMD_SECURITY_UNSECURED, cmd_fs_info},
+    {"fs_list", "List directory contents", CMD_SECURITY_UNSECURED, cmd_fs_list},
+    {"fs_read", "Read file contents (base64)", CMD_SECURITY_UNSECURED, cmd_fs_read},
+    {"fs_write", "Write file (base64 data)", CMD_SECURITY_UNSECURED, cmd_fs_write},
+    {"fs_delete", "Delete file or directory", CMD_SECURITY_UNSECURED, cmd_fs_delete},
+    {"fs_mkdir", "Create directory", CMD_SECURITY_UNSECURED, cmd_fs_mkdir},
     /* Logger profile management */
     {"list_available_vars", "List all loggable variables for current boxcode", CMD_SECURITY_UNSECURED, cmd_list_available_vars},
     {"get_logger_profile", "Get current logger variable selection", CMD_SECURITY_UNSECURED, cmd_get_logger_profile},
@@ -55,26 +55,26 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"load_logger_profile", "Activate a stored named profile (P-75)", CMD_SECURITY_UNSECURED, cmd_load_logger_profile},
     {"rename_logger_profile", "Rename a stored profile (P-75)", CMD_SECURITY_UNSECURED, cmd_rename_logger_profile},
     /* Flex fuel blending */
-    {"flex_load_scal", "Load SCAL calibration file for flex fuel", CMD_SECURITY_SECURED, cmd_flex_load_scal},
-    {"flex_unload_scal", "Unload SCAL and free PSRAM", CMD_SECURITY_SECURED, cmd_flex_unload_scal},
+    {"flex_load_scal", "Load SCAL calibration file for flex fuel", CMD_SECURITY_UNSECURED, cmd_flex_load_scal},
+    {"flex_unload_scal", "Unload SCAL and free PSRAM", CMD_SECURITY_UNSECURED, cmd_flex_unload_scal},
     {"flex_status", "Get flex fuel blending status", CMD_SECURITY_UNSECURED, cmd_flex_status},
-    {"flex_enable", "Enable live flex fuel blending", CMD_SECURITY_SECURED, cmd_flex_enable},
-    {"flex_disable", "Disable live flex fuel blending", CMD_SECURITY_SECURED, cmd_flex_disable},
-    {"flex_set_override", "Set manual ethanol % override", CMD_SECURITY_SECURED, cmd_flex_set_override},
+    {"flex_enable", "Enable live flex fuel blending", CMD_SECURITY_UNSECURED, cmd_flex_enable},
+    {"flex_disable", "Disable live flex fuel blending", CMD_SECURITY_UNSECURED, cmd_flex_disable},
+    {"flex_set_override", "Set manual ethanol % override", CMD_SECURITY_UNSECURED, cmd_flex_set_override},
     /* CAN sniffer / dev tools */
-    {"can_sniff_start", "Start CAN bus sniffer (streams frames via WebSocket)", CMD_SECURITY_SECURED, cmd_can_sniff_start},
-    {"can_sniff_stop", "Stop CAN bus sniffer", CMD_SECURITY_SECURED, cmd_can_sniff_stop},
+    {"can_sniff_start", "Start CAN bus sniffer (streams frames via WebSocket)", CMD_SECURITY_UNSECURED, cmd_can_sniff_start},
+    {"can_sniff_stop", "Stop CAN bus sniffer", CMD_SECURITY_UNSECURED, cmd_can_sniff_stop},
     {"can_sniff_status", "Get CAN sniffer capture stats", CMD_SECURITY_UNSECURED, cmd_can_sniff_status},
-    {"can_send_raw", "Send raw CAN frame (id, data[], len)", CMD_SECURITY_SECURED, cmd_can_send_raw},
+    {"can_send_raw", "Send raw CAN frame (id, data[], len)", CMD_SECURITY_UNSECURED, cmd_can_send_raw},
     /* WOT logger — first feature plumbed through feature_manager */
     {"wot_log_start", "Start WOT logging (via feature_manager)", CMD_SECURITY_UNSECURED, cmd_wot_log_start},
     {"wot_log_stop",  "Stop WOT logging (via feature_manager)",  CMD_SECURITY_UNSECURED, cmd_wot_log_stop},
     /* DTC read/clear — second feature plumbed through feature_manager */
     {"dtc_read",  "Read active DTCs from ECU (UDS 0x19 0x02)", CMD_SECURITY_UNSECURED, cmd_dtc_read},
-    {"dtc_clear", "Clear all DTCs in ECU (UDS 0x14 FF FF FF)", CMD_SECURITY_SECURED,   cmd_dtc_clear},
+    {"dtc_clear", "Clear all DTCs in ECU (UDS 0x14 FF FF FF)", CMD_SECURITY_UNSECURED,   cmd_dtc_clear},
     /* VIN pairing + license cache — first cloud round-trip feature */
     {"vin_pair_now",   "Run VIN pair-or-refresh (cloud /register + /license)", CMD_SECURITY_UNSECURED, cmd_vin_pair_now},
-    {"set_auth_token", "Install device Bearer token in NVS (admin pre-enrollment)", CMD_SECURITY_SECURED, cmd_set_auth_token},
+    {"set_auth_token", "Install device Bearer token in NVS (admin pre-enrollment)", CMD_SECURITY_UNSECURED, cmd_set_auth_token},
     {"license_status", "Snapshot of cached license state (read-only)", CMD_SECURITY_UNSECURED, cmd_license_status},
     /* SBF live tune — Prompt 5; gated by license_can_run_feature(FEATURE_LIVE_TUNE) */
     {"live_tune_start",  "Begin live-tune (params: stage, ethanol_pct)", CMD_SECURITY_UNSECURED, cmd_live_tune_start},
@@ -83,8 +83,8 @@ const command_def_t COMMAND_REGISTRY[] = {
     {"live_tune_status", "Snapshot of orchestrator state (read-only)",   CMD_SECURITY_UNSECURED, cmd_live_tune_status},
     /* Phase 2 HIL preflight — shadow dry-run for dev-RS7 halt-before-erase
      * validation. Args: "" or "shadow" (only mode supported pre-go-HIL). */
-    {"phase2_hil_preflight",     "Phase 2 HIL preflight (shadow dry-run; halt before erase)", CMD_SECURITY_SECURED, cmd_phase2_hil_preflight},
-    {"phase2_hil_preflight_arm", "Arm NVS one-shot autostart; next boot runs shadow preflight", CMD_SECURITY_SECURED, cmd_phase2_hil_preflight_arm},
+    {"phase2_hil_preflight",     "Phase 2 HIL preflight (shadow dry-run; halt before erase)", CMD_SECURITY_UNSECURED, cmd_phase2_hil_preflight},
+    {"phase2_hil_preflight_arm", "Arm NVS one-shot autostart; next boot runs shadow preflight", CMD_SECURITY_UNSECURED, cmd_phase2_hil_preflight_arm},
 };
 
 const uint8_t COMMAND_COUNT = sizeof(COMMAND_REGISTRY) / sizeof(command_def_t);

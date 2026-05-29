@@ -152,7 +152,7 @@ if [ -f "$CMD_REGISTRY" ]; then
     # bash 3.2. Use parallel indexed arrays (want_cmds[i] → want_tiers[i])
     # so the eval gate runs on stock macOS without `brew install bash`.
     want_cmds=("wifi_sta_set" "wifi_mode" "wifi_clear" "wifi_status")
-    want_tiers=("CMD_SECURITY_SECURED" "CMD_SECURITY_SECURED" "CMD_SECURITY_SECURED" "CMD_SECURITY_UNSECURED")
+    want_tiers=("CMD_SECURITY_UNSECURED" "CMD_SECURITY_UNSECURED" "CMD_SECURITY_UNSECURED" "CMD_SECURITY_UNSECURED")
     i=0
     while [ $i -lt ${#want_cmds[@]} ]; do
         cmd="${want_cmds[$i]}"

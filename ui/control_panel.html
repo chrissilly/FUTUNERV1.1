@@ -21,12 +21,10 @@
     <span class="license-lock unpaid" id="licenseLock" onclick="toggleLicenseTooltip()" title="License status">&#128274; <span class="license-tooltip"></span></span>
     <span class="active-feature idle" id="activeFeatureLabel">Active: idle</span>
   </div>
-  <div class="auth-group">
-    <span class="lock-icon" id="lockIcon">&#128274;</span>
-    <input type="password" id="authPass" placeholder="Password" autocomplete="off">
-    <button onclick="doAuth()" id="authBtn">Unlock</button>
-    <span class="auth-status" id="authStatus">Locked</span>
-  </div>
+  <!-- P-75: command auth gate removed; the per-client unlock UI
+       came with it. License-lock indicator at left is the
+       customer-license tier (separate system, kept). -->
+
 </div>
 
 <div class="tabs">
@@ -288,8 +286,8 @@
       <button onclick="refreshLicense()">Refresh License</button>
     </div>
   </div>
-  <div class="card admin-only" id="vinpairAdminCard">
-    <h3>Set Auth Token <span style="font-size:.7em;color:var(--text-dim)">(admin only — unlock first)</span></h3>
+  <div class="card" id="vinpairAdminCard">
+    <h3>Set Auth Token <span style="font-size:.7em;color:var(--text-dim)">(device cloud bearer; pre-enrollment only)</span></h3>
     <p style="font-size:.85em;color:var(--text-dim);margin-bottom:10px">Install device Bearer token in NVS. 32-hex string from <code>/admin/devices</code>.</p>
     <div class="token-row">
       <input type="text" id="authTokenInput" placeholder="32-hex device token">

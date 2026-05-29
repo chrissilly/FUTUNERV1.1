@@ -167,7 +167,10 @@ function setActiveFeature(name) {
 /* =========================================================================
  * Per-panel local state (scoped, NOT in appState).
  * ========================================================================= */
-let ws = null, authenticated = false, pollTimer = null;
+let ws = null, pollTimer = null;
+/* P-75: `authenticated` module-scoped flag removed with the
+ * command auth gate. Every "if (!authenticated) toast(...)"
+ * guard came out at the same time. */
 let sniffing = false, sniffFrames = 0, sniffRateCount = 0, sniffRateVal = 0;
 let xdfData = null;
 /* P-69 Dashboard v1 state. See dashboardInit() near bottom of file. */
@@ -1110,7 +1113,6 @@ function handleMsg(msg){
 
   /* Command-response routing. */
   if (msg.command === 'get_logger_data' && msg.success && msg.data) return updateDash(msg.data);
-  if (msg.command === 'unlock') return onAuthResp(msg);
   if (msg.command === 'get_errors') return onSystemErrLogResp(msg);
   if (msg.command === 'clear_errors') return onClearSystemErrLogResp(msg);
   if (msg.command === 'dtc_read') return onDtcReadResp(msg);
@@ -1138,22 +1140,9 @@ function handleMsg(msg){
   }
 }
 
-/* =========================================================================
- * Auth
- * ========================================================================= */
-function doAuth(){
-  const p = document.getElementById('authPass').value;
-  if (!p) return;
-  wsSend({command:'unlock', password:p});
-}
-function onAuthResp(msg){
-  authenticated = !!msg.success;
-  document.getElementById('authStatus').textContent = authenticated ? 'Unlocked' : 'Locked';
-  document.getElementById('authStatus').classList.toggle('authed', authenticated);
-  document.getElementById('lockIcon').innerHTML = authenticated ? '&#128275;' : '&#128274;';
-  document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('authed', authenticated));
-  toast(authenticated ? 'Authenticated' : 'Auth failed: ' + (msg.error||''), authenticated ? '' : 'error');
-}
+/* P-75: doAuth / onAuthResp removed with the command auth gate.
+ * Phase 2/3 destructive ops will gate through a different
+ * mechanism (P-76 auth-model RFC). */
 
 /* =========================================================================
  * Logger polling — single shared pollTimer.
@@ -1226,13 +1215,9 @@ function updateDash(payload){
  * CAN Sniffer
  * ========================================================================= */
 function sniffStart(){
-  /* P5: can_sniff_start is admin-gated server-side. The button used
-   * to fire without checking auth, so the firmware silently
-   * returned "Authentication required" and the frame count stayed
-   * at 0 — looked like a sniffer bug. Guard at the UI; if not
-   * authenticated, prompt the user instead of issuing a doomed
-   * command. */
-  if (!authenticated){ toast('Authenticate first (System tab → Unlock)','error'); return; }
+  /* P-75: no auth gate — fire the command, surface any
+   * firmware-side rejection (bus state, feature lock, etc.) in a
+   * toast. */
   wsSend({command:'can_sniff_start'}, msg => {
     if (msg && msg.success === false){
       toast('CAN sniffer start failed: ' + (msg.message || msg.error || 'unknown'), 'error');
@@ -1293,7 +1278,6 @@ function sendRawCan(){
  * ========================================================================= */
 function readDtc(){ wsSend({command:'dtc_read'}); }
 function clearDtc(){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   if (!confirm('Clear all ECU DTCs?')) return;
   wsSend({command:'dtc_clear'});
 }
@@ -1355,7 +1339,6 @@ function onDtcClearResp(msg){
 /* System Error Log — keeps the legacy commands. */
 function readSystemErrLog(){ wsSend({command:'get_errors'}); }
 function clearSystemErrLog(){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   wsSend({command:'clear_errors'});
 }
 function onSystemErrLogResp(msg){
@@ -1476,22 +1459,19 @@ function onWifiDisconnectResp(msg){
 }
 
 /* wifi_manager (ddfb677): credential-store, mode-intent, and clear.
- * All three are CMD_SECURITY_SECURED per commands.c, so they gate on
- * `authenticated` first — same pattern as setAuthToken above. */
+ * P-75: command auth gate removed; all three commands fire
+ * unconditionally and surface firmware errors normally. */
 function wifiStaSet(){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   const ssid = document.getElementById('staSSID').value.trim();
   const password = document.getElementById('staPassword').value;
   if (!ssid){ toast('Enter SSID','error'); return; }
   wsSend({command:'wifi_sta_set', params:{ssid:ssid, password:password}});
 }
 function wifiMode(mode){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   if (mode !== 'ap' && mode !== 'sta'){ toast('Mode must be ap|sta','error'); return; }
   wsSend({command:'wifi_mode', params:{mode:mode}});
 }
 function wifiClear(){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   wsSend({command:'wifi_clear'});
 }
 
@@ -1555,7 +1535,6 @@ function onVinPairResp(msg){
 }
 
 function setAuthToken(){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   const tok = document.getElementById('authTokenInput').value.trim();
   if (!tok){ toast('Enter token','error'); return; }
   wsSend({command:'set_auth_token', params:{token:tok}});
@@ -2246,27 +2225,23 @@ function onFsReadResp(msg){
   document.getElementById('fileContent').value = msg.success ? (msg.content || msg.data || '') : 'Error: ' + (msg.error||'');
 }
 function fileSave(){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   const p = document.getElementById('viewerName').textContent;
   const content = document.getElementById('fileContent').value;
   wsSend({command:'fs_write', path:p, content:content});
 }
 function fileDelete(){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   const p = document.getElementById('viewerName').textContent;
   if (!confirm('Delete '+p+'?')) return;
   wsSend({command:'fs_delete', path:p});
   fileViewerClose();
 }
 function fsDel(name){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   const p = document.getElementById('fsPath').value.replace(/\/$/,'') + '/' + name;
   if (!confirm('Delete '+p+'?')) return;
   wsSend({command:'fs_delete', path:p});
 }
 function fileViewerClose(){ document.getElementById('fileViewer').style.display='none'; }
 function fileUpload(){
-  if (!authenticated){ toast('Authenticate first','error'); return; }
   const fileInput = document.getElementById('uploadFile');
   if (!fileInput.files.length){ toast('Select a file','error'); return; }
   const file = fileInput.files[0];
@@ -2298,12 +2273,7 @@ function toast(msg, type){
  * Auth via Enter key
  * ========================================================================= */
 document.addEventListener('DOMContentLoaded', () => {
-  const passEl = document.getElementById('authPass');
-  if (passEl) passEl.addEventListener('keydown', e => { if (e.key==='Enter') doAuth(); });
 });
-const _passEl = document.getElementById('authPass');
-if (_passEl) _passEl.addEventListener('keydown', e => { if (e.key==='Enter') doAuth(); });
-
 /* =========================================================================
  * P-69 Dashboard v1 core — per docs/UI_DASHBOARD_SPEC.md.
  *

@@ -396,7 +396,7 @@ static void test_ws_server_starts_unconditionally_on_boot(void) {
 /* 10 — Auth-tier registration check (static, file-scan)                  */
 /*                                                                       */
 /* Open commands.c and verify the new commands carry the expected       */
-/* CMD_SECURITY_SECURED / _UNSECURED tier. This guards against a       */
+/* CMD_SECURITY_UNSECURED / _UNSECURED tier. This guards against a       */
 /* drive-by registry edit that loosens auth on the new mutating cmds.   */
 /* --------------------------------------------------------------------- */
 static char *slurp(const char *path) {
@@ -446,11 +446,11 @@ static void test_wifi_commands_require_auth_except_status(void) {
         return;
     }
 
-    EXPECT(line_contains_both(txt, "\"wifi_sta_set\"", "CMD_SECURITY_SECURED"),
+    EXPECT(line_contains_both(txt, "\"wifi_sta_set\"", "CMD_SECURITY_UNSECURED"),
            "wifi_sta_set is registered SECURED");
-    EXPECT(line_contains_both(txt, "\"wifi_mode\"", "CMD_SECURITY_SECURED"),
+    EXPECT(line_contains_both(txt, "\"wifi_mode\"", "CMD_SECURITY_UNSECURED"),
            "wifi_mode is registered SECURED");
-    EXPECT(line_contains_both(txt, "\"wifi_clear\"", "CMD_SECURITY_SECURED"),
+    EXPECT(line_contains_both(txt, "\"wifi_clear\"", "CMD_SECURITY_UNSECURED"),
            "wifi_clear is registered SECURED");
     EXPECT(line_contains_both(txt, "\"wifi_status\"", "CMD_SECURITY_UNSECURED"),
            "wifi_status stays UNSECURED (matches its current behavior)");

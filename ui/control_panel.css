@@ -67,12 +67,6 @@ a{color:var(--accent)}
 .conn-dot{width:10px;height:10px;border-radius:50%;background:var(--red);transition:background .3s}
 .conn-dot.connected{background:var(--green);box-shadow:0 0 8px var(--green)}
 .conn-label{font-size:.85em;color:var(--text-dim)}
-.auth-group{display:flex;gap:6px;align-items:center}
-.auth-group input{background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:.85em;width:160px}
-.auth-group input:focus{outline:none;border-color:var(--accent)}
-.lock-icon{font-size:1.1em;margin-right:2px}
-.auth-status{font-size:.75em;padding:2px 8px;border-radius:3px;background:#331a00;color:var(--accent)}
-.auth-status.authed{background:#003300;color:var(--green)}
 
 /* License + active-feature header indicators (Prompt 9). */
 .header-state{display:flex;align-items:center;gap:14px;font-size:.82em;color:var(--text-dim)}
@@ -402,8 +396,6 @@ tr:hover td{background:var(--bg-hover)}
 .vinpair-controls button{min-height:var(--touch-target-min)}
 .token-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .token-row input{flex:1;min-width:240px;font-family:monospace;font-size:.85em}
-.admin-only{opacity:.6}
-.admin-only.authed{opacity:1}
 
 /* Feature-swap confirmation modal — full-screen on phones, centered card on desktop. */
 .modal-backdrop{position:fixed;inset:0;background:var(--modal-overlay);display:none;align-items:center;justify-content:center;z-index:var(--modal-z);padding:16px}
@@ -423,8 +415,6 @@ tr:hover td{background:var(--bg-hover)}
 @media(max-width:768px){
   /* Header */
   .header{flex-direction:column;align-items:flex-start;padding:10px 12px}
-  .auth-group input{width:120px}
-  .auth-group{flex-wrap:wrap}
   .header-state{flex-wrap:wrap}
   /* Tabs */
   .tab{padding:8px 12px;font-size:.82em;min-height:var(--touch-target-min);display:flex;align-items:center}
