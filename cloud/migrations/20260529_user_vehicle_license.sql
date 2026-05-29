@@ -33,8 +33,11 @@
 
 PRAGMA foreign_keys = ON;
 
--- Customer accounts. email stored lowercased by the app layer; password_hash
--- is argon2id (PHASE 2) — never plaintext/MD5/SHA1.
+-- Customer accounts. email stored lowercased by the app layer. password_hash
+-- is a self-describing, algorithm-tagged KDF string written by src/passwords.py
+-- (PHASE 2) — currently 'pbkdf2_sha256$<iters>$<salt>$<dk>' (stdlib, zero extra
+-- deps). The scheme tag lets a future argon2id swap re-hash on next login while
+-- still verifying old rows. Never plaintext/MD5/SHA1.
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     email         TEXT    NOT NULL UNIQUE,

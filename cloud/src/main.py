@@ -41,6 +41,7 @@ The dongle picks up everything on its next boot/poll cycle.
 from __future__ import annotations
 import os, json, sqlite3, secrets, time, hashlib, struct, hmac
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -77,10 +78,52 @@ GZIP_MAGIC         = b"\x1f\x8b"        # RFC-1952 gzip stream magic
 # the lock. Env-overridable per Rule 3 (no magic literals).
 DB_BUSY_TIMEOUT_MS = int(os.environ.get("DB_BUSY_TIMEOUT_MS", "5000"))
 
+# --- Customer auth / session config (PHASE 2) ----------------------------
+# Server-side sessions (D3): the cookie carries an opaque token, the row in
+# `sessions` is authoritative, so logout/expiry is real revocation. All
+# tunables named + env-overridable per Rule 3.
+SESSION_COOKIE_NAME      = os.environ.get("SESSION_COOKIE_NAME", "session")
+SESSION_TTL_SECONDS      = int(os.environ.get("SESSION_TTL_SECONDS", str(30 * 24 * 3600)))  # 30d
+# Secure flag default ON; the test harness sets "0" because TestClient is http.
+SESSION_COOKIE_SECURE    = os.environ.get("SESSION_COOKIE_SECURE", "1") != "0"
+# Email-link token lifetimes (verify = generous, reset = short per OWASP).
+VERIFY_TOKEN_TTL_SECONDS = int(os.environ.get("VERIFY_TOKEN_TTL_SECONDS", str(7 * 24 * 3600)))  # 7d
+RESET_TOKEN_TTL_SECONDS  = int(os.environ.get("RESET_TOKEN_TTL_SECONDS", str(3600)))            # 1h
+
 DATA_DIR.mkdir(exist_ok=True)
 FW_DIR.mkdir(exist_ok=True)
 CAL_DIR.mkdir(exist_ok=True)
 WOT_LOG_DIR.mkdir(exist_ok=True)
+
+
+# ===========================================================================
+# Time + error helpers (shared by the customer modules)
+# ===========================================================================
+def now_iso(plus_seconds: int = 0) -> str:
+    """UTC 'YYYY-MM-DDTHH:MM:SSZ'. Whole seconds (no microseconds) so the
+    strings are fixed-width and lexicographic order == chronological order
+    — that's what lets `expires_at > ?` comparisons work as plain TEXT.
+    `plus_seconds` offsets into the future (session/token expiries)."""
+    t = datetime.now(timezone.utc) + timedelta(seconds=plus_seconds)
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class ApiError(Exception):
+    """Customer-surface error → the LOCKED envelope
+    {error:{code, message, details?}} (API_CONTRACT.md ## Errors).
+
+    Legacy device/admin endpoints keep raising HTTPException (FastAPI's
+    {detail: ...} shape, FROZEN for the field dongles). New customer
+    endpoints raise ApiError so `code` is a stable switch-on identifier
+    and `message` can evolve for humans."""
+    def __init__(self, status_code: int, code: str, message: str,
+                 details: Optional[dict] = None):
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+        self.details = details
+        super().__init__(message)
+
 
 # ===========================================================================
 # Database (SQLite — one file, no service to run)
@@ -217,6 +260,24 @@ def init_db():
         received_at  TEXT    NOT NULL,
         processed_at TEXT
     );
+
+    -- ===================================================================
+    -- PHASE 2 auth: single-use email-link tokens (verify + password
+    -- reset). Sessions live in their own table (login state); this one is
+    -- only the out-of-band links the stubbed email would carry. `purpose`
+    -- separates 'verify' from 'reset'; `used_at` makes them single-use.
+    -- LOCKSTEP with migrations/20260529_user_auth_tokens.sql — edit BOTH
+    -- or neither (same contract as the PHASE 1 block above).
+    -- ===================================================================
+    CREATE TABLE IF NOT EXISTS user_tokens (
+        token      TEXT    PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        purpose    TEXT    NOT NULL,
+        expires_at TEXT    NOT NULL,
+        created_at TEXT    NOT NULL,
+        used_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_tokens_user ON user_tokens(user_id);
     """)
     # Idempotent license-column migrations. SCALE_ARCHITECTURE §6 adds
     # paid / revoked / revoked_reason to the devices table. SQLite's
@@ -338,6 +399,16 @@ app = FastAPI(
     description="Silly Rabbit Motorsport device-management cloud — replaces api.dynoscorpion.com",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(ApiError)
+async def _api_error_handler(request: Request, exc: ApiError):
+    """Render ApiError as the LOCKED customer envelope. `details` is
+    omitted entirely when None so the wire shape stays minimal."""
+    err = {"code": exc.code, "message": exc.message}
+    if exc.details:
+        err["details"] = exc.details
+    return JSONResponse(status_code=exc.status_code, content={"error": err})
 
 # ---------------------------------------------------------------------------
 # Device-facing endpoints (the three the dongle calls)
@@ -864,3 +935,16 @@ async def root():
 @app.get("/health")
 async def health():
     return {"ok": True, "ts": int(time.time())}
+
+
+# ===========================================================================
+# Customer modules (PHASE 2+). Imported at the BOTTOM on purpose: auth.py
+# does `from .main import db, now_iso, ApiError, SESSION_*` at its top, and
+# every one of those names is defined above this line. Including the router
+# here (rather than at app-creation time) is what breaks the import cycle —
+# by now `src.main` is fully initialized, so auth's `from .main import ...`
+# resolves cleanly. Future customer modules (vehicles, licenses, logs,
+# views, admin) append their include the same way.
+# ===========================================================================
+from . import auth          # noqa: E402  (deliberate bottom import — see above)
+app.include_router(auth.router)
