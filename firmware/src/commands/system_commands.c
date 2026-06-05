@@ -171,14 +171,23 @@ esp_err_t cmd_wifi_status(int fd, const char *params, char *response, size_t res
 }
 
 esp_err_t cmd_logger_start(int fd, const char *params, char *response, size_t response_size) {
-    connection_manager_logger_start();
-    snprintf(response, response_size, "{\"logger\":\"started\"}");
+    /* P-80: per-fd polling refcount. Dashboard tab's Start sends
+     * logger_start → this fd holds a ref. Dashboard Stop sends
+     * logger_stop → ref drops. Polling continues only if some
+     * other consumer (WOT, Live Tune, another WS client) still
+     * holds a ref. */
+    connection_manager_logger_ws_acquire(fd);
+    snprintf(response, response_size,
+             "{\"logger\":\"started\",\"refcount\":%u}",
+             (unsigned)connection_manager_logger_refcount());
     return ESP_OK;
 }
 
 esp_err_t cmd_logger_stop(int fd, const char *params, char *response, size_t response_size) {
-    connection_manager_logger_stop();
-    snprintf(response, response_size, "{\"logger\":\"stopped\"}");
+    connection_manager_logger_ws_release(fd);
+    snprintf(response, response_size,
+             "{\"logger\":\"stopped\",\"refcount\":%u}",
+             (unsigned)connection_manager_logger_refcount());
     return ESP_OK;
 }
 

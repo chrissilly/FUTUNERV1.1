@@ -3,7 +3,10 @@
 Per Rule 12: this markdown is required reading before any firmware patch
 to the logger-polling lifecycle ships.
 
-**Status: awaiting owner sign-off. No firmware code changed.**
+**Status: design signed off; patch applied + flashed to dev dongle.
+Post-fix verification trace captured 2026-06-05 and confirms the fix
+(see "Post-fix verification" below). Awaiting owner commit sign-off
+per Rule 12(c) before the patch lands on origin/main.**
 
 ---
 
@@ -187,6 +190,53 @@ logger polling.)
 
 Sean will reproduce this manually post-flash via the live UI and
 confirm against wire log.
+
+## Post-fix verification (2026-06-05) — ACTUAL trace
+
+Source: `firmware/test/can_capture/dev_session/log.log` (rooted
+can_tail capture, sorted span ts 2018.9 → 4294.9, ~38 min). Captured
+on the live RS7 with the P-80 firmware flashed.
+
+Logger-poll signature on this build is the 6-byte ReadData frame
+`7E0#06 3E 33 50 01 D6 ..` (followed by its `7E0#30 08` flow-control
+for the multi-frame response). TesterPresent keepalive is
+`7E0#02 3E 00`. The two are distinct on the wire, which is what lets
+us prove "polling stopped, connection alive."
+
+Counts over the whole capture: **14,513 logger polls**, **22,120
+TesterPresent**. Active poll cadence ~90 ms.
+
+### Stop event — polling halts within one cycle, keepalive continues
+
+```
+ts 2040.872  7E0#02 3E 00            TesterPresent
+ts 2041.068  7E0#06 3E 33 50 01 D6   <-- LAST logger poll before Stop
+ts 2041.088  7E0#30 08 ..            (flow-control for that poll's response)
+ts 2041.173  7E0#02 3E 00            TesterPresent
+ts 2041.383  7E0#02 3E 00            TesterPresent
+ts 2041.514  7E0#02 3E 00            TesterPresent
+   ... [NO logger-poll frame for the next 408 s] ...
+ts 2449.6    7E0#06 3E 33 50 01 D6   (polling resumes — second Start)
+```
+
+Window 2041.1 → 2449.6 (408 s): **POLL = 0, TesterPresent = 2838**
+(~6.9/s). Polling ceased on the first cycle after the WS `logger_stop`
+(refcount → 0) and stayed off; the connection-manager keepalive was
+untouched. A second Start at 2449.6 brought polling back, and a brief
+5 s Stop at 2451.8 → resume 2457.2 confirms the lifecycle is now freely
+toggleable rather than sticky-on-until-reboot.
+
+This is the behavior the old global flag could not produce: under
+`7b4e525`-era firmware the `obd_clear.log` capture showed 9,626
+continuous polls over 33 min with zero stops. The refcount fix
+makes Stop actually stop.
+
+Note (per the HALT trigger in the planned-evidence section above):
+the WS `logger_stop` request and its `refcount=0` reply ride the
+WebSocket, not CAN, so they do not appear in this wire log. The CAN
+evidence is the cessation of the `06 3E 33 ..` poll frame while the
+`02 3E 00` keepalive continues — exactly the separation Rule 12
+asks us to witness on the bus.
 
 ## Sign-off requested
 

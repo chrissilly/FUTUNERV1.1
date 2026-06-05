@@ -2347,7 +2347,12 @@ document.addEventListener('DOMContentLoaded', () => {
  * What this MUST NOT touch (per spec §2 synchronicity hazards):
  *   - data_callback slot (WOT logger owns it during capture)
  *   - set_logger_profile (would step on WOT or DTC consumers)
- *   - logger_stop (would kill polling for everyone)
+ *
+ * P-80: logger_start/stop are now refcounted on the firmware side
+ * (one ref per WS fd + one per internal consumer like WOT). The
+ * dashboard freely fires both — polling continues iff another
+ * consumer still holds a ref. Sticky-polling-after-Stop bug fixed
+ * by this change.
  * ========================================================================= */
 
 /* Unit-based min/max + decimals inference. Spec §5.3 says "Min/max
@@ -2613,7 +2618,9 @@ function dashboardStaleTickClear(){
   }
 }
 
-/* Start / Stop button. Stop never fires logger_stop — see spec §5.2. */
+/* Start / Stop button. P-80: Stop now fires logger_stop — the firmware
+ * holds a per-fd refcount and polling halts iff no other consumer
+ * (WOT, another tab) holds a ref. */
 function dashboardToggleStarted(){
   if (!dashState) dashboardInit();
   if (dashState.started) dashboardStop();
@@ -2633,7 +2640,10 @@ function dashboardStop(){
   if (!dashState) dashboardInit();
   dashState.started = false;
   dashState.startedIntent = false;  /* explicit stop → drop the intent */
-  /* Do NOT fire logger_stop — logger lifecycle is owned elsewhere. */
+  /* P-80: drop this WS client's polling refcount. Firmware keeps
+   * polling iff another consumer (WOT capture, another tab) still
+   * holds a ref; with zero refs, polling halts within one cycle. */
+  wsSend({command:'logger_stop'});
   dashboardEvaluatePollNeed();
   dashboardRenderButton();
   /* Visually freeze: opacity goes to PAUSE_OPACITY via the stopped class. */

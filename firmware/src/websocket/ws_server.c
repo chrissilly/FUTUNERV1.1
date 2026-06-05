@@ -1,5 +1,6 @@
 #include "ws_server.h"
 #include "commands/command_handler.h"
+#include "state_machine/connection_manager.h"  /* P-80 logger ws release */
 #include "esp_log.h"
 #include "esp_http_server.h"
 #include "freertos/FreeRTOS.h"
@@ -40,6 +41,12 @@ static void register_client(int fd) {
 
 static void unregister_client(int fd) {
     /* P-75: no per-client auth state to clear. */
+    /* P-80: drop any logger-polling ref this fd was holding. Safe to
+     * call unconditionally; release on a non-held fd is a no-op. This
+     * is the auto-cleanup path so a customer closing their browser
+     * tab (or yanking WiFi) doesn't leave polling stuck on. */
+    connection_manager_logger_ws_release(fd);
+
     if (s_client_mutex) xSemaphoreTake(s_client_mutex, portMAX_DELAY);
     for (int i = 0; i < MAX_WS_CLIENTS; i++) {
         if (active_clients[i] == fd) {

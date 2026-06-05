@@ -354,6 +354,89 @@ test.describe('UI Dashboard v1 (P-69 acceptance §7)', () => {
     await expect(page.locator('#panel-logconfig')).toHaveClass(/active/);
   });
 
+  /* AC-12 + AC-13 — P-80 refcounted polling lifecycle.
+   *
+   * AC-12: explicit Stop from the only WS consumer must drop the
+   * refcount to 0 and the firmware response reflects that. (Wire-
+   * level "polling actually halts within one cycle" is proven by
+   * the wire trace in the P-80 commit body, not Playwright.)
+   *
+   * AC-13: WOT capture acquires its own consumer ref. With Dashboard
+   * stopped but WOT capture armed, refcount stays >= 1 so polling
+   * stays alive. Requires a live ECU plus the ability to arm WOT,
+   * which Playwright can do via wot_start / wot_stop WS commands.
+   */
+  test('AC-12: Stop drops WS-fd refcount to 0 (live)', async ({ page }) => {
+    test.skip(process.env.DEV_ECU !== '1', 'Requires live dongle (DEV_ECU=1).');
+    await bootClean(page);
+    await tickVar(page, VAR_NMOT_W);
+    await page.evaluate(() => switchTab('dashboard'));
+
+    /* Capture every WS message so we can read back the firmware's
+     * refcount field. The control_panel doesn't expose this on the
+     * DOM — it goes through onmessage. Stash incoming JSON on a
+     * page-scoped array. */
+    await page.evaluate(() => {
+      window.__p80_msgs = [];
+      const orig = window._wsOriginalOnMessage || window.ws.onmessage;
+      window._wsOriginalOnMessage = orig;
+      window.ws.onmessage = function (ev) {
+        try { window.__p80_msgs.push(JSON.parse(ev.data)); } catch (e) {}
+        if (orig) orig.call(this, ev);
+      };
+    });
+
+    await page.click('#dashStartBtn');           /* fires logger_start */
+    await page.waitForTimeout(500);
+    await page.click('#dashStartBtn');           /* fires logger_stop  */
+    await page.waitForTimeout(500);
+
+    const stopResp = await page.evaluate(() => {
+      return window.__p80_msgs.find(m =>
+        m && m.command === 'logger_stop' && m.success === true);
+    });
+    expect(stopResp).toBeTruthy();
+    /* command_handler wraps payload in { data: {…} }. */
+    const payload = (stopResp && stopResp.data) ? stopResp.data : stopResp;
+    expect(payload.refcount).toBe(0);
+  });
+
+  test('AC-13: Stop with WOT armed keeps polling alive (live)', async ({ page }) => {
+    test.skip(process.env.DEV_ECU !== '1', 'Requires live dongle + WOT (DEV_ECU=1).');
+    await bootClean(page);
+    await tickVar(page, VAR_NMOT_W);
+    await page.evaluate(() => switchTab('dashboard'));
+
+    await page.evaluate(() => {
+      window.__p80_msgs = [];
+      const orig = window._wsOriginalOnMessage || window.ws.onmessage;
+      window._wsOriginalOnMessage = orig;
+      window.ws.onmessage = function (ev) {
+        try { window.__p80_msgs.push(JSON.parse(ev.data)); } catch (e) {}
+        if (orig) orig.call(this, ev);
+      };
+    });
+
+    await page.click('#dashStartBtn');                /* WS consumer ref */
+    await page.waitForTimeout(300);
+    await wsSendFromPage(page, { command: 'wot_start' });   /* WOT consumer ref */
+    await page.waitForTimeout(500);
+    await page.click('#dashStartBtn');                /* WS Stop → drops 1 ref */
+    await page.waitForTimeout(500);
+
+    const stopResp = await page.evaluate(() => {
+      return window.__p80_msgs.find(m =>
+        m && m.command === 'logger_stop' && m.success === true);
+    });
+    expect(stopResp).toBeTruthy();
+    const payload = (stopResp && stopResp.data) ? stopResp.data : stopResp;
+    /* WOT still holds its ref → refcount must be >= 1. */
+    expect(payload.refcount).toBeGreaterThanOrEqual(1);
+
+    /* Clean up: stop WOT so the bench doesn't keep polling indefinitely. */
+    await wsSendFromPage(page, { command: 'wot_stop' });
+  });
+
   /* AC10 is the long-running soak. Skipped by default; run with
    * NIGHTLY=1 npx playwright test once it's wanted in CI. */
   test('AC10: 60min run, no memory growth, no duplicate timers', async ({ page }) => {

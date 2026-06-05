@@ -4,6 +4,9 @@
 #include "wot_logger_config.h"
 
 #include "feature_manager.h"
+#ifndef WOT_LOGGER_HOST_BUILD
+#  include "state_machine/connection_manager.h"  /* P-80 polling consumer */
+#endif
 #include "esp_log.h"
 
 #ifndef WOT_LOGGER_HOST_BUILD
@@ -359,11 +362,25 @@ esp_err_t wot_logger_start(void) {
     if (s_running) {
         return ESP_OK;
     }
+    /* P-80: acquire a polling ref BEFORE arming the recorder so that
+     * if logger polling was off (Dashboard not started), WOT capture
+     * still works. Released symmetrically in wot_logger_stop. */
+#ifndef WOT_LOGGER_HOST_BUILD
+    connection_manager_logger_consumer_acquire(LOGGER_CONSUMER_WOT);
+#endif
     esp_err_t rc = wot_recorder_arm();
-    if (rc != ESP_OK) return rc;
+    if (rc != ESP_OK) {
+#ifndef WOT_LOGGER_HOST_BUILD
+        connection_manager_logger_consumer_release(LOGGER_CONSUMER_WOT);
+#endif
+        return rc;
+    }
     rc = wot_uploader_start();
     if (rc != ESP_OK) {
         wot_recorder_disarm();
+#ifndef WOT_LOGGER_HOST_BUILD
+        connection_manager_logger_consumer_release(LOGGER_CONSUMER_WOT);
+#endif
         return rc;
     }
 #ifndef WOT_LOGGER_HOST_BUILD
@@ -387,6 +404,10 @@ esp_err_t wot_logger_stop(void) {
     wot_recorder_disarm();
     wot_uploader_stop();
     s_running = false;
+#ifndef WOT_LOGGER_HOST_BUILD
+    /* P-80: release the polling ref symmetrically with start. */
+    connection_manager_logger_consumer_release(LOGGER_CONSUMER_WOT);
+#endif
     ESP_LOGI(TAG, "wot_logger stopped");
     return ESP_OK;
 }

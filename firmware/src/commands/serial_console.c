@@ -165,12 +165,16 @@ static void handle_line(char *line) {
         printf("%s\n", r);
     }
     else if (strcmp(line, "logger_start") == 0) {
-        connection_manager_logger_start();
-        printf("logger started\n");
+        /* P-80: serial console is its own refcount consumer
+         * (LOGGER_CONSUMER_SERIAL) — independent of WS clients. */
+        connection_manager_logger_consumer_acquire(LOGGER_CONSUMER_SERIAL);
+        printf("logger started (refcount=%u)\n",
+               (unsigned)connection_manager_logger_refcount());
     }
     else if (strcmp(line, "logger_stop") == 0) {
-        connection_manager_logger_stop();
-        printf("logger stopped\n");
+        connection_manager_logger_consumer_release(LOGGER_CONSUMER_SERIAL);
+        printf("logger stopped (refcount=%u)\n",
+               (unsigned)connection_manager_logger_refcount());
     }
     else if (strcmp(line, "reboot") == 0) {
         printf("Rebooting...\n");

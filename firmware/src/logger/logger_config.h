@@ -7,6 +7,13 @@
 #define LOGGER_MAX_VARIABLES 32
 #define LOGGER_CONFIG_BUFFER_SIZE 256
 
+/* P-80: per-WS-fd polling refcount uses a bitmap, so the cap on
+ * simultaneous WS consumers is the bitmap's word width. 32 keeps
+ * the bitmap in a single uint32_t — wider than MAX_WS_CLIENTS=4
+ * but harmless and leaves headroom if MAX_WS_CLIENTS ever grows.
+ * Per CLAUDE.md Rule 3 (no magic numbers). */
+#define LOGGER_WS_CONSUMER_MAX_FDS 32
+
 typedef struct {
     uint32_t address;
     uint8_t size;

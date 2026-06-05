@@ -24,9 +24,67 @@ static uint32_t state_entry_time = 0;
 static uint32_t last_keepalive_time = 0;
 static bool is_patched = false;
 static bool is_paired = false;
-/* Logger off by default — avoids contention with live tuning, flashing, DTC reads.
- * Set true via connection_manager_logger_start(). */
-static bool logger_polling_enabled = false;
+/* P-80: refcounted polling lifecycle. Polling runs iff
+ * refcount_nonzero() returns true. The old sticky-global
+ * logger_polling_enabled flag was deleted in this commit — it
+ * couldn't be safely released from Dashboard Stop because doing
+ * so killed polling for every other consumer (WOT, serial console,
+ * future Live Tune). Refcount solves the multi-consumer problem.
+ *
+ * Thread safety:
+ *  - internal_consumers[]: written from can_task / WOT lifecycle
+ *    callbacks only (per P-72 single-owner inheritance). Reads
+ *    from can_task are naturally race-free.
+ *  - ws_fd_slots[]: written from WS task, read from can_task.
+ *    Mutation guarded by portMUX critical section.
+ *
+ * Slot table vs bitmap: an earlier P-80 turn used `1 << fd` as the
+ * bit index. That broke because LWIP socket fds in ESP-IDF httpd
+ * start at LWIP_SOCKET_OFFSET (54), which always failed the
+ * `fd < 32` guard so every acquire silently no-op'd. A bounded
+ * slot table sidesteps the fd-numbering assumption entirely.
+ */
+static bool internal_consumers[LOGGER_CONSUMER_INTERNAL_COUNT] = {0};
+#define LOGGER_WS_SLOT_EMPTY  (-1)
+static int ws_fd_slots[LOGGER_WS_CONSUMER_MAX_FDS];
+static bool ws_fd_slots_initialized = false;
+static portMUX_TYPE ws_fd_slots_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static inline void ws_fd_slots_init_if_needed(void) {
+    if (ws_fd_slots_initialized) return;
+    portENTER_CRITICAL(&ws_fd_slots_mux);
+    if (!ws_fd_slots_initialized) {
+        for (uint8_t i = 0; i < LOGGER_WS_CONSUMER_MAX_FDS; i++) {
+            ws_fd_slots[i] = LOGGER_WS_SLOT_EMPTY;
+        }
+        ws_fd_slots_initialized = true;
+    }
+    portEXIT_CRITICAL(&ws_fd_slots_mux);
+}
+
+static inline bool any_internal_consumer(void) {
+    for (uint8_t i = 0; i < LOGGER_CONSUMER_INTERNAL_COUNT; i++) {
+        if (internal_consumers[i]) return true;
+    }
+    return false;
+}
+
+static inline uint8_t ws_fd_slots_count_locked(void) {
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < LOGGER_WS_CONSUMER_MAX_FDS; i++) {
+        if (ws_fd_slots[i] != LOGGER_WS_SLOT_EMPTY) n++;
+    }
+    return n;
+}
+
+static inline bool refcount_nonzero(void) {
+    ws_fd_slots_init_if_needed();
+    bool any_ws;
+    portENTER_CRITICAL(&ws_fd_slots_mux);
+    any_ws = (ws_fd_slots_count_locked() > 0);
+    portEXIT_CRITICAL(&ws_fd_slots_mux);
+    return any_internal_consumer() || any_ws;
+}
 
 static ecu_info_t current_ecu_info;
 static ecu_info_t stored_ecu_info;
@@ -617,7 +675,7 @@ static void handle_connected(void) {
 
     uint32_t now = get_time_ms();
 
-    if (is_patched && logger_manager_is_configured() && logger_polling_enabled) {
+    if (is_patched && logger_manager_is_configured() && refcount_nonzero()) {
         float nmot = logger_manager_get_variable_value_by_name("nmot_w");
         uint32_t poll_interval = (nmot > 0.0f) ? 0 : 1000;
 
@@ -938,19 +996,109 @@ float connection_manager_logger_get_value_by_name(const char *name) {
     return logger_manager_get_variable_value_by_name(name);
 }
 
-void connection_manager_logger_start(void) {
-    logger_polling_enabled = true;
-    last_logger_poll_time = 0;
-    ESP_LOGI(TAG, "Logger polling enabled");
+/* P-80: refcount machinery. Old start/stop/is_running deleted —
+ * all four call sites (system_commands.c, serial_console.c) now
+ * use the consumer-acquire/release API below. */
+
+void connection_manager_logger_consumer_acquire(logger_consumer_id_t consumer) {
+    if ((unsigned)consumer >= (unsigned)LOGGER_CONSUMER_INTERNAL_COUNT) {
+        ESP_LOGE(TAG, "logger acquire: invalid consumer %d", (int)consumer);
+        return;
+    }
+    if (!internal_consumers[consumer]) {
+        internal_consumers[consumer] = true;
+        last_logger_poll_time = 0;  /* poll immediately on first ref */
+        ESP_LOGI(TAG, "logger consumer acquired: %d (refcount=%u)",
+                 (int)consumer, (unsigned)connection_manager_logger_refcount());
+    }
 }
 
-void connection_manager_logger_stop(void) {
-    logger_polling_enabled = false;
-    ESP_LOGI(TAG, "Logger polling disabled");
+void connection_manager_logger_consumer_release(logger_consumer_id_t consumer) {
+    if ((unsigned)consumer >= (unsigned)LOGGER_CONSUMER_INTERNAL_COUNT) {
+        ESP_LOGE(TAG, "logger release: invalid consumer %d", (int)consumer);
+        return;
+    }
+    if (internal_consumers[consumer]) {
+        internal_consumers[consumer] = false;
+        ESP_LOGI(TAG, "logger consumer released: %d (refcount=%u)",
+                 (int)consumer, (unsigned)connection_manager_logger_refcount());
+    }
 }
 
-bool connection_manager_logger_is_running(void) {
-    return logger_polling_enabled;
+void connection_manager_logger_ws_acquire(int fd) {
+    if (fd < 0) {
+        ESP_LOGW(TAG, "logger ws_acquire: invalid fd %d", fd);
+        return;
+    }
+    ws_fd_slots_init_if_needed();
+    bool first = false;
+    bool added = false;
+    bool full  = false;
+
+    portENTER_CRITICAL(&ws_fd_slots_mux);
+    /* Skip if already present (idempotent re-Start from same client). */
+    bool already = false;
+    int free_idx = -1;
+    for (uint8_t i = 0; i < LOGGER_WS_CONSUMER_MAX_FDS; i++) {
+        if (ws_fd_slots[i] == fd) { already = true; break; }
+        if (free_idx < 0 && ws_fd_slots[i] == LOGGER_WS_SLOT_EMPTY) free_idx = i;
+    }
+    if (!already) {
+        if (free_idx >= 0) {
+            first = (ws_fd_slots_count_locked() == 0);
+            ws_fd_slots[free_idx] = fd;
+            added = true;
+        } else {
+            full = true;
+        }
+    }
+    portEXIT_CRITICAL(&ws_fd_slots_mux);
+
+    if (full) {
+        ESP_LOGW(TAG, "logger ws_acquire: slot table full (%d slots), dropping fd=%d",
+                 LOGGER_WS_CONSUMER_MAX_FDS, fd);
+        return;
+    }
+    if (first) last_logger_poll_time = 0;  /* poll immediately on first ref */
+    if (added) {
+        ESP_LOGI(TAG, "logger ws acquired: fd=%d (refcount=%u)",
+                 fd, (unsigned)connection_manager_logger_refcount());
+    }
+}
+
+void connection_manager_logger_ws_release(int fd) {
+    if (fd < 0) return;
+    ws_fd_slots_init_if_needed();
+    bool had = false;
+    portENTER_CRITICAL(&ws_fd_slots_mux);
+    for (uint8_t i = 0; i < LOGGER_WS_CONSUMER_MAX_FDS; i++) {
+        if (ws_fd_slots[i] == fd) {
+            ws_fd_slots[i] = LOGGER_WS_SLOT_EMPTY;
+            had = true;
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&ws_fd_slots_mux);
+    if (had) {
+        ESP_LOGI(TAG, "logger ws released: fd=%d (refcount=%u)",
+                 fd, (unsigned)connection_manager_logger_refcount());
+    }
+}
+
+bool connection_manager_logger_polling_is_active(void) {
+    return refcount_nonzero();
+}
+
+uint8_t connection_manager_logger_refcount(void) {
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < LOGGER_CONSUMER_INTERNAL_COUNT; i++) {
+        if (internal_consumers[i]) n++;
+    }
+    ws_fd_slots_init_if_needed();
+    portENTER_CRITICAL(&ws_fd_slots_mux);
+    n += ws_fd_slots_count_locked();
+    portEXIT_CRITICAL(&ws_fd_slots_mux);
+    return n;
 }
 
 const char* connection_manager_get_state_name(connection_state_t state) {

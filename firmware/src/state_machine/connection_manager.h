@@ -91,11 +91,34 @@ float connection_manager_logger_get_value_by_name(const char *name);
 
 const char* connection_manager_get_state_name(connection_state_t state);
 
-/* Logger gating — off by default to avoid contention with live tuning,
- * flashing, and DTC reads. Caller must explicitly start. */
-void connection_manager_logger_start(void);
-void connection_manager_logger_stop(void);
-bool connection_manager_logger_is_running(void);
+/* P-80: refcounted logger polling lifecycle. Polling runs iff at
+ * least one consumer holds a reference. Replaces the old sticky
+ * global flag (logger_polling_enabled) that Dashboard Stop
+ * deliberately couldn't release because doing so would have killed
+ * polling for everyone. Refcount makes "release my ref, but keep
+ * polling if anyone else needs it" a single API call.
+ *
+ * Two consumer flavors:
+ *  - Internal: a fixed set of in-firmware producers (WOT capture,
+ *    Live Tune, dev serial console). Touched from can_task only
+ *    per P-72 single-owner discipline.
+ *  - WS-fd: per-client WS sessions. Touched from WS task; bitmap
+ *    mutation protected by critical section. Auto-released on
+ *    fd disconnect (command_handler).
+ */
+typedef enum {
+    LOGGER_CONSUMER_WOT       = 0,
+    LOGGER_CONSUMER_LIVETUNE  = 1,
+    LOGGER_CONSUMER_SERIAL    = 2,   /* dev serial console */
+    LOGGER_CONSUMER_INTERNAL_COUNT,
+} logger_consumer_id_t;
+
+void  connection_manager_logger_consumer_acquire(logger_consumer_id_t consumer);
+void  connection_manager_logger_consumer_release(logger_consumer_id_t consumer);
+void  connection_manager_logger_ws_acquire(int fd);
+void  connection_manager_logger_ws_release(int fd);
+bool  connection_manager_logger_polling_is_active(void);
+uint8_t connection_manager_logger_refcount(void);  /* debug surface */
 
 #endif // CONNECTION_MANAGER_H
 
