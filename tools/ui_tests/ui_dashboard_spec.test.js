@@ -364,37 +364,38 @@ test.describe('UI Dashboard v1 (P-69 acceptance §7)', () => {
    * AC-13: WOT capture acquires its own consumer ref. With Dashboard
    * stopped but WOT capture armed, refcount stays >= 1 so polling
    * stays alive. Requires a live ECU plus the ability to arm WOT,
-   * which Playwright can do via wot_start / wot_stop WS commands.
+   * which Playwright can do via wot_log_start / wot_log_stop WS commands.
    */
+  /* Helper: attach an in-test WS frame collector. The UI declares
+   * `ws` at module scope (not on window), so we intercept at the
+   * Playwright browser layer via page.on('websocket') — that gives
+   * us every text frame regardless of the page's own onmessage. */
+  function collectWsFrames(page) {
+    const frames = [];
+    page.on('websocket', sock => {
+      sock.on('framereceived', ev => {
+        const data = typeof ev.payload === 'string' ? ev.payload : null;
+        if (!data) return;
+        try { frames.push(JSON.parse(data)); } catch (_) {}
+      });
+    });
+    return frames;
+  }
+
   test('AC-12: Stop drops WS-fd refcount to 0 (live)', async ({ page }) => {
     test.skip(process.env.DEV_ECU !== '1', 'Requires live dongle (DEV_ECU=1).');
+    const frames = collectWsFrames(page);
     await bootClean(page);
     await tickVar(page, VAR_NMOT_W);
     await page.evaluate(() => switchTab('dashboard'));
 
-    /* Capture every WS message so we can read back the firmware's
-     * refcount field. The control_panel doesn't expose this on the
-     * DOM — it goes through onmessage. Stash incoming JSON on a
-     * page-scoped array. */
-    await page.evaluate(() => {
-      window.__p80_msgs = [];
-      const orig = window._wsOriginalOnMessage || window.ws.onmessage;
-      window._wsOriginalOnMessage = orig;
-      window.ws.onmessage = function (ev) {
-        try { window.__p80_msgs.push(JSON.parse(ev.data)); } catch (e) {}
-        if (orig) orig.call(this, ev);
-      };
-    });
-
     await page.click('#dashStartBtn');           /* fires logger_start */
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(800);
     await page.click('#dashStartBtn');           /* fires logger_stop  */
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1200);
 
-    const stopResp = await page.evaluate(() => {
-      return window.__p80_msgs.find(m =>
-        m && m.command === 'logger_stop' && m.success === true);
-    });
+    const stopResp = frames.find(m =>
+      m && m.command === 'logger_stop' && m.success === true);
     expect(stopResp).toBeTruthy();
     /* command_handler wraps payload in { data: {…} }. */
     const payload = (stopResp && stopResp.data) ? stopResp.data : stopResp;
@@ -403,38 +404,30 @@ test.describe('UI Dashboard v1 (P-69 acceptance §7)', () => {
 
   test('AC-13: Stop with WOT armed keeps polling alive (live)', async ({ page }) => {
     test.skip(process.env.DEV_ECU !== '1', 'Requires live dongle + WOT (DEV_ECU=1).');
+    const frames = collectWsFrames(page);
     await bootClean(page);
     await tickVar(page, VAR_NMOT_W);
     await page.evaluate(() => switchTab('dashboard'));
 
-    await page.evaluate(() => {
-      window.__p80_msgs = [];
-      const orig = window._wsOriginalOnMessage || window.ws.onmessage;
-      window._wsOriginalOnMessage = orig;
-      window.ws.onmessage = function (ev) {
-        try { window.__p80_msgs.push(JSON.parse(ev.data)); } catch (e) {}
-        if (orig) orig.call(this, ev);
-      };
-    });
+    await page.click('#dashStartBtn');                            /* WS consumer ref */
+    await page.waitForTimeout(400);
+    await wsSendFromPage(page, { command: 'wot_log_start' });     /* WOT consumer ref */
+    await page.waitForTimeout(1500);                              /* let WOT arm */
+    await page.click('#dashStartBtn');                            /* Stop → drops 1 ref */
+    await page.waitForTimeout(1200);
 
-    await page.click('#dashStartBtn');                /* WS consumer ref */
-    await page.waitForTimeout(300);
-    await wsSendFromPage(page, { command: 'wot_start' });   /* WOT consumer ref */
-    await page.waitForTimeout(500);
-    await page.click('#dashStartBtn');                /* WS Stop → drops 1 ref */
-    await page.waitForTimeout(500);
-
-    const stopResp = await page.evaluate(() => {
-      return window.__p80_msgs.find(m =>
-        m && m.command === 'logger_stop' && m.success === true);
-    });
-    expect(stopResp).toBeTruthy();
-    const payload = (stopResp && stopResp.data) ? stopResp.data : stopResp;
+    /* The page may have produced more than one logger_stop in its
+     * lifecycle; we want the most recent one. */
+    const stopFrames = frames.filter(m =>
+      m && m.command === 'logger_stop' && m.success === true);
+    expect(stopFrames.length).toBeGreaterThan(0);
+    const last = stopFrames[stopFrames.length - 1];
+    const payload = (last && last.data) ? last.data : last;
     /* WOT still holds its ref → refcount must be >= 1. */
     expect(payload.refcount).toBeGreaterThanOrEqual(1);
 
     /* Clean up: stop WOT so the bench doesn't keep polling indefinitely. */
-    await wsSendFromPage(page, { command: 'wot_stop' });
+    await wsSendFromPage(page, { command: 'wot_log_stop' });
   });
 
   /* AC10 is the long-running soak. Skipped by default; run with
