@@ -120,6 +120,16 @@ All Phase 1 features deploy and validate **before** touching full binary flash. 
 
 **Notes:** WebSocket allows real-time streaming without polling. Logging triggers automatically on WOT detection (manual control also available). Small log size means storage is not a constraint — multiple logs can queue before upload.
 
+**Variable catalog provenance:** the per-boxcode logger variable list
+(addresses, sizes, scaling, units) is **A2L-derived**, not
+hand-curated. The generator pipeline lives at
+[`tools/a2l_to_catalog/README.md`](../tools/a2l_to_catalog/README.md);
+output is the JSON at `firmware/src/logger/catalogs/<boxcode>__<cal>.json`
+and the firmware-included header at
+`firmware/src/logger/catalogs/generated/logger_catalog_<boxcode>__<cal>.h`.
+See the README for the end-to-end regen sequence when a new
+boxcode/calibration is added.
+
 ---
 
 ### 4.4 Ethanol Sensor Bluetooth Bridge

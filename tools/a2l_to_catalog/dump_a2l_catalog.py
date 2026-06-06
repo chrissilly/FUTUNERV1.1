@@ -34,8 +34,6 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("a2l")
     ap.add_argument("out_json")
-    ap.add_argument("--require-address", action="store_true", default=True,
-                    help="(default) skip MEASUREMENTs with no ECU_ADDRESS")
     args = ap.parse_args()
 
     print(f"parsing {args.a2l} ...", file=sys.stderr)
@@ -48,7 +46,7 @@ def main():
     out = []
     skipped = {"no_addr": 0, "bad_type": 0, "array": 0}
     for name, m in measurements.items():
-        if args.require_address and m["ecu_address"] is None:
+        if m["ecu_address"] is None:
             skipped["no_addr"] += 1
             continue
         if m["datatype_raw"] not in LOGGABLE_DATATYPES:

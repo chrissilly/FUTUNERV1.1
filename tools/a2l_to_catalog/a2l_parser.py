@@ -93,11 +93,6 @@ def parse_a2l(path):
 
             m = _RE_END.search(line)
             if m and stack:
-                kind = m.group(1)
-                if stack and stack[-1][0] in (b"MEASUREMENT", b"COMPU_METHOD") or \
-                   (stack and stack[-1][0] == "MEASUREMENT" and kind == b"MEASUREMENT") or \
-                   (stack and stack[-1][0] == "COMPU_METHOD" and kind == b"COMPU_METHOD"):
-                    pass  # handled below
                 top_kind, top_name, top_d = stack.pop()
                 if top_kind == "MEASUREMENT" and top_d is not None:
                     measurements[top_name] = top_d
