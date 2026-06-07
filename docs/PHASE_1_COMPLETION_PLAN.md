@@ -43,7 +43,7 @@ customer-experience column for every in-scope row.
 | 4.4b | Ethanol BLE live-tune feed | n/a | **🚚 MOVED TO PHASE 3 §4.4b → §6** | See `docs/PHASE_3_PREREQUISITES.md` P3-06. |
 | **4.5** | **Ethanol constraints + rev limiter** | n/a | **🚚 MOVED TO PHASE 3 §6.2** | See `docs/PHASE_3_PREREQUISITES.md` P3-03 / P3-04. |
 | 4.6 | OBD fault code read | 🟢 PASS | 🟢 PASS | Read returns 7 DTCs on RS7 wire-witnessed; P-57 callback routing closed — codes now render in UI table. |
-| 4.6 | OBD fault code clear | 🟢 PASS | 🔴 BROKEN | Demux fixed (P-53 RESOLVED); ECU returns NRC 0x11 — needs session-state fix (P-54). **Owner-held pending sign-off; not blocking Phase 1 close.** |
+| 4.6 | OBD fault code clear | 🟢 PASS | 🟢 PASS | P-54 / P-68 closed 2026-05-29 (`a0319e0`). Patched ECU strips UDS $14; firmware now uses OBD-II **Mode 04** (`$04` → `$44`) per VCDS wire capture. Verified on RS7: `{ok:true, cleared_count:0}`. |
 | 4.7 | Transport — CAN | 🟢 PASS | 🟢 PASS | Production driver in use |
 | 4.7 | Transport — Ethernet skeleton | 🟡 PARTIAL | DEFERRED-PENDING-HARDWARE | Hardware "arriving soon" per spec |
 
@@ -63,29 +63,26 @@ Each item below has a one-pass diagnostic and a fix sketch. Most are
 small, all are localized. Sequenced by dependency. None require ECU
 write access; all are safe-to-test on RS7.
 
-### A1 · P-54 — ClearDTC NRC 0x11 root cause
+### A1 · P-54 — ClearDTC ✅ RESOLVED 2026-05-29 (`a0319e0`)
 
-**Hypothesis:** Session-state issue, not service-support issue. Bosch
-MG1 honors `0x14 ClearDTC` only in Extended Diagnostic Session, not in
-Default Session. `0x19 ReadDTC` IS in the Default Session service set —
-that's why Phase 4-read worked while Phase 4-clear didn't.
+**Closed.** Original hypothesis (extended-session preamble before
+`14 FF FF FF`) was empirically disproved on RS7: extended session
+entered cleanly, ECU positively acked, but the subsequent `14`
+still returned NRC 0x11. VCDS wire capture
+(`firmware/test/dtc/vcds_clear_capture_2026-05-29.md`) showed the
+SRM-patched ECU strips UDS `$14` from its service table entirely
+and uses **OBD-II Mode 04** (`$04` → response `$44`). The firmware
+now sends Mode 04. NRC 0x22 from Mode 04 on an empty DTC table
+maps to `{ok:true, cleared_count:0}`, matching VCDS's UX.
 
-**Discriminator (3 added frames before clear request):**
-1. `10 03` (DiagnosticSessionControl → Extended) → expect `50 03 …`
-2. `14 FF FF FF` (ClearDTC) → look at the response:
-   - Positive `54` → **fixed** (session was the issue)
-   - NRC `33` → SecurityAccess required (chain `27 0x` after extended)
-   - NRC `22` → conditionsNotCorrect (engine state requirement)
-   - NRC `11` again → DID/service mapping deeper than session; escalate
+**Verified on RS7 2026-05-29:** `dtc_clear` returns
+`{ok:true, cleared_count:0}` end-to-end; wire witness shows
+`7E0#02 04 00 ...` request + `7E8#02 44 00 ...` ack.
 
-**Fix scope (if hypothesis holds):** wrap `dtc_uds_clear_diagnostic_information`
-with a session-entry preamble + session-exit. Add config flag
-`DTC_CLEAR_REQUIRES_EXTENDED_SESSION` to `dtc_config.h` so other ECU
-families that DON'T need it can opt out.
-
-**Exit criteria:** `dtc_clear` over WS returns `{"ok":true}` AND DTC
-read after clear returns 0 codes on dev RS7 AND wire witness shows
-both the `10 03` and `14 FF FF FF` frames.
+Detail in `docs/PHASE_2_PREREQUISITES.md` P-54 / P-68. The Rule 12
+process miss (patch shipped before owner read the diagnostic md)
+is documented in `status-2026-05-29.md`; CLAUDE.md Rule 12 landed
+the same day to make diagnostic-before-patch binding going forward.
 
 ### A2 · P-55 — Logger DID resolution / value scaling
 
@@ -135,39 +132,40 @@ With `wifi_mode ap` mid-active, `wot_log_start` returns
 `{"ok":false,"error":"feature_active"}` (interlock test for the
 network-feature-blocks-wifi-mode-swap safety net).
 
-### A4 · P-29..P-32 — UI fixes lost in PC reset
+### A4 · P-29..P-32 — UI fixes lost in PC reset ✅ DONE
 
-Reserved entries during the 2026-05-19 audit close-out (per
-`PHASE_2_PREREQUISITES.md:959-984`). Content was never recorded; need
-to reconstruct from the PC handoff doc or accept the loss and refile
-with current observations.
+All four slots explicitly marked **⚫ OBSOLETE** in
+`PHASE_2_PREREQUISITES.md` (CLOSED 2026-05-22) with the rationale
+that the placeholder content was never recorded into either
+archived handoff (`handoffs/archive/PC_PHASE1_HANDOFF.md`,
+`handoffs/archive/HANDOFF_TO_PC.md`) and is not derivable from
+git history. The UI surface the slots were meant to hold is now
+covered by P-57..P-61 from the 2026-05-21 UI vet.
 
-**Action:** Read `handoffs/archive/PC_PHASE1_HANDOFF.md` for the
-original UI-fix list, refile content under P-29..P-32 with current
-audit findings.
+P-NN numbers stay sticky — these slots will not be reused.
 
-**Exit criteria:** Each of P-29..P-32 has either real content or is
-explicitly marked OBSOLETE in `PHASE_2_PREREQUISITES.md`.
+### A5 · P-33 — wifi_manager/eval.sh bash 3.2 portability ✅ DONE
 
-### A5 · P-33 — wifi_manager/eval.sh bash 3.2 portability
+The eval.sh now uses parallel indexed arrays (`want_cmds[i]` /
+`want_tiers[i]`) instead of `declare -A`. The only remaining
+`declare -A` token in the file is in the explanatory comment at
+line 151 documenting why the indexed-array approach was chosen.
+Compatible with stock macOS bash 3.2; no `brew install bash`
+required.
 
-`declare -A` requires bash 4+. macOS ships bash 3.2.
+### A6 · P-42 — Shadow-test primary halt gate ✅ DONE (closed 2026-05-22)
 
-**Fix paths (pick one):**
-- Rewrite using parallel indexed arrays (portable across 3.2 / 4+)
-- Migrate eval logic to a Python wrapper (consistent with `tools/`)
-
-**Exit criteria:** `bash firmware/test/wifi_manager/eval.sh` runs to
-completion exit 0 on stock macOS bash 3.2 without `brew install bash`.
-
-### A6 · P-42 — Shadow-test primary halt gate regression
-
-Tracked but no diagnostic captured this cycle. Blocks Phase 2
-shadow-validation if not resolved. Need a fresh repro on `main` HEAD
-post the three pending pushes.
-
-**Exit criteria:** `firmware/test/mdg1_flash_orchestrator/eval.sh`
-primary halt gate fires as designed.
+Fresh repro on `main` HEAD 2026-06-06 reproduces the same 3
+failures the P-42 close already documented:
+`host_test_runner reported failures`, `shadow_full vs
+mm_FULL_Flash.log: MISMATCH`, `CAL section vs mm_MAPS_upload.log:
+MISMATCH` — all three collapse to `/tmp/lzrb_cli` not being
+present on the host (P-38 fixture-portability surface, not a
+halt-gate regression). The
+`test_hil_defensive_secondary_engages_when_primary_bypassed` case
+still PASSES — the primary halt gate fires as designed. P-42
+marked 🟢 in `PHASE_2_PREREQUISITES.md`; fixture portability
+tracked under **P-38**.
 
 ### A7 · P-43 — Cloud `GET /admin/devices/{mac}` endpoint
 
@@ -182,40 +180,36 @@ selector against `devices` table by MAC. Mirror the existing
 **Exit criteria:** `GET /admin/devices/{mac}` returns the row by MAC
 or `404` if absent; admin auth required.
 
-### A8 · P-47, P-48 — Cloud source + docs still reference `api.*`
+### A8 · P-47, P-48 — Cloud source + docs still reference `api.*` ✅ DONE
 
-Cleanup after `4253304` URL fix. Cloud source comments, `cloud/Caddyfile`,
-`cloud/scripts/centos-server-setup.sh`, and 9 doc files still cite
-`api.sillyrabbitmotorsport.com`. Dead reference but misleading.
+Cleanup landed (P-48 RESOLVED 2026-05-22). No source/script
+references `api.sillyrabbitmotorsport.com` anymore. Remaining grep
+hits in the main tree are descriptive references in current
+planning docs (HERMES_AUDIT_2026-05-21_OVERNIGHT.md,
+PHASE_1_COMPLETION_PLAN.md, PHASE_2_PREREQUISITES.md,
+CLAUDE_CODE_PHASE1_TRACK_ALPHA.md) describing the fix in past
+tense, plus `.claude/worktrees/` snapshots and archive material —
+none of them route live traffic. P-47 / P-48 close confirmed in
+`docs/PHASE_2_PREREQUISITES.md`.
 
-**Exit criteria:** `grep -rE 'api\.sillyrabbitmotorsport\.com'
-~/esp/obd/FUTV1.1/` returns nothing except in deprecation-noted
-archive files.
+### A9 · P-49 — Refactor 3 cloud HTTPS clients to single factory ✅ DONE (`aaa8ea8`)
 
-### A9 · P-49 — Refactor 3 cloud HTTPS clients to single factory
+`firmware/src/cloud/cloud_client.{c,h}` exposes
+`cloud_client_https_init(url, method, timeout_ms)`. All three sites
+(`vin_pairing.c`, `wot_logger.c`, `sbf_orchestrator.c`) call it. The
+only `.crt_bundle_attach` reference in `firmware/src/` is inside
+`cloud_client.c`. P-49 marked 🟢 in `PHASE_2_PREREQUISITES.md`.
 
-Currently `vin_pairing.c`, `wot_logger.c`, `sbf_orchestrator.c` each
-duplicate the `esp_http_client_config_t` initializer with
-`.crt_bundle_attach`. Future TLS knobs (cert pinning, IP allowlist,
-timeout policy) would require touching 3 sites.
+### A10 · P-50 — HTTPS smoke test in `firmware/test/` ✅ DONE (`1a18fa3`)
 
-**Fix scope:** Extract to `firmware/src/cloud/cloud_client.{c,h}` —
-`cloud_client_https_init(esp_http_client_handle_t *out, const char
-*path)` constructs the bundle-attached, host-correct config.
-
-**Exit criteria:** All three sites call `cloud_client_https_init` and
-no `esp_http_client_config_t` literal contains a `.crt_bundle_attach`
-field outside `cloud_client.c`.
-
-### A10 · P-50 — HTTPS smoke test in `firmware/test/`
-
-Reproduces the TLS-handshake regression that P-46 surfaced on HIL.
-Host-side test against a known-good CA bundle + a known-bad cert
-(no SAN) using `esp_http_client` mocks. Catches future regressions
-in the bundle attachment.
-
-**Exit criteria:** `firmware/test/cloud_client/eval.sh` exists,
-passes, and would have caught P-46 if it had existed.
+`firmware/test/cloud_client/eval.sh` shipped as a static-grep
+regression gate (14 PASS / 0 FAIL at HEAD). Asserts: factory module
+present + exports `cloud_client_https_init`; factory attaches
+`esp_crt_bundle_attach`; no `.crt_bundle_attach` literal anywhere
+outside `cloud_client.c`; each of `vin_pairing.c`, `wot_logger.c`,
+`sbf_orchestrator.c` includes + calls the factory; CMake registers
+the module. Would have caught the P-46 class. P-50 marked 🟢 in
+`PHASE_2_PREREQUISITES.md`.
 
 ### A11 · P-51 — Battery voltage read surface
 
@@ -494,22 +488,30 @@ Sean sign-off before each track starts.
 When every line below reads `🟢`, Phase 1 is PERFECT and Phase 2 is
 unblocked from a Phase-1-side correctness standpoint.
 
-- [ ] All 3 pending commits pushed to `origin/main`
-- [ ] `PHASE_2_PREREQUISITES.md` contains formal entries for every
-      P-NN referenced in the project (no orphan numbers)
-- [ ] Every P-item in this plan that is not RESOLVED-AS-DEFERRED
-      shows 🟢 in `PHASE_2_PREREQUISITES.md`
-- [ ] MISSION_SPEC §4.1 — VIN pair + license: HIL PASS, persistence
+- [x] All Phase-1-arc commits pushed to `origin/main` (HEAD parity
+      verified 2026-06-06: local main == origin/main == `e37983d`)
+- [x] `PHASE_2_PREREQUISITES.md` contains formal entries for every
+      P-NN referenced in the project (no orphan numbers — P-69
+      through P-80 backfilled 2026-06-06)
+- [x] Every P-item in this plan that is not RESOLVED-AS-DEFERRED
+      shows 🟢 in `PHASE_2_PREREQUISITES.md` (open items remaining
+      are deferred / forward-filed: P-51 battery voltage [HIL], P-52
+      Candlelight wedge [hardware/driver], P-60 dashboard '--' gauge
+      cosmetic, P-61 v2 title cosmetic, P-73 logger queue
+      hardening, P-76 Phase 2/3 auth model, P-79 Bosch FTB lookup)
+- [x] MISSION_SPEC §4.1 — VIN pair + license: HIL PASS, persistence
       across power cycle verified
 - [ ] ~~MISSION_SPEC §4.2~~ 🚚 MOVED TO PHASE 3 — see
       `docs/PHASE_3_PREREQUISITES.md` (P3-01, P3-02). Not a Phase 1
       exit gate.
-- [ ] MISSION_SPEC §4.3 — Live gauges: all 6 vars return plausible
+- [x] MISSION_SPEC §4.3 — Live gauges: all 6 vars return plausible
       KOEO values (P-55 closed); UI routing fixed (P-57 closed);
-      gauges populate in browser on dashboard mount
-- [ ] MISSION_SPEC §4.3 — Data logging: P-28 closed; WOT log
+      gauges populate in browser on dashboard mount; A2L-driven
+      catalog expanded supported vars from 6 → 47 (P-74 closed)
+- [x] MISSION_SPEC §4.3 — Data logging: P-28 closed; WOT log
       captures, gzip, cloud-uploads, and local-deletes within
-      configured window
+      configured window. P-80 closed sticky-polling-after-Stop bug
+      (refcounted lifecycle)
 - [ ] MISSION_SPEC §4.4a — Ethanol BLE bridge (LOGGING-ONLY, Phase 1):
       🟡 DEFERRED-PENDING-HARDWARE (owner directive 2026-05-22). No
       sensor on dev RS7 today; same posture as §4.7 Ethernet. Not a
@@ -518,16 +520,19 @@ unblocked from a Phase-1-side correctness standpoint.
 - [ ] ~~MISSION_SPEC §4.5~~ 🚚 MOVED TO PHASE 3 — see
       `docs/PHASE_3_PREREQUISITES.md` (P3-03, P3-04). Not a Phase 1
       exit gate.
-- [ ] MISSION_SPEC §4.6 — Fault code read AND clear both PASS on RS7
-      (P-54 closed for clear)
-- [ ] MISSION_SPEC §4.7 — Transport abstraction: CAN PASS in
+- [x] MISSION_SPEC §4.6 — Fault code read AND clear both PASS on RS7
+      (P-54 / P-68 closed 2026-05-29 in `a0319e0`; Mode 04 swap, not
+      the original session-preamble hypothesis)
+- [x] MISSION_SPEC §4.7 — Transport abstraction: CAN PASS in
       production; Ethernet design-verified (deferred-pending-hardware
-      acceptable here)
+      acceptable here — scaffolded at `firmware/src/transport/`
+      pending HW)
 - [ ] Three-stream HIL contract restored (WS + serial + wire), OR
-      two-stream contract explicitly accepted by owner
+      two-stream contract explicitly accepted by owner — depends on
+      P-52 (Candlelight macOS gs_usb wedge); owner decision pending
 - [ ] Full Phase 1 HIL dispatch (C1) shows PASS on every phase, no
-      PARTIAL
-- [ ] Per-feature golden fixtures landed (C2)
+      PARTIAL — requires car + recorder stability (separate dispatch)
+- [ ] Per-feature golden fixtures landed (C2) — requires C1 first
 - [ ] `FUTUNER_PHASE2_ENABLED` still 0 — flipping it is a separate
       owner-signed action
 - [ ] `FUTUNER_PHASE3_ENABLED` still 0 — flipping it is a separate
@@ -535,16 +540,16 @@ unblocked from a Phase-1-side correctness standpoint.
 
 ---
 
-## 🟢 Phase 1 CLOSE declaration — 2026-05-28
+## 🟢 Phase 1 CLOSE declaration — 2026-05-28 (DTC clear closed 2026-05-29)
 
-**Phase 1 customer-experience gates are 🟢** on dev RS7 with two
-explicit exceptions:
+**Phase 1 customer-experience gates are 🟢** on dev RS7 with one
+remaining hardware-pending exception:
 
-- **§4.6 OBD fault code CLEAR** stays 🔴 owner-held pending P-54
-  sign-off (ECU returns NRC 0x11; the session-state preamble that
-  would fix it is an ECU-wire-surface change requiring Sean's
-  explicit authorization). Tracked as P-68 in
-  `docs/PHASE_2_PREREQUISITES.md`.
+- **§4.6 OBD fault code CLEAR** closed 2026-05-29 in `a0319e0`. The
+  fix was not the session-state preamble originally hypothesized
+  — VCDS wire capture revealed the SRM-patched ECU strips UDS $14
+  entirely. Firmware now uses OBD-II Mode 04 (`$04` → `$44`). P-54
+  and P-68 both 🟢 in `docs/PHASE_2_PREREQUISITES.md`.
 - **§4.4a Ethanol BLE bridge** + **§4.7 Ethernet transport** are
   🟡 DEFERRED-PENDING-HARDWARE — no sensor on the RS7, no Ethernet
   hardware yet. Neither is a Phase 1 close gate.

@@ -100,10 +100,8 @@ Context bootstrap (read in this order)
 - ~/esp/obd/FUTV1.1/docs/PHASE_2_PREREQUISITES.md   (P-items, including
                                   P-28 which blocks Phase 5 of this
                                   validation)
-- ~/sniffer/can_tail.py (Sean directive 2026-05-19: canonical wire
-  witness. tools/can_sniff.py retained in-tree for legacy reference
-  only — P-52 documents the macOS gs_usb sustained-use wedge that
-  drove the swap.)
+- ~/sniffer/can_tail.py (canonical wire witness — Sean directive
+  2026-05-19; legacy tooling background captured in P-52).
 - ~/esp/obd/FUTV1.1/tools/ws_driver.py --help
 - ~/esp/obd/FUTV1.1/firmware/src/commands/commands.c
 

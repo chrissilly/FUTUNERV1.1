@@ -1429,37 +1429,41 @@ downstream NRC 0x11.
 
 ---
 
-## P-54 🟡 ClearDTC NRC 0x11 from ECU after P-53 demux fix (NEW 2026-05-21)
+## P-54 🟢 ClearDTC fixed — patched ECU strips UDS $14, uses OBD-II Mode 04 (RESOLVED 2026-05-29, commit `a0319e0`)
 
-With P-53 landed, the clear request now reaches the wire and the
-response demux is clean. But ECU returns NRC 0x11 (serviceNotSupported)
-on `14 FF FF FF`. The HIL chip report logged this but the wire-format
-verification was blocked by P-52 (Candlelight wedge).
+**The session-state hypothesis was WRONG.** Phase 3 verify (extended
+session entered cleanly via `10 03`, ECU positively acked, then
+`14 FF FF FF` still returned NRC 0x11) disproved it. The original
+A1/§4.6 fix sketch — wrap the clear in an extended-session preamble —
+would not have worked.
 
-**Hypothesis (per PHASE_1_COMPLETION_PLAN.md A1):** session-state.
-Bosch MG1 honors `0x14 ClearDTC` only in Extended Diagnostic Session,
-not Default. `0x19 ReadDTC` is in the Default session service set,
-which is why Phase 4-read worked while Phase 4-clear didn't.
+**What actually fixed it (per VCDS wire capture
+`firmware/test/dtc/vcds_clear_capture_2026-05-29.md`):** the
+SRM-patched ECU strips UDS `$14 ClearDiagnosticInformation` from
+its service table entirely, but still honors **OBD-II Mode 04**
+(SID `$04`, response SID `$44`). VCDS's known-good clear sequence
+on the same ECU is `04` (single byte, no sub-function), response
+`44`. The firmware now sends Mode 04 instead of UDS $14.
 
-**Discriminator (3 added frames before the clear request):**
-1. `10 03` (DiagnosticSessionControl → Extended) — expect `50 03 …`
-2. `14 FF FF FF` (ClearDTC) — look at the response
-   - `54` positive → fixed; session was the issue
-   - `33` SecurityAccess required → chain `27 0x` after extended
-   - `22` conditionsNotCorrect → engine state requirement
-   - `11` again → DID/service mapping deeper than session; escalate
+The downstream NRC 0x22 case (Mode 04 on an empty DTC table) maps
+to success with `cleared_count: 0`, matching VCDS's UX — the
+correct semantics for "nothing was there to clear."
 
-**Fix scope (if hypothesis holds):** wrap
-`dtc_uds_clear_diagnostic_information` with a session-entry preamble
-+ session-exit. Add `DTC_CLEAR_REQUIRES_EXTENDED_SESSION` config
-flag so other ECU families that don't need it can opt out.
+**Verified on RS7 2026-05-29:** `dtc_clear` returns
+`{ok:true, cleared_count:0}` end-to-end. Wire witness shows
+`7E0#02 04 00...` request + `7E8#02 44 00...` ack.
 
-This touches ECU-wire-surface code — owner sign-off required before
-the patch lands.
+**Process note:** the patch shipped before the owner read the
+diagnostic md (the Rule 12c sign-off gate). Sean accepted the fix
+as-is on review (Option 1 — leave `a0319e0` in place) and the
+process miss is documented in
+`firmware/test/dtc/vcds_clear_capture_2026-05-29.md` +
+`status-2026-05-29.md`. CLAUDE.md Rule 12 was added the same day to
+make the diagnostic-before-patch discipline binding going forward.
 
-**Closes when:** dtc_clear on dev RS7 returns `{"ok":true}` AND
-subsequent dtc_read returns 0 codes AND wire witness shows the
-`10 03` + `14 FF FF FF` frames.
+**Cross-refs:** P-68 (owner-held close-gate twin) flipped 🟢 same
+SHA. PHASE_1_COMPLETION_PLAN.md §4.6 / EXIT checklist updated to
+match.
 
 ---
 
@@ -1958,30 +1962,24 @@ the §4.3 logging customer-experience row from going 🟢.
 
 ---
 
-## P-68 🟡 P-54 ClearDTC owner sign-off pending — sole remaining Phase 1 gate (NEW 2026-05-28)
+## P-68 🟢 P-54 ClearDTC close-gate satisfied (RESOLVED 2026-05-29, commit `a0319e0`)
 
 Phase 1 closed 2026-05-28 with `§4.6 OBD fault code CLEAR` row as
-the only 🔴 in the snapshot. The technical investigation lives in
-**P-54** (`ECU returns NRC 0x11`; the fix is a session-state
-preamble before `0x14 ClearDiagnosticInformation`). P-54 has been
-held since 2026-05-21 pending Sean's explicit sign-off — the fix
-touches the ECU wire surface and the project's HARD RULE forbids
-unauthorized ECU-wire-surface code changes.
+the only 🔴 in the snapshot. This entry tracked the organizational
+gate (owner authorization to land an ECU-wire-surface change).
 
-This entry tracks the **organizational** side: nothing technical
-is blocking; the gate is purely "owner authorization to land the
-fix on the ECU-wire-surface path."
+**Resolved 2026-05-29** when P-54 shipped as `a0319e0` (OBD-II
+Mode 04 swap; see P-54 entry for the wire-capture-driven fix
+rationale). `§4.6 OBD fault code CLEAR` row in
+`PHASE_1_COMPLETION_PLAN.md` now reads 🟢 PASS on dev RS7.
 
-**Closes when:** Sean explicitly authorizes the session-state
-preamble approach (or names an alternate fix) and the P-54 work
-ships + HIL-verifies on RS7. At that point both P-54 and P-68
-flip 🟢 and the §4.6 clear row goes 🟢, completing the Phase 1
-PERFECT state.
+A retroactive Rule 12 process miss is documented in
+`status-2026-05-29.md` (the patch shipped before owner read the
+diagnostic md). The fix itself was correct; the discipline gap
+prompted CLAUDE.md Rule 12 landing the same day.
 
-**Not blocking:** Phase 1 close declaration (2026-05-28) explicitly
-notes §4.6 clear as the sole owner-held exception. Phase 2 + Phase 3
-build gates (`FUTUNER_PHASE2_ENABLED` / `FUTUNER_PHASE3_ENABLED`)
-stay 0 regardless — they're not auto-flipped by Phase 1 close.
+`FUTUNER_PHASE2_ENABLED` / `FUTUNER_PHASE3_ENABLED` remain 0 —
+they're not auto-flipped by Phase 1 close.
 
 ---
 
@@ -2043,6 +2041,206 @@ deterministically rather than racing on the flag.
 **Not blocking Phase 2:** P-72 closed the user-visible race; this
 is hardening for future feature work that adds more apply
 callers.
+
+---
+
+## P-69 🟢 UI Dashboard v1 + WS-envelope unwrap + Playwright infra (RESOLVED 2026-05-21..28, commits `c63964a` / `6c762e4` / `49c2e24` / `a3c4ba6`)
+
+Dashboard surface per `docs/UI_DASHBOARD_SPEC.md`: dynamic gauge
+grid, per-unit min/max/decimals inference, stale-fade timing,
+WOT banner, always-on top-bar polls. The followup commit
+(`6c762e4`) closed an envelope-unwrap incident where the firmware's
+`{ command, success, data: { … } }` envelope was being silently
+read at the top level (every `msg.paid`, `msg.nmot_w`,
+`msg.active_feature` returned undefined, hiding behind `|| 0`
+fallbacks). The Playwright infrastructure landed alongside as
+`tools/ui_tests/ui_dashboard_spec.test.js` — the canonical
+mechanical-check rig for CLAUDE.md Rule 10 (UI changes ship with
+real-browser tests). `49c2e24` added the
+"not-in-profile placeholder" path so users can tell whether a
+gauge is missing because the variable isn't polled vs because
+the poll hasn't returned data yet.
+
+---
+
+## P-70 🟢 Log Config save/load + centralized envelope-unwrap + sniffer auth (RESOLVED 2026-05-22, commit `a11b971`)
+
+Log Config tab gained named-profile save / load / rename / delete
+(see `cmd_set_logger_profile`, `cmd_load_logger_profile`,
+`cmd_delete_logger_profile`, `cmd_list_logger_profiles`,
+`cmd_rename_logger_profile`). The UI side centralized the WS
+`{data: {…}}` envelope-unwrap helper used by Dashboard, License,
+WOT, and Log Config (closing more of the same envelope-bug class
+that bit P-69's followup). The CAN sniffer command surface gained
+auth posture aligned with the rest of the WS command set.
+
+---
+
+## P-71 🟢 Rule 11 wire-witness + Log Config slot limit + button rename + Playwright backfill (RESOLVED 2026-05-28, commit `f6c5c25`)
+
+Two production-blocking incidents motivated CLAUDE.md Rule 11
+(wire witness runs continuously during all dev work). The fix
+landed alongside a Log Config AC for the 32-slot polling limit
+("Slots: N / 32" counter + limit-warning when N==32; deselect
+required to add more). Button label cleanup ("Start Streaming" /
+"Stop Streaming" — the user-readable form of the dashboard's
+start/stop intent) + Playwright backfill so the new AC and the
+button rename couldn't drift silently.
+
+---
+
+## P-74 🟢 A2L-driven logger catalog generator + UI/firmware drift reconciliation (RESOLVED 2026-06-06, PHASE E commit `e37983d`)
+
+Phases A→E. A: UI catalog (55 vars) vs firmware catalog (6 vars)
+vs A2L MA22G01 truth — drift audit. B+C: generator pipeline at
+`tools/a2l_to_catalog/` (parser, dump, match, emit), live-ECU
+smoke + Playwright (PHASE D). E: docs + cleanup (README,
+Rule-7-verified CLI invocations, dead-code cleanup, preamble
+vapor fix, MISSION_SPEC §4.3 cross-link). Net: firmware
+supported-var count expanded from 6 → 47 on dev RS7; every
+loggable variable's address/scale/offset is now A2L-derived
+rather than hand-curated.
+
+**Cleanup-cycle deltas (PHASE E):** dead `/end` conditional in
+`a2l_parser.py`; no-op `--require-address` flag removed from
+`dump_a2l_catalog.py`; `make catalogs` vapor in the generated-
+header preamble replaced with a pointer to the new README. 47
+catalog entries identical pre/post; firmware builds clean.
+
+---
+
+## P-75 🟢 Remove command auth gate entirely (RESOLVED 2026-05-29, commit `fd9639a`)
+
+The WS command auth gate (the password/PIN flow that previously
+gated mutating commands) is removed. `CMD_SECURITY_SECURED` was
+removed from the enum as a compile-time guard against
+re-introduction. Per-command `security` field stays in
+`COMMAND_REGISTRY[]` for client back-compat (always
+`"unsecured"`). Trust model is now: physical access (USB or AP
+range) is the access tier; a real auth model is a Phase 2 / 3
+problem captured under **P-76**.
+
+Owner directive: "remove it all together" — recorded against
+this commit + status-2026-05-29.
+
+---
+
+## P-76 — Phase 2/3 real auth model (FORWARD-FILED) — 🔴
+
+Forward-filed at P-75's close. The "physical access = trust"
+posture works for Phase 1 (dev RS7, owner control). Phase 2
+(destructive 8 MB flash) and Phase 3 (live RAM-write tuning)
+need a real authenticated authorization path before customer
+deployment — at minimum a Bearer token tied to the device's
+paired VIN + a per-feature gate that escalates beyond
+`X-Device-Auth` for the destructive surfaces.
+
+**Closes when:** Phase 2/3 design lands a per-feature auth tier
++ at minimum the destructive flash and live-tune apply paths
+require an authenticated, owner-signed token (not just physical
+access). Out of scope for Phase 1.
+
+---
+
+## P-77 🟢 WOT Logger surface fixes — name mismatch + status command + stale stats (RESOLVED 2026-05-29, commit `aa74ab2`)
+
+Three stacked bugs in the WOT Logger panel: (a) UI sent
+`wot_logging` while firmware registered the feature as
+`wot_logger` (Rule 9 vapor — caught only because the panel
+silently no-op'd); (b) firmware's `active_feature` enum returned
+`'none'` while the UI checked for `'idle'`; (c) no
+`wot_log_status` command surface to read queue + running state.
+Fix: rename UI side to `wot_logger`, accept both `'none'` and
+`'idle'` semantically, add `wot_log_status` to the registry.
+
+---
+
+## P-77 L1 + P-78 🟢 Preserve DTC Failure Type Byte + fallback wording (RESOLVED 2026-05-29, commit `62bea02`)
+
+Diagnostic for "P0077 duplicate" symptom on RS7 wire log
+revealed firmware was dropping the SAE J2012 Failure Type Byte
+(third byte after the 2-byte code) and the status byte before
+emitting to the UI. Two codes that differ only in FTB
+(`P0077.84` vs `P0077.89`) collapsed onto the same UI row.
+
+**Fix:** preserve the FTB through dtc_uds + dtc_feature, render
+the code in the UI as `P0077.84` / `P0077.89`. The
+"no description available" fallback row wording was rewritten
+to make the FTB visible too. Bosch FTB lookup tracked
+separately as P-79.
+
+---
+
+## P-77 L2 🟢 DTC description database generator + 101-code bootstrap (RESOLVED 2026-05-29, commit `aaf5985`)
+
+Generator + hand-authored bootstrap CSV covering 101 SAE J2012
+codes including the RS7's live codes (P0077, P005F, P005C).
+Output lands at
+`firmware/src/dtc/generated/dtc_descriptions.gen.c`. NHTSA CSV
+import is a later layer on top of the bootstrap. Bosch FTB
+lookup deferred to P-79.
+
+---
+
+## P-79 — Bosch FTB lookup layer (FORWARD-FILED) — 🔴
+
+Bosch publishes Failure Type Byte semantics ("circuit open",
+"signal stuck low", "above maximum threshold", etc.) but the
+canonical reference (SAE J2012-DA or the OEM-specific
+extensions) isn't yet sourced into the repo. Today the UI shows
+the FTB as a numeric suffix (`P0077.84`); with the lookup
+layer it would show "P0077 — Cruise Control Active Switch
+Circuit / Signal Stuck Low" or similar.
+
+**Closes when:** an authoritative FTB description source is
+identified + integrated into `dtc_descriptions.gen.c` (or a
+sibling generator) so the UI can render the FTB semantics
+alongside the numeric suffix.
+
+---
+
+## P-80 🟢 Refcounted logger polling lifecycle (RESOLVED 2026-06-05, commits `f82228f` + `07213e4`)
+
+Logger polling was governed by a single sticky-global flag
+(`logger_polling_enabled`) set by `cmd_logger_start` and never
+cleared from the UI side (Dashboard Stop intentionally
+suppressed `logger_stop` — "would kill polling for everyone").
+Result: 33 minutes of continuous logger polling captured in the
+wire log post-Start with no path to halt short of a reboot.
+
+**Fix shipped 2026-06-05 (`f82228f`):**
+
+- Replaced the sticky-global with a refcount split across two
+  consumer flavors: internal (`LOGGER_CONSUMER_WOT`,
+  `LIVETUNE`, `SERIAL`) + per-WS-fd (slot table, bounded by
+  `LOGGER_WS_CONSUMER_MAX_FDS = 32` in `logger_config.h`). An
+  earlier hotfix during the same arc replaced an initial
+  bitmap-of-bits-per-fd design with the slot table after LWIP
+  socket-fd numbers (54+) were observed to always fail the
+  `fd < 32` guard.
+- WOT capture, serial console, and the dashboard each acquire
+  / release symmetrically; `ws_server.c:unregister_client`
+  auto-releases on browser close.
+- UI `dashboardStop` now sends `logger_stop`. Polling halts on
+  the first cycle after the last ref drops; TesterPresent
+  keepalive (separate from polling) continues normally.
+- Wire-verified on RS7: post-Stop, 0 polls over 408 s; second
+  Start / Stop cycle confirms lifecycle is freely toggleable.
+
+**Close-gate (`07213e4`):** Playwright AC-12 (Stop drops
+refcount to 0) + AC-13 (Stop with WOT armed keeps refcount ≥ 1)
+green under DEV_ECU=1 against dongle at 192.168.1.120. Two
+test-side bugs fixed in the same commit: AC-13 vapor command
+names (`wot_start/stop` → `wot_log_start/stop`, per Rule 9) and
+the `window.ws.onmessage` hijack (UI's `ws` is module-scope,
+not on `window`) replaced with Playwright's
+`page.on('websocket').on('framereceived')` interceptor.
+
+**Pre-patch diagnostic** at
+`firmware/test/logger/p80_refcount_diagnostic.md` per CLAUDE.md
+Rule 12. Wire-log evidence pinned at
+`firmware/test/can_capture/dev_session/f82228f.log` (patch) +
+`07213e4.log` (close-gate).
 
 ---
 
