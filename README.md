@@ -24,7 +24,7 @@ FUTV1.1/
 │
 ├── cloud/                    ← FastAPI backend (sillyrabbitmotorsport.com)
 │   ├── src/                  ← endpoints: VIN pairing, SBF download, log upload
-│   ├── tests/                ← pytest suite (5 tests passing)
+│   ├── tests/                ← pytest suite (53 tests passing)
 │   └── docker-compose.yml
 │
 ├── sbf/                      ← Sample SBF/FBF files + JSON
@@ -47,13 +47,24 @@ FUTV1.1/
 
 ## Build & Flash (firmware)
 
+The `firmware/` wrapper scripts are the supported entry points. `build.sh`
+bundles the split UI sources into `futuner_control_panel.html` *before*
+`idf.py build` — a bare `idf.py build` would embed a stale UI.
+
 ```bash
 cd firmware
-. ~/esp/esp-idf/export.sh
-idf.py set-target esp32s3   # one-time
-idf.py build
-idf.py -p /dev/cu.usbmodemXXXX flash
+# one-time: ESP-IDF v5.5 at ~/esp/esp-idf (or export IDF_PATH=...), then:
+. ~/esp/esp-idf/export.sh && idf.py set-target esp32s3
+./build.sh                        # bundle UI, then idf.py build
+./flash.sh                        # build + app-only flash to first /dev/cu.usbmodem*
+./flash.sh /dev/cu.usbmodemXXXX   # explicit port
+./flash.sh --full                 # first flash per dongle: bootloader + part-table + app
+./flash.sh --prebuilt             # flash prebuilt/*.bin, skip building
+./monitor.sh                      # tail serial @115200 (-t 60 for a timed capture)
 ```
+
+**Just testing — no toolchain?** `TESTING.md` has the flash-from-prebuilt
+path (`./flash.sh --prebuilt`) and a Phase 1 walkthrough.
 
 ## Mission Status
 

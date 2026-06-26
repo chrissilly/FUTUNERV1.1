@@ -32,3 +32,14 @@ tools/*.pyc
 
 # Raw ECU binary dumps — proprietary IP per Hard Rule 5. Stay local.
 *.bin
+
+# macOS Finder noise.
+.DS_Store
+
+# Dev-session wire captures: rolling logs/CSVs are regenerated every session
+# and are not source. Per-commit pins (Rule 11) are added explicitly with
+# `git add -f <sha>.log` when a build needs one. Already-tracked logs (e.g.
+# obd_clear.log) are intentionally left as-is — untracking them is a separate
+# cleanup decision, not part of this change.
+firmware/test/can_capture/dev_session/*.log
+firmware/test/can_capture/dev_session/*.csv
